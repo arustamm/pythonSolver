@@ -1,0 +1,5 @@
+ifndef QUICK
+./Obj/matrix2.o:  
+./Obj/matrix1.o:  
+./Obj/Rand.o:   
+endif  

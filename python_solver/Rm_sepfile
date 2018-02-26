@@ -1,0 +1,30 @@
+#!/usr/bin/env python
+#Rm command for SEP files
+import array
+import sys,re,os,string
+import sep_python as sep
+
+if __name__ == '__main__':
+	if(len(sys.argv) == 1):
+		print "NAME \n"
+		print "	Rm_sepfile - remove SEP regular files and its associated binary \n"
+		print "SYNOPSIS"
+		print "	Rm_sepfile header.H \n"
+		print "DESCRIPTION"
+		print "	Simpler version of Rm for regular SEP header files (Does not remove non-SEP files)\n"
+		print "INPUT PARAMETERS"
+		print "	None"
+	else:
+		[pars,files]=sep.parse_args(sys.argv)
+		#Cleaning variables
+		files.remove(files[0])
+		del pars["basic_sep_io"]
+		#Obtaining binary file
+		header_list = " ".join(files)
+		out=sep.RunShellCmd_output("In %s | grep in="%header_list)
+		binary_list = [x.split('=')[1] for x in out.split('\n')]
+		binary_list = " ".join(binary_list)
+		#Removing file (if not a SEP file, the file will not be removed)
+		if binary_list:
+			sep.RunShellCmd("rm -f %s; rm -f %s"%(header_list,binary_list))
+		

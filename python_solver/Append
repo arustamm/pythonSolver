@@ -1,0 +1,51 @@
+#!/usr/bin/env python
+#Append command for SEP files
+import array
+import commands
+import inspect
+import sys,re,os,string
+import struct
+import sep_python as sep
+
+if __name__ == '__main__':
+	if(len(sys.argv) == 1):
+		print "NAME \n"
+		print "	Append - append files to given file \n"
+		print "SYNOPSIS"
+		print "	Append header.H [header2.H header3.H ...] [pars]\n"
+		print "DESCRIPTION"
+		print "	Append header2,3,... to header.H "
+		print "	Same parameters as Cat3d \n"
+		print "INPUT PARAMETERS"
+		print "	axis - int"
+		print "		[3]: which axis to append on\n"
+		print "	max_memory - int"
+		print "		[10000]: maximum memory in words\n"
+		print "	virtual - int"
+		print "		[0]  (1 if you don't wish to concatenate data just"
+		print "		      make a multi-file seplib file)"
+	else:
+		[pars,files]=sep.parse_args(sys.argv)
+		#Cleaning variables
+		files.remove(files[0])
+		del pars["basic_sep_io"]
+		#Creating input parameter variable if any
+		pars_strg=""
+		for key, value in pars.iteritems():
+			pars_strg+=key+"="+value+" "
+		#Creating file list
+		file_strg=""
+		for file in files:
+			file_strg+=file+" "
+		#Set internal previous gradient file
+		tmp=sep.tmp_file("Append.H")
+		#Concatenating files
+		cmd="Cat3d "+file_strg+pars_strg+" max_memory=10000 >"+tmp+" hff="+tmp+"@@"
+		sep.RunShellCmd(cmd)
+		#Removing previous file
+		sep.Rm(files[0])
+		#copying header of new file
+		sep.RunShellCmd("mv %s %s"%(tmp,files[0]))
+
+		
+		

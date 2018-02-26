@@ -1,0 +1,7 @@
+#Rosenbrock function derivatives
+RUN: Window3d < input_m0.H n1=1 > x_tmp_rosenbrock.H
+RUN: Window3d < input_m0.H n1=1 f1=1> y_tmp_rosenbrock.H
+RUN: Math file1=x_tmp_rosenbrock.H file2=y_tmp_rosenbrock.H exp="-400.0*file1*(file2-file1*file1)-2.0*(1.0-file1)" > tmp_dx_rosen.H
+RUN: Math file1=x_tmp_rosenbrock.H file2=y_tmp_rosenbrock.H exp="200.0*(file2-file1^2)" > tmp_dy_rosen.H
+RUN: Cat3d tmp_dx_rosen.H tmp_dy_rosen.H axis=1 >output.H
+RUN: Rm x_tmp_rosenbrock.H y_tmp_rosenbrock.H tmp_dx_rosen.H tmp_dy_rosen.H

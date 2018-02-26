@@ -1,0 +1,4 @@
+#Trial for operator
+RUN: In input.H
+RUN: ls
+RUN: In output.H

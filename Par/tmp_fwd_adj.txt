@@ -1,0 +1,3 @@
+RUN: ./python_solver/matrix1 matrix_name=tmp_matrix.H <input.H adj=0  >tmp_fwd.H
+RUN: ./python_solver/matrix1 matrix_name=tmp_matrix.H <tmp_fwd.H adj=1  >output.H out=output.H@
+RUN: Rm tmp_fwd.H
