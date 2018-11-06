@@ -27,6 +27,13 @@ else:
 if(datapath == None): raise IOError("SEP datapath not found")
 
 
+def rm_file(filename):
+	"""File to remove header and binary files"""
+	binfile=get_binary(filename)
+	if os.path.isfile(filename): os.remove(filename)
+	if os.path.isfile(binfile): os.remove(binfile)
+	return
+
 def get_par(filename,par):
 	""" Function to obtain a header parameter within the passed header file"""
 	info = None
@@ -96,13 +103,8 @@ def get_axes(filename):
 		try:
 			axis_lab=get_par(filename,par="label%s"%(iaxis+1))
 		except IOError as exc:
-			if(iaxis == 0): 
-				print(exc.args)
-				print("ERROR! First axis parameters must be found! Returning None")
-				return None
-			else:
-				#Default value for an unset axis
-				axis_lab = "Undefined"
+			#Default value for an unset axis
+			axis_lab = "Undefined"
 		axes.append([axis_n,axis_o,axis_d,axis_lab])	
 	return axes
 	
@@ -131,8 +133,11 @@ def read_file(filename,formatting='>f',mem_order="C"):
 	fid = open(get_binary(filename),'r+b')
 	#Default formatting big-ending floating point number
 	data = np.fromfile(fid, dtype=formatting)
-	#Reshaping array
-	data = np.reshape(data,shape,order=mem_order)
+	#Reshaping array and forcing memory continuity
+	if(mem_order == "C"):
+		data = np.ascontiguousarray(np.reshape(data,shape,order=mem_order))
+	else:
+		data = np.asfortranarray(np.reshape(data,shape,order=mem_order))
 	fid.close()
 	return [data, axis_info]	
 	
@@ -152,13 +157,13 @@ def write_file(filename,data,axis_info=None,formatting='>f'):
 	if(axis_info == None):
 		naxis = data.shape
 		if(not np.isfortran(data)): naxis=tuple(reversed(naxis)) #If C last axis is the "fastest"
-		axis_info = [[naxis[ii], 1.0, 0.0, 'Undefined'] for ii in range(0,len(naxis))]
+		axis_info = [[naxis[ii], 0.0, 1.0, 'Undefined'] for ii in range(0,len(naxis))]
 	#writing header/pointer file
-	with open(filename,'a') as fid:
+	with open(filename,'w') as fid:
 		#Writing axis info
 		for ii,ax_info in enumerate(axis_info):
 			ax_id = ii + 1
-			fid.write("n%s=%s d%s=%s o%s=%s label%s='%s'\n"%(ax_id,ax_info[0],ax_id,ax_info[1],ax_id,ax_info[2],ax_id,ax_info[3]))
+			fid.write("n%s=%s o%s=%s d%s=%s label%s='%s'\n"%(ax_id,ax_info[0],ax_id,ax_info[1],ax_id,ax_info[2],ax_id,ax_info[3]))
 		fid.write("in='%s'\n"%(binfile))
 	fid.close()
 	return 

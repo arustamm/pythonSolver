@@ -1,0 +1,146 @@
+#!/usr/bin/env python3
+import sys,os
+sys.path.append(os.environ.get('REPOSITORY')+"/python_solver/python_modules")
+import pyVector as Vec
+import pyOperator as Op
+import pyLCGsolver as LCG
+import pyProblem as Prblm
+import pyStopperBase as Stopper
+import sep_util as sep
+import numpy as np
+
+class MatMult_incore(Op.Operator):
+	"""Operator class to perform matrix-vector multiplication"""
+		
+	def __init__(self,A,domain,range):
+		"""Constructor for the class: A = matrix to use; domain = domain vector; range = range vector"""
+		if(not isinstance(domain,Vec.vector)): raise TypeError("ERROR! Domain vector not a vector object")
+		if(not isinstance(range,Vec.vector)): raise TypeError("ERROR! Range vector not a vector object")
+		#Setting domain and range of operator and matrix to use during application of the operator
+		self.setDomainRange(domain,range)
+		self.A = np.matrix(A)
+		return
+	
+	def forward(self,add,model,data):
+		"""Method to compute d = A m"""
+		self.checkDomainRange(model,data)
+		if(not isinstance(model,Vec.vectorIC)): raise TypeError("ERROR! Model vector not a vectorIC object")
+		if(not isinstance(data,Vec.vectorIC)): raise TypeError("ERROR! Data vector not a vectorIC object")
+		if(not add): data.zero()
+		data.arr+=np.matmul(A,model.arr)
+		return
+	
+	def adjoint(self,add,model,data):
+		"""Method to compute m = A d"""
+		self.checkDomainRange(model,data)
+		if(not isinstance(model,Vec.vectorIC)): raise TypeError("ERROR! Model vector not a vectorIC object")
+		if(not isinstance(data,Vec.vectorIC)): raise TypeError("ERROR! Data vector not a vectorIC object")
+		if(not add): model.zero()
+		model.arr+=np.matmul(A.H,data.arr)
+		return
+
+class MatMult_outcore(Op.Operator):
+	"""Operator class to perform matrix-vector multiplication"""
+		
+	def __init__(self,A,domain,range):
+		"""Constructor for the class: A = matrix to use; domain = domain vector; range = range vector"""
+		if(not isinstance(domain,Vec.vector)): raise TypeError("ERROR! Domain vector not a vector object")
+		if(not isinstance(range,Vec.vector)): raise TypeError("ERROR! Range vector not a vector object")
+		#Setting domain and range of operator and matrix to use during application of the operator
+		self.setDomainRange(domain,range)
+		self.A = np.matrix(A)
+		return
+	
+	def forward(self,add,model,data):
+		"""Method to compute d = A m"""
+		self.checkDomainRange(model,data)
+		if(not isinstance(model,Vec.vectorOC)): raise TypeError("ERROR! Model vector not a vectorOC object")
+		if(not isinstance(data,Vec.vectorOC)): raise TypeError("ERROR! Data vector not a vectorOC object")
+		if(not add): data.zero()
+		#Reading model and data vector files
+		[model_arr,_]=sep.read_file(model.vecfile)
+		[data_arr,data_axis]=sep.read_file(data.vecfile)
+		data_arr+=np.matmul(A,model_arr)
+		#writing data vector file
+		sep.write_file(data.vecfile,data_arr,data_axis)
+		return
+	
+	def adjoint(self,add,model,data):
+		"""Method to compute m = A d"""
+		self.checkDomainRange(model,data)
+		if(not isinstance(model,Vec.vectorOC)): raise TypeError("ERROR! Model vector not a vectorOC object")
+		if(not isinstance(data,Vec.vectorOC)): raise TypeError("ERROR! Data vector not a vectorOC object")
+		if(not add): model.zero()
+		#Reading model and data vector files
+		[model_arr,model_axis]=sep.read_file(model.vecfile)
+		[data_arr,_]=sep.read_file(data.vecfile)
+		model_arr+=np.matmul(A.H,data_arr)
+		#writing data vector file
+		sep.write_file(model.vecfile,model_arr,model_axis)
+		return
+
+if __name__ == '__main__':
+	#In-core run
+	#Creating model vector
+	model_vec = Vec.vectorIC(np.zeros((100,1)))
+	model_vec.zero()
+	#Creating data vector
+	data_vec  = Vec.vectorIC(np.zeros((200,1)))
+	data_vec.rand()
+	#Matrix to be inverted
+	A = np.matrix(np.random.rand(200,100))
+	#Create operator
+	MatMult = MatMult_incore(A,model_vec,data_vec)
+	#Create L2-norm linear problem
+	L2Prob = Prblm.ProblemL2Linear(model_vec,data_vec,MatMult)
+	#Create stopper
+	niter = 2000
+	Stop  = Stopper.BasicStopper(niter=niter)
+	#Create solver
+	LCGsolver = LCG.LCGsolver(Stop)
+	LCGsolver.setDefaults(inv_mod_file="inv_mod.H",obj_file="obj.H",model_file="mod.H",res_file="res.H",grad_file="grad.H",iter_buffer=None,iter_sampling=1)
+	#Running the solver
+	LCGsolver.run(L2Prob)
+	
+	#Out-of-core run
+	#Creating model vector
+	model_vecOC = Vec.vectorOC(model_vec)
+	#Creating data vector
+	data_vecOC  = Vec.vectorOC(data_vec)
+	#Create operator
+	MatMultOC = MatMult_outcore(A,model_vecOC,data_vecOC)
+	#Create L2-norm linear problem
+	L2Prob_outcore = Prblm.ProblemL2Linear(model_vecOC,data_vecOC,MatMultOC)
+
+	#Running the solver
+# 	LCGsolver.setDefaults()
+# 	LCGsolver.run(L2Prob_outcore)
+
+	#Testing inversion of a symmetric matrix (second-order derivative operator)
+	n=200
+	A = np.matrix(np.zeros((n,n),dtype=np.float64))
+	np.fill_diagonal(A, -2)
+	np.fill_diagonal(A[1:], 1)
+	np.fill_diagonal(A[:,1:], 1)
+	model_vec_sym = Vec.vectorIC(np.zeros((n,1),dtype=np.float64))
+	data_vec_sym = Vec.vectorIC(np.zeros((n,1),dtype=np.float64))
+	#Constant derivative
+	data_vec_sym.arr.fill(1.)
+	#Create operator
+	MatMultSym = MatMult_incore(A,model_vec_sym,data_vec_sym)
+	#Create L2-norm linear problem
+	L2Prob_sym = Prblm.ProblemL2Linear(model_vec_sym,data_vec_sym,MatMultSym)
+	#Running the solver
+	LCGsolver.setDefaults(inv_mod_file="inv_mod_noreg.H",obj_file="obj_noreg.H",res_file="res_noreg.H",grad_file="grad_noreg.H",iter_buffer=None,iter_sampling=100)
+	LCGsolver.run(L2Prob_sym)
+	
+	
+	#Testing LCG with regularized problem
+	L2Prob_reg = Prblm.ProblemL2LinearReg(model_vec_sym,data_vec_sym,MatMultSym,0.0)
+	L2Prob_reg.estimate_epsilon()
+	#Running the solver
+	LCGsolver.setDefaults(inv_mod_file="inv_mod_reg.H",obj_file="obj_reg.H",res_file="res_reg.H",iter_sampling=100)
+	LCGsolver.run(L2Prob_reg)
+	
+	
+	

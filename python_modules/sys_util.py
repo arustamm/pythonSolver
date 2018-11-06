@@ -2,12 +2,20 @@
 import subprocess
 import sys, os
 import hashlib
+import random
+import string
 
 debug = False #Debug flag for printing screen output of RunShellCmd as it runs commands
 debug_log = None #File where debug outputs are written if requested (it must be a logger object)
 BUF_SIZE = 8388608  #read binary files in 64Mb chunks!
 DEVNULL = open(os.devnull,'wb')
 
+def mkdir(directory):
+    try:
+        if not os.path.exists(directory):
+            os.makedirs(directory)
+    except OSError:
+        print ('Error: Creating directory. ' +  directory)
 
 class logger:
 	"""System logger class"""
@@ -26,8 +34,11 @@ class logger:
 		"""Function to write message to log file"""
 		self.file.write(msg+"\n")
 		return
-		
 
+def rand_name(N):
+	"""function returning random sequence of N letters and numbers"""
+	return ''.join(random.choice(string.ascii_uppercase + string.ascii_lowercase + string.digits ) for _ in range(N))
+		
 def hashfile(binfile):
 	"""Function hashing a binary file. It uses a BUF_SIZE to partially store file in memory 
 	and do not completely load the file into the RAM"""
