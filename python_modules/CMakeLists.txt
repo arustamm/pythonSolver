@@ -8,4 +8,4 @@ pyLCGsolver.py    pyProblem.py    pyStepperParabolic.py pySymLCGsolver.py sys_ut
 pyOperator.py   pySolver.py   pyStopper.py    pyVector.py   vector.py)
 
 
-install(FILES ${PythonFiles}  DESTINATION lib/python)
+install(FILES ${PlotFiles}  DESTINATION lib/python)
