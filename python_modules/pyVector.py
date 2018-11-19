@@ -806,7 +806,7 @@ class vectorSEP(vector):
 
 	def cloneSpace(self):
 		"""Function to clone vector space only"""
-		return vectorSEP(self.vec.cloneSpace)
+		return vectorSEP(self.vec.cloneSpace())
 
 	def cloneVector(self):
 		"""Function to clone/allocate vector from vector space by getting the Hypercube"""

@@ -27,8 +27,8 @@ class MatMult_SepVector(Op.Operator):
 		if(not isinstance(data,pyVector.vectorSEP)): raise TypeError("ERROR! Data vector not a Vector object")
 		if(not add): data.zero()
 		#Converting to numpy arrays
-		data_np=np.array(data,copy=False)
-		model_np=np.array(model,copy=False)
+		data_np=np.array(data.vec,copy=False)
+		model_np=np.array(model.vec,copy=False)
 		data_np+=np.matmul(A,model_np)
 		return
 
@@ -39,8 +39,8 @@ class MatMult_SepVector(Op.Operator):
 		if(not isinstance(data,pyVector.vectorSEP)): raise TypeError("ERROR! Data vector not a Vector object")
 		if(not add): model.zero()
 		#Converting to numpy arrays
-		data_np=np.array(data,copy=False)
-		model_np=np.array(model,copy=False)
+		data_np=np.array(data.vec,copy=False)
+		model_np=np.array(model.vec,copy=False)
 		model_np+=np.matmul(A.H,data_np)
 		return
 
@@ -48,7 +48,7 @@ class MatMult_SepVector(Op.Operator):
 
 if __name__ == '__main__':
 	#Create stopper
-	niter = 2000
+	niter = 10000
 	Stop  = Stopper.BasicStopper(niter=niter)
 	#Create solver
 	LCGsolver = LCG.LCGsolver(Stop)
@@ -64,15 +64,16 @@ if __name__ == '__main__':
 	MatMultSym = MatMult_SepVector(A,model,data)
 	#Testing operator
 	model.rand()
-	print(model.norm(2))
+	print(model.norm())
 	MatMultSym.forward(False,model,data)
 	MatMultSym.adjoint(False,model,data)
-	print(data.norm(2))
-	print(model.norm(2))
+	print(data.norm())
+	print(model.norm())
 	#Testing solver
-	data_np = np.array(data,copy=False)
+	data_np = np.array(data.vec,copy=False)
 	data_np.fill(1.)
 	model.zero()
 	#Create L2-norm linear problem
 	L2Prob_sym = Prblm.ProblemL2Linear(model,data,MatMultSym)
+# 	LCGsolver.setDefaults(inv_mod_file="inv_mod_SEP.H",obj_file="obj_SEP.H",model_file="mod_SEP.H",res_file="res_SEP.H",grad_file="grad_SEP.H",iter_buffer=None,iter_sampling=500)
 	LCGsolver.run(L2Prob_sym)

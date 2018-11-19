@@ -1,11 +1,11 @@
-#Module containing Linear-Conjugate Gradient Solver class 
+#Module containing Linear-Conjugate Gradient Solver class
 #It can also handle steppest-descent algorithm
 from math import isnan
 import pySolver
 
 class LCGsolver(pySolver.Solver):
 	"""Linear-Conjugate Gradient and Steepest-Descent Solver parent object"""
-	
+
 	#Default class methods/functions
 	def __init__(self,stoppr,steepest=False,logger=None):
 		"""Constructor for LCG Solver"""
@@ -18,7 +18,7 @@ class LCGsolver(pySolver.Solver):
 		#Setting defaults for saving results
 		self.setDefaults()
 		return
-	
+
 	def __del__(self):
 		"""Default destructor"""
 		return
@@ -32,18 +32,18 @@ class LCGsolver(pySolver.Solver):
 				msg="LINEAR CONJUGATE GRADIENT SOLVER"
 			if(verbose): print(msg)
 			if(self.logger): self.logger.addToLog(msg+" log file")
-			#Printing restart folder 
+			#Printing restart folder
 			msg="Restart folder: %s\n"%(self.restart.restart_folder)
 			if(verbose): print(msg)
 			if(self.logger): self.logger.addToLog(msg)
-			
-			
+
+
 			#Setting internal vectors (model and search direction vectors)
 			prblm_mdl=prblm.get_model()
 			cg_mdl = prblm_mdl.clone()
 			cg_dmodl = prblm_mdl.clone()
 			cg_dmodl.zero()
-		
+
 			#Other internal variables
 			iter = 0
 		else:
@@ -52,7 +52,7 @@ class LCGsolver(pySolver.Solver):
 			if(verbose): print(msg)
 			if(self.logger): self.logger.addToLog(msg)
 			self.restart.read_restart()
-			iter = self.restart.retrieve_parameter("iter")			  
+			iter = self.restart.retrieve_parameter("iter")
 			initial_obj_value=self.restart.retrieve_parameter("obj_initial") #Retrieving initial objective function value
 			cg_mdl = self.restart.retrieve_vector("cg_mdl")
 			cg_dmodl = self.restart.retrieve_vector("cg_dmodl")
@@ -61,10 +61,10 @@ class LCGsolver(pySolver.Solver):
 			prblm.set_model(cg_mdl)
 			#Setting residual vector to avoid its unnecessary computation
 			prblm.set_residual(self.restart.retrieve_vector("prblm_res"))
-			
+
 		#Common variables unrelated to restart
 		success = True
-			
+
 		#Iteration loop
 		while True:
 			#Computing objective function
@@ -88,13 +88,13 @@ class LCGsolver(pySolver.Solver):
 				print("Gradient vanishes identically")
 				break
 			prblm_gradd=prblm.get_dres(cg_mdl,prblm_grad)	#Project gradient in the data space
-			
+
 			#Saving results
 			self.save_results(iter,prblm,force_saving=False)
-			
+
 			if(iter==0 or self.steepest):
 				#Steepest descent
-				beta = 0.0 
+				beta = 0.0
 				dot_gradd=prblm_gradd.dot(prblm_gradd)
 				if(dot_gradd==0.0):
 					success = False
@@ -131,7 +131,7 @@ class LCGsolver(pySolver.Solver):
 				if(verbose): print(msg)
 				if(self.logger): self.logger.addToLog(msg)
 				break
-				
+
 			#dmodl = alpha * grad + beta * dmodl
 			cg_dmodl.scaleAdd(prblm_grad,beta,alpha) 			#update search direction
 			#dres  = alpha * gradd + beta * dres
@@ -140,16 +140,17 @@ class LCGsolver(pySolver.Solver):
 			cg_mdl.scaleAdd(cg_dmodl)							#Update model
 			#res = res + dres
 			prblm_res.scaleAdd(cg_dres)							#Update residuals
-			
+
+			# clipped=self.stpr.clipping(modl,log_file)
+
 			#Increasing iteration counter
 			iter = iter + 1
 			#Setting the model and residuals to avoid residual twice computation
 			prblm.set_model(cg_mdl)
-			
+
 			#Setting residual vector to avoid its unnecessary computation
 			prblm.set_residual(prblm_res)
-			
-			
+
 			#Computing new objective function value
 			obj1=prblm.get_obj(cg_mdl)
 			if(obj1 >= obj0):
@@ -161,7 +162,7 @@ class LCGsolver(pySolver.Solver):
 				cg_mdl.scaleAdd(cg_dmodl,1.0,-1.0)
 				prblm.set_model(cg_mdl)
 				break
-			
+
 			#Saving current model and previous search direction in case of restart
 			self.restart.save_parameter("iter",iter)
 			self.restart.save_vector("cg_mdl",cg_mdl)
@@ -176,9 +177,9 @@ class LCGsolver(pySolver.Solver):
 			#Writing on log file
 			if(self.logger): self.logger.addToLog("\n"+msg)
 			#Check if either objective function value or gradient norm is NaN
-			if(isnan(obj0) or isnan(prblm_grad.norm())): raise ValueError("Error! Either gradient norm or objective function value NaN!")
+			if(isnan(obj1) or isnan(prblm_grad.norm())): raise ValueError("Error! Either gradient norm or objective function value NaN!")
 			if (self.stoppr.run(prblm,iter,initial_obj_value,verbose)): break
-			
+
 		#Writing last inverted model
 		self.save_results(iter,prblm,force_saving=True,force_flush=True)
 		if(self.steepest):
@@ -187,5 +188,5 @@ class LCGsolver(pySolver.Solver):
 			if(self.logger): self.logger.addToLog("LINEAR CONJUGATE GRADIENT SOLVER log file end")
 		#Clear restart object
 		self.restart.clear_restart()
-			
+
 		return

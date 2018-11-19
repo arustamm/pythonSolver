@@ -4,6 +4,7 @@ sys.path.append(os.environ.get('REPOSITORY')+"/python_solver/python_modules")
 import pyVector as Vec
 import pyOperator as Op
 import pyLCGsolver as LCG
+import pySymLCGsolver as SymLCGsolver
 import pyProblem as Prblm
 import pyStopperBase as Stopper
 import sep_util as sep
@@ -11,7 +12,7 @@ import numpy as np
 
 class MatMult_incore(Op.Operator):
 	"""Operator class to perform matrix-vector multiplication"""
-		
+
 	def __init__(self,A,domain,range):
 		"""Constructor for the class: A = matrix to use; domain = domain vector; range = range vector"""
 		if(not isinstance(domain,Vec.vector)): raise TypeError("ERROR! Domain vector not a vector object")
@@ -20,7 +21,7 @@ class MatMult_incore(Op.Operator):
 		self.setDomainRange(domain,range)
 		self.A = np.matrix(A)
 		return
-	
+
 	def forward(self,add,model,data):
 		"""Method to compute d = A m"""
 		self.checkDomainRange(model,data)
@@ -29,7 +30,7 @@ class MatMult_incore(Op.Operator):
 		if(not add): data.zero()
 		data.arr+=np.matmul(A,model.arr)
 		return
-	
+
 	def adjoint(self,add,model,data):
 		"""Method to compute m = A d"""
 		self.checkDomainRange(model,data)
@@ -41,7 +42,7 @@ class MatMult_incore(Op.Operator):
 
 class MatMult_outcore(Op.Operator):
 	"""Operator class to perform matrix-vector multiplication"""
-		
+
 	def __init__(self,A,domain,range):
 		"""Constructor for the class: A = matrix to use; domain = domain vector; range = range vector"""
 		if(not isinstance(domain,Vec.vector)): raise TypeError("ERROR! Domain vector not a vector object")
@@ -50,7 +51,7 @@ class MatMult_outcore(Op.Operator):
 		self.setDomainRange(domain,range)
 		self.A = np.matrix(A)
 		return
-	
+
 	def forward(self,add,model,data):
 		"""Method to compute d = A m"""
 		self.checkDomainRange(model,data)
@@ -64,7 +65,7 @@ class MatMult_outcore(Op.Operator):
 		#writing data vector file
 		sep.write_file(data.vecfile,data_arr,data_axis)
 		return
-	
+
 	def adjoint(self,add,model,data):
 		"""Method to compute m = A d"""
 		self.checkDomainRange(model,data)
@@ -98,10 +99,10 @@ if __name__ == '__main__':
 	Stop  = Stopper.BasicStopper(niter=niter)
 	#Create solver
 	LCGsolver = LCG.LCGsolver(Stop)
-	LCGsolver.setDefaults(inv_mod_file="inv_mod.H",obj_file="obj.H",model_file="mod.H",res_file="res.H",grad_file="grad.H",iter_buffer=None,iter_sampling=1)
+	LCGsolver.setDefaults(inv_mod_file="inv_mod_rand.H",obj_file="obj_rand.H",model_file="mod_rand.H",res_file="res_rand.H",grad_file="grad_rand.H",iter_buffer=None,iter_sampling=10)
 	#Running the solver
-	LCGsolver.run(L2Prob)
-	
+	# LCGsolver.run(L2Prob)
+
 	#Out-of-core run
 	#Creating model vector
 	model_vecOC = Vec.vectorOC(model_vec)
@@ -132,15 +133,38 @@ if __name__ == '__main__':
 	L2Prob_sym = Prblm.ProblemL2Linear(model_vec_sym,data_vec_sym,MatMultSym)
 	#Running the solver
 	LCGsolver.setDefaults(inv_mod_file="inv_mod_noreg.H",obj_file="obj_noreg.H",res_file="res_noreg.H",grad_file="grad_noreg.H",iter_buffer=None,iter_sampling=100)
-	LCGsolver.run(L2Prob_sym)
-	
-	
+	# LCGsolver.run(L2Prob_sym)
+
+
 	#Testing LCG with regularized problem
 	L2Prob_reg = Prblm.ProblemL2LinearReg(model_vec_sym,data_vec_sym,MatMultSym,0.0)
 	L2Prob_reg.estimate_epsilon()
 	#Running the solver
 	LCGsolver.setDefaults(inv_mod_file="inv_mod_reg.H",obj_file="obj_reg.H",res_file="res_reg.H",iter_sampling=100)
-	LCGsolver.run(L2Prob_reg)
-	
-	
-	
+	# LCGsolver.run(L2Prob_reg)
+
+	#Testing LCG for symmetric systems
+	SymProb = Prblm.ProblemLinearSymmetric(model_vec_sym,data_vec_sym,MatMultSym)
+	SLCG = SymLCGsolver.SymLCGsolver(Stop)
+	SLCG.setDefaults(inv_mod_file="inv_mod_sym.H",obj_file="obj_sym.H",res_file="res_sym.H",iter_sampling=5)
+	SLCG.run(SymProb)
+
+	#Testing Linear steepest-descent algorithm for symmetric systems
+	SymProb1 = Prblm.ProblemLinearSymmetric(model_vec_sym,data_vec_sym,MatMultSym)
+	SLSD = SymLCGsolver.SymLCGsolver(Stop,steepest=True)
+	SLSD.setDefaults(inv_mod_file="inv_mod_sym_sd.H",obj_file="obj_sym_sd.H",iter_sampling=100)
+	SLSD.run(SymProb1)
+
+
+
+
+
+
+
+
+
+
+
+
+
+#

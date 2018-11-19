@@ -6,8 +6,8 @@ from timeit import default_timer as timer
 
 class BasicStopper(pyStopper.Stopper):
 	"""Basic Stopper with different options"""
-	
-	def __init__(self,niter=0,maxfevals=0,maxhours=0.0,tolr=1.0e-18,tolg=1.0e-18,tolobj=None,tolobjrel=None,logger=None):
+
+	def __init__(self,niter=0,maxfevals=0,maxhours=0.0,tolr=1.0e-18,tolg=1.0e-18,tolobj=None,tolobjrel=None,toleta=None,logger=None):
 		"""Constructor for Basic Stopper"""
 		#Criteria to evaluate whether or not to stop the solver
 		self.niter=niter
@@ -17,20 +17,21 @@ class BasicStopper(pyStopper.Stopper):
 		self.tolg=tolg
 		self.tolobj=tolobj
 		self.tolobjrel=tolobjrel
+		self.toleta=toleta
 		#Logger to write to file stopper information
 		self.logger=logger
 		#Starting timer
 		self.__start=timer()
 		return
-		
+
 	def reset_timer(self):
 		"""Function to reset timer of the stopper"""
 		#Restarting timer
 		self.__start=timer()
 		return
-		
+
 	#Beware stopper is going to change the gradient/obj/res files
-	def run(self,prblm,iter,initial_obj_value,verbose=True):
+	def run(self,prblm,iter,initial_obj_value=None,verbose=True):
 		if(not isinstance(prblm,pyProblem.Problem)): raise TypeError("Input variable is not a Problem object")
 		#Variable to impose stopping to solver
 		stop = False
@@ -84,10 +85,19 @@ class BasicStopper(pyStopper.Stopper):
 				if(verbose): print(msg)
 				if(self.logger): self.logger.addToLog(msg)
 				return stop
-		if(self.tolobjrel!=None):
-			if(prblm.get_obj()/initial_obj_value < self.tolobjrel):
+		if(self.tolobjrel!=None and initial_obj_value!=None):
+			obj = prblm.get_obj(prblm.model)
+			if(obj/initial_obj_value < self.tolobjrel):
 				stop = True
-				msg  =  "Terminate: relative objective function value tolerance of %s reached,  relative objective function value %s\n"%(self.tolobjrel,prblm.get_obj_value()/prblm.initial_obj_value)
+				msg  =  "Terminate: relative objective function value tolerance of %s reached,  relative objective function value %s\n"%(self.tolobjrel,obj/initial_obj_value)
+				if(verbose): print(msg)
+				if(self.logger): self.logger.addToLog(msg)
+				return stop
+		if(self.toleta!=None):
+			data_norm = prblm.data.norm()
+			if(res_norm < self.toleta*data_norm):
+				stop = True
+				msg =  "Terminate: eta tolerance (i.e., |Am - b|/|b|) of %s reached, eta value %s"%(self.toleta,residual_norm/data_norm)
 				if(verbose): print(msg)
 				if(self.logger): self.logger.addToLog(msg)
 				return stop
