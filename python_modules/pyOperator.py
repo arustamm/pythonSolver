@@ -32,6 +32,7 @@ class Operator:
 
 	def checkDomainRange(self,model,data):
 		"""Function to check model and data vector sizes"""
+		print(type(model),"<-mod dom->",type9self.domain)
 		if not self.domain.checkSame(model):
 			raise ValueError("Provided model vector does not match operator domain")
 		if not self.range.checkSame(data):
