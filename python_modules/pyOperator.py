@@ -46,10 +46,10 @@ class Operator:
 		if(verb): print("Dot-product test of forward and adjoint operators")
 		if(verb): print("-------------------------------------------------")
 		#Allocating temporary vectors for dot-product test
-		d1=self.domain.cloneVector()
-		d2=self.domain.cloneVector()
-		r1=self.range.cloneVector()
-		r2=self.range.cloneVector()
+		d1=self.domain.clone()
+		d2=self.domain.clone()
+		r1=self.range.clone()
+		r2=self.range.clone()
 
 		#Randomize the input vectors
 		d1.rand()
