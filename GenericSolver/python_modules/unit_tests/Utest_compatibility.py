@@ -27,8 +27,8 @@ class MatMult_SepVector(Op.Operator):
 		if(not isinstance(data,pyVector.vectorSEP)): raise TypeError("ERROR! Data vector not a Vector object")
 		if(not add): data.zero()
 		#Converting to numpy arrays
-		data_np=np.array(data.vec,copy=False)
-		model_np=np.array(model.vec,copy=False)
+		data_np=np.array(data.vec.getCpp(),copy=False)
+		model_np=np.array(model.vec.getCpp(),copy=False)
 		data_np+=np.matmul(A,model_np)
 		return
 
@@ -39,8 +39,8 @@ class MatMult_SepVector(Op.Operator):
 		if(not isinstance(data,pyVector.vectorSEP)): raise TypeError("ERROR! Data vector not a Vector object")
 		if(not add): model.zero()
 		#Converting to numpy arrays
-		data_np=np.array(data.vec,copy=False)
-		model_np=np.array(model.vec,copy=False)
+		data_np=np.array(data.vec.getCpp(),copy=False)
+		model_np=np.array(model.vec.getCpp(),copy=False)
 		model_np+=np.matmul(A.H,data_np)
 		return
 

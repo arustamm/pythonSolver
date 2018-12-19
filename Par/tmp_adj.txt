@@ -1,1 +1,0 @@
-RUN: ./python_solver/matrix1 matrix_name=tmp_matrix.H <input.H adj=1  >output.H out=output.H@

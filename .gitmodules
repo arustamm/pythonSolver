@@ -1,0 +1,3 @@
+[submodule "GenericSolver/external/genericIO"]
+	path = GenericSolver/external/genericIO
+	url = http://cees-gitlab.Stanford.EDU/bob/genericIO.git

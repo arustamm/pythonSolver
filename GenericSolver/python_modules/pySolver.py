@@ -4,10 +4,7 @@ import pyVector as Vec
 import numpy as np
 import os
 #Functions and modules necessary for writing on disk
-try:
-    import cPickle as pickle
-except ModuleNotFoundError:
-    import pickle
+import pickle
 import atexit
 from sys_util import mkdir
 from shutil import rmtree

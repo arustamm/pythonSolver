@@ -11,11 +11,6 @@ from sys import version_info
 import sys_util
 import sep_util
 
-#Sep library
-import Hypercube
-import pySepVector
-import SepVector
-
 #regex to read output of Solver_ops
 re_dpr=re.compile("DOT RESULT(.*)")
 
@@ -53,7 +48,7 @@ class vector:
 		return
 
 	def clone(self):
-		"""Function to clone (deep copy) a vector"""
+		"""Function to clone (deep copy) a vector from a vector or a Space"""
 		raise NotImplementedError("clone must be overwritten")
 		return
 
@@ -62,10 +57,10 @@ class vector:
 		raise NotImplementedError("cloneSpace must be overwritten")
 		return
 
-	def cloneVector(self):
-		"""Function to clone/allocate vector from vector space"""
-		raise NotImplementedError("cloneVector must be overwritten")
-		return
+	# def cloneVector(self):
+	# 	"""Function to clone/allocate vector from vector space"""
+	# 	raise NotImplementedError("cloneVector must be overwritten")
+	# 	return
 
 	def checkSame(self):
 		"""Function to check to make sure the vectors exist in the same space"""
@@ -103,6 +98,10 @@ class vector:
 		"""Function to check if two vectors are identical"""
 		raise NotImplementedError("isDifferent must be overwritten")
 		return
+
+#Sep library (Importing after vector since SepVector uses it)
+import Hypercube
+import SepVector
 
 #Set of vectors (useful to store results and same-Space vectors together)
 class vectorSet:
@@ -200,16 +199,16 @@ class superVector(vector):
 		return
 
 	def clone(self):
-		"""Function to clone (deep copy) a vector"""
+		"""Function to clone (deep copy) a vector from a vector or a Space"""
 		return superVector(self.vec1.clone(),self.vec2.clone())
 
 	def cloneSpace(self):
 		"""Function to clone vector space"""
 		return superVector(self.vec1.cloneSpace(),self.vec2.cloneSpace())
 
-	def cloneVector(self):
-		"""Function to clone/allocate vector from vector space"""
-		return superVector(self.vec1.cloneVector(),self.vec2.cloneVector())
+	# def cloneVector(self):
+	# 	"""Function to clone/allocate vector from vector space"""
+	# 	return superVector(self.vec1.cloneVector(),self.vec2.cloneVector())
 
 	def checkSame(self,vec_in):
 		"""Function to check to make sure the vectors exist in the same space"""
@@ -348,8 +347,12 @@ class vectorIC(vector):
 		return
 
 	def clone(self):
-		"""Function to clone (deep copy) a vector"""
-		return deepcopy(self)
+		"""Function to clone (deep copy) a vector from a vector or a Space"""
+		vec_clone = self.clone() #Deep clone of vector
+		#Checking if a vector space was provided
+		if(vec_clone.arr.size == 0):
+			vec_clone.arr = np.zeros(tuple(reversed(vec_clone.naxis)))
+		return vec_clone
 
 	def cloneSpace(self):
 		"""Function to clone vector space only (vector without actual vector array by using empty array of size 0)"""
@@ -361,13 +364,13 @@ class vectorIC(vector):
 		vec_space.size = self.size
 		return vec_space
 
-	def cloneVector(self):
-		"""Function to clone/allocate vector from vector space"""
-		vec_clone = self.clone() #Deep clone of vector
-		#Checking if a vector space was provided
-		if(vec_clone.arr.size == 0):
-			vec_clone.arr = np.zeros(tuple(reversed(vec_clone.naxis)))
-		return vec_clone
+	# def cloneVector(self):
+	# 	"""Function to clone/allocate vector from vector space"""
+	# 	vec_clone = self.clone() #Deep clone of vector
+	# 	#Checking if a vector space was provided
+	# 	if(vec_clone.arr.size == 0):
+	# 		vec_clone.arr = np.zeros(tuple(reversed(vec_clone.naxis)))
+	# 	return vec_clone
 
 	def checkSame(self,vec2):
 		"""Function to check dimensionality of vectors"""
@@ -571,22 +574,35 @@ class vectorOC(vector):
 		return
 
 	def clone(self):
-		"""Function to clone (deep copy) a vector and creating a copy of the associated header file"""
+		"""Function to clone (deep copy) a vector or from a space and creating a copy of the associated header file"""
 		#First performing a deep copy of the vector
 		vec_clone = deepcopy(self)
-		#Creating a temporary file with similar name but computer time at the end
-		tmp_vec = self.vecfile.split(".H")[0].split("/")[-1] #Getting filename only
-		#Placing temporary file into datapath folder
-		tmp_vec = sep_util.datapath+tmp_vec+"_clone_"+str(int(time.time()*1000000))+".H"
-		tmp_bin = tmp_vec+"@"
-		#Copying header and binary files and setting pointers to new file
-		copyfile(self.vecfile, tmp_vec) #Copying header
-		copyfile(self.binfile, tmp_bin) #Copying binary
-		vec_clone.vecfile = tmp_vec
-		vec_clone.binfile = tmp_bin
-		#"Fixing" header file
-		with open(vec_clone.vecfile,"a") as fid:
-			fid.write("in='%s\n'"%tmp_bin)
+		if(vec_clone.vecfile == None):
+			#Creating header and binary files from vector space
+			#Placing temporary file into datapath folder
+			tmp_vec = sep_util.datapath+"clone_tmp_vector"+str(int(time.time()*1000000))+".H"
+			axis_file = ""
+			for iaxis,naxis in enumerate(vec_clone.naxis):
+				axis_file += "n%s=%s "%(iaxis+1,naxis)
+			#Creating temporary vector file
+			cmd="Spike %s | Add scale=0.0 > %s"%(axis_file,tmp_vec)
+			sys_util.RunShellCmd(cmd,get_stat=False,get_output=False)
+			vec_clone.vecfile = tmp_vec
+			vec_clone.binfile = sep_util.get_binary(vec_clone.vecfile)
+		else:
+			#Creating a temporary file with similar name but computer time at the end
+			tmp_vec = self.vecfile.split(".H")[0].split("/")[-1] #Getting filename only
+			#Placing temporary file into datapath folder
+			tmp_vec = sep_util.datapath+tmp_vec+"_clone_"+str(int(time.time()*1000000))+".H"
+			tmp_bin = tmp_vec+"@"
+			#Copying header and binary files and setting pointers to new file
+			copyfile(self.vecfile, tmp_vec) #Copying header
+			copyfile(self.binfile, tmp_bin) #Copying binary
+			vec_clone.vecfile = tmp_vec
+			vec_clone.binfile = tmp_bin
+			#"Fixing" header file
+			with open(vec_clone.vecfile,"a") as fid:
+				fid.write("in='%s\n'"%tmp_bin)
 		#By default the clone file is going to be removed once the vector is deleted
 		vec_clone.remove_file = True
 		return vec_clone
@@ -600,25 +616,25 @@ class vectorOC(vector):
 		vec_space.remove_file = False
 		return vec_space
 
-	def cloneVector(self):
-		"""Function to clone/allocate vector from vector space"""
-		vec_clone = deepcopy(self) #Deep clone of vector
-		#Checking if a vector space was provided
-		if(vec_clone.vecfile == None):
-			#Creating header and binary files from vector space
-			#Placing temporary file into datapath folder
-			tmp_vec = sep_util.datapath+"cloneVector_tmp_vector"+str(int(time.time()*1000000))+".H"
-			axis_file = ""
-			for iaxis,naxis in enumerate(vec_clone.naxis):
-				axis_file += "n%s=%s "%(iaxis+1,naxis)
-			#Creating temporary vector file
-			cmd="Spike %s | Add scale=0.0 > %s"%(axis_file,tmp_vec)
-			sys_util.RunShellCmd(cmd,get_stat=False,get_output=False)
-			vec_clone.vecfile = tmp_vec
-			vec_clone.binfile = sep_util.get_binary(vec_clone.vecfile)
-			#Removing header file?
-			vec_clone.remove_file = True
-		return vec_clone
+	# def cloneVector(self):
+	# 	"""Function to clone/allocate vector from vector space"""
+	# 	vec_clone = deepcopy(self) #Deep clone of vector
+	# 	#Checking if a vector space was provided
+	# 	if(vec_clone.vecfile == None):
+	# 		#Creating header and binary files from vector space
+	# 		#Placing temporary file into datapath folder
+	# 		tmp_vec = sep_util.datapath+"cloneVector_tmp_vector"+str(int(time.time()*1000000))+".H"
+	# 		axis_file = ""
+	# 		for iaxis,naxis in enumerate(vec_clone.naxis):
+	# 			axis_file += "n%s=%s "%(iaxis+1,naxis)
+	# 		#Creating temporary vector file
+	# 		cmd="Spike %s | Add scale=0.0 > %s"%(axis_file,tmp_vec)
+	# 		sys_util.RunShellCmd(cmd,get_stat=False,get_output=False)
+	# 		vec_clone.vecfile = tmp_vec
+	# 		vec_clone.binfile = sep_util.get_binary(vec_clone.vecfile)
+	# 		#Removing header file?
+	# 		vec_clone.remove_file = True
+	# 	return vec_clone
 
 	def checkSame(self,vec2):
 		"""Function to check dimensionality of vectors"""
@@ -725,13 +741,13 @@ class vectorOC(vector):
 
 class vectorSEP(vector):
 	"""SEP vector class based on Bob's library"""
-	
+
 	def __init__(self,input):
 		"""Creating a vectorSEP using SepVector.Vector class"""
 		if(isinstance(input,Hypercube.hypercube)):
 			#Using an hypercube to create vector
 			self.vec=SepVector.getSepVector(input)
-		elif(isinstance(input,pySepVector.Vector)):
+		elif(isinstance(input,SepVector.vector)):
 			#Using SepVector directly
 			self.vec=input
 		elif(isinstance(input,vectorIC)):
@@ -746,7 +762,7 @@ class vectorSEP(vector):
 			del arr, ax_info
 		elif(isinstance(input,np.ndarray)):
 			#Using Numpy Array
-			if(not np.isfortran(input)): 
+			if(not np.isfortran(input)):
 				shape=tuple(reversed(input.shape)) #If C last axis is the "fastest"
 			else:
 				shape = input.shape
@@ -767,14 +783,14 @@ class vectorSEP(vector):
 		hyper = self.vec.getHyper()
 		#Number of axes
 		self.ndims = hyper.getNdim()
-		#Number of elements per axis 
+		#Number of elements per axis
 		self.naxis=tuple([hyper.getAxis(ii).n for ii in range(1,self.ndims+1)])
 		#Total number of elements
 		self.size = hyper.getN123()
 		#Creating ax_info
 		self.ax_info=[[hyper.getAxis(ii).n,hyper.getAxis(ii).o,hyper.getAxis(ii).d,hyper.getAxis(ii).label] for ii in range(1,self.ndims+1)]
 		return
-	
+
 	def norm(self,N=2):
 		"""Function to compute vector N-norm using Numpy"""
 		if(N == 1):
@@ -808,9 +824,9 @@ class vectorSEP(vector):
 		"""Function to clone vector space only"""
 		return vectorSEP(self.vec.cloneSpace())
 
-	def cloneVector(self):
-		"""Function to clone/allocate vector from vector space by getting the Hypercube"""
-		return vectorSEP(self.vec.getHyper())
+	# def cloneVector(self):
+	# 	"""Function to clone/allocate vector from vector space by getting the Hypercube"""
+	# 	return vectorSEP(self.vec.getHyper())
 
 	def checkSame(self,vec2):
 		"""Function to check dimensionality of vectors"""
@@ -858,7 +874,7 @@ class vectorSEP(vector):
 		#Writing binary file
 		with open(binfile,mode+'b') as fid:
 			#Creating np_array from vectorSEP
-			arr = np.array(self.vec)
+			arr = np.array(self.vec.getCpp())
 			#Writing big-ending floating point number
 			arr.astype('>f').tofile(fid)
 		fid.close()
@@ -871,8 +887,8 @@ class vectorSEP(vector):
 		#Checking dimensionality
 		if(not self.checkSame(vec2)): raise ValueError("ERROR! Dimensionality not equal: vec1 = %s; vec2 = %s"%(self.naxis,vec2.naxis))
 		#Element-wise copy of the input array
-		selfvec_np=np.array(self.vec,copy=False)
-		vec2_np=np.array(vec2.vec,copy=False)
+		selfvec_np=np.array(self.vec.getCpp(),copy=False)
+		vec2_np=np.array(vec2.vec.getCpp(),copy=False)
 		selfvec_np[:]=vec2_np
 		return
 
@@ -913,11 +929,3 @@ class vectorSEP(vector):
 		#Checking whether the input is a vector or not
 		if(not isinstance(vec2,vectorSEP)): raise TypeError("ERROR! Provided input vector not a vectorSEP!")
 		return self.vec.isDifferent(vec2.vec)
-		
-	
-	
-	
-	
-	
-	
-	
