@@ -24,6 +24,10 @@ find_package(OpenMP)
 #Adding genericIO submodule
 # execute_process(COMMAND git submodule add http://cees-gitlab.Stanford.EDU/bob/genericIO.git external/genericIO WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
 #Updating genericIO library
+if(NOT DEFINED AddGenericIO)
+    set(AddGenericIO TRUE)
+endif()
+if(AddGenericIO)
   execute_process(COMMAND git submodule update --init --recursive -- external/genericIO WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
   add_subdirectory(external/genericIO)
   include_directories(${CMAKE_CURRENT_BINARY_DIR}/external/genericIO)
@@ -33,6 +37,8 @@ find_package(OpenMP)
   include_directories(${CMAKE_CURRENT_SOURCE_DIR}/external/genericIO/external/sepVector/external/hypercube/lib)
   include_directories(${CMAKE_CURRENT_SOURCE_DIR}/external/genericIO/external/buffers/external/json)
   include_directories(${CMAKE_CURRENT_SOURCE_DIR}/external/genericIO/external/buffers/lib)
+  set(AddGenericIO FALSE)
+endif(AddGenericIO)
 
 #Finding multithread libraries
 find_package(Threads)
