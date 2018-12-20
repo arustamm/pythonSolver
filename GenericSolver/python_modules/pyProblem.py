@@ -267,7 +267,7 @@ class ProblemL2LinearReg(Problem):
 		self.op=pyOp.stackOperator(op,reg_op,model,Vec.superVector(self.data,reg_op.range)) #Modeling operator
 		self.epsilon=epsilon #Regularization weight
 		#Residual vector (data and model residual vectors)
-		self.res=self.op.range.cloneVector()
+		self.res=self.op.range.clone()
 		self.res.zero()
 		#Dresidual vector
 		self.dres=self.res.clone()

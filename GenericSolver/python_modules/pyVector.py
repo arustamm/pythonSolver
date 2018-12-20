@@ -348,7 +348,7 @@ class vectorIC(vector):
 
 	def clone(self):
 		"""Function to clone (deep copy) a vector from a vector or a Space"""
-		vec_clone = self.clone() #Deep clone of vector
+		vec_clone = deepcopy(self) #Deep clone of vector
 		#Checking if a vector space was provided
 		if(vec_clone.arr.size == 0):
 			vec_clone.arr = np.zeros(tuple(reversed(vec_clone.naxis)))
