@@ -742,23 +742,29 @@ class vectorOC(vector):
 class vectorSEP(vector):
 	"""SEP vector class based on Bob's library"""
 
-	def __init__(self,input):
-		"""Creating a vectorSEP using SepVector.Vector class"""
+	def __init__(self,input,storage_in="dataFloat"):
+		"""Creating a vectorSEP using SepVector.Vector class
+			storage_in = ('dataFloat'), 'dataComplex', 'dataDouble', 'dataInt', 'dataByte'
+		"""
 		if(isinstance(input,Hypercube.hypercube)):
 			#Using an hypercube to create vector
-			self.vec=SepVector.getSepVector(input)
+			self.vec=SepVector.getSepVector(input,storage=storage_in)
 		elif(isinstance(input,SepVector.vector)):
 			#Using SepVector directly
 			self.vec=input
 		elif(isinstance(input,vectorIC)):
 			#Using vectorIC
 			hyper_in = Hypercube.hypercube(axes=[Hypercube.axis(n=ii) for ii in input.naxis])
-			self.vec=SepVector.getSepVector(hyper_in,input.arr)
+			self.vec=SepVector.getSepVector(hyper_in,storage=storage_in)
+			vec_np = np.array(self.vec.getCpp(),copy=False)
+			vec_np[:] = input.arr
 		elif(isinstance(input,vectorOC)):
 			#Using vectorOC
 			arr,ax_info = sep_util.read_file(input.vecfile)
 			hyper_in = Hypercube.hypercube(axes=[Hypercube.axis(n=axis[0],o=axis[1],d=axis[2],label=axis[3]) for axis in ax_info[:sep_util.get_num_axes(input.vecfile)]])
-			self.vec=SepVector.getSepVector(hyper_in,arr)
+			self.vec=SepVector.getSepVector(hyper_in,storage=storage_in)
+			vec_np = np.array(self.vec.getCpp(),copy=False)
+			vec_np[:] = arr
 			del arr, ax_info
 		elif(isinstance(input,np.ndarray)):
 			#Using Numpy Array
@@ -767,16 +773,20 @@ class vectorSEP(vector):
 			else:
 				shape = input.shape
 			hyper_in = Hypercube.hypercube(axes=[Hypercube.axis(n=ii) for ii in shape])
-			self.vec=SepVector.getSepVector(hyper_in,input)
+			self.vec=SepVector.getSepVector(hyper_in,storage=storage_in)
+			vec_np = np.array(self.vec.getCpp(),copy=False)
+			vec_np[:] = input
 		elif(isinstance(input,str)):
 			#Using SEP header file
 			arr,ax_info = sep_util.read_file(input)
 			hyper_in = Hypercube.hypercube(axes=[Hypercube.axis(n=axis[0],o=axis[1],d=axis[2],label=axis[3]) for axis in ax_info[:sep_util.get_num_axes(input)]])
-			self.vec=SepVector.getSepVector(hyper_in,arr)
+			self.vec=SepVector.getSepVector(hyper_in,storage=storage_in)
+			vec_np = np.array(self.vec.getCpp(),copy=False)
+			vec_np[:] = arr
 			del arr, ax_info
 		elif(isinstance(input,tuple)):
 			#Using an axis tuple
-			self.vec=SepVector.getSepVector(Hypercube.hypercube(axes=[Hypercube.axis(n=ii) for ii in input]))
+			self.vec=SepVector.getSepVector(Hypercube.hypercube(axes=[Hypercube.axis(n=ii) for ii in input]),storage=storage_in)
 		else:
 			#Not supported type
 			raise ValueError("ERROR! Input variable not currently supported!")
