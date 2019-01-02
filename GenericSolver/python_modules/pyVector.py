@@ -4,12 +4,20 @@ import re
 import math
 import time
 import os
+import imp
 from copy import deepcopy
 from shutil import copyfile
 from sys import version_info
 #other modules
 import sys_util
 import sep_util
+#Verify if GenericIO modules are presents
+try:
+	imp.find_module('Hypercube')
+	imp.find_module('SepVector')
+	genIO_found = True
+except ImportError:
+	genIO_found = False
 
 #regex to read output of Solver_ops
 re_dpr=re.compile("DOT RESULT(.*)")
@@ -99,9 +107,10 @@ class vector:
 		raise NotImplementedError("isDifferent must be overwritten")
 		return
 
-#Sep library (Importing after vector since SepVector uses it)
-import Hypercube
-import SepVector
+#Sep library (Importing after vector since SepVector uses it) if present
+if genIO_found:
+	import Hypercube
+	import SepVector
 
 #Set of vectors (useful to store results and same-Space vectors together)
 class vectorSet:
@@ -739,203 +748,204 @@ class vectorOC(vector):
 		hashmd5_vec2=sys_util.hashfile(vec2.binfile)
 		return (hashmd5_vec1!=hashmd5_vec2)
 
-class vectorSEP(vector):
-	"""SEP vector class based on Bob's library"""
+if genIO_found:
+	class vectorSEP(vector):
+		"""SEP vector class based on Bob's library"""
 
-	def __init__(self,input,storage_in="dataFloat"):
-		"""Creating a vectorSEP using SepVector.Vector class
-			storage_in = ('dataFloat'), 'dataComplex', 'dataDouble', 'dataInt', 'dataByte'
-		"""
-		if(isinstance(input,Hypercube.hypercube)):
-			#Using an hypercube to create vector
-			self.vec=SepVector.getSepVector(input,storage=storage_in)
-		elif(isinstance(input,SepVector.vector)):
-			#Using SepVector directly
-			self.vec=input
-		elif(isinstance(input,vectorIC)):
-			#Using vectorIC
-			hyper_in = Hypercube.hypercube(axes=[Hypercube.axis(n=ii) for ii in input.naxis])
-			self.vec=SepVector.getSepVector(hyper_in,storage=storage_in)
-			vec_np = np.array(self.vec.getCpp(),copy=False)
-			vec_np[:] = input.arr
-		elif(isinstance(input,vectorOC)):
-			#Using vectorOC
-			arr,ax_info = sep_util.read_file(input.vecfile)
-			hyper_in = Hypercube.hypercube(axes=[Hypercube.axis(n=axis[0],o=axis[1],d=axis[2],label=axis[3]) for axis in ax_info[:sep_util.get_num_axes(input.vecfile)]])
-			self.vec=SepVector.getSepVector(hyper_in,storage=storage_in)
-			vec_np = np.array(self.vec.getCpp(),copy=False)
-			vec_np[:] = arr
-			del arr, ax_info
-		elif(isinstance(input,np.ndarray)):
-			#Using Numpy Array
-			if(not np.isfortran(input)):
-				shape=tuple(reversed(input.shape)) #If C last axis is the "fastest"
+		def __init__(self,input,storage_in="dataFloat"):
+			"""Creating a vectorSEP using SepVector.Vector class
+				storage_in = ('dataFloat'), 'dataComplex', 'dataDouble', 'dataInt', 'dataByte'
+			"""
+			if(isinstance(input,Hypercube.hypercube)):
+				#Using an hypercube to create vector
+				self.vec=SepVector.getSepVector(input,storage=storage_in)
+			elif(isinstance(input,SepVector.vector)):
+				#Using SepVector directly
+				self.vec=input
+			elif(isinstance(input,vectorIC)):
+				#Using vectorIC
+				hyper_in = Hypercube.hypercube(axes=[Hypercube.axis(n=ii) for ii in input.naxis])
+				self.vec=SepVector.getSepVector(hyper_in,storage=storage_in)
+				vec_np = np.array(self.vec.getCpp(),copy=False)
+				vec_np[:] = input.arr
+			elif(isinstance(input,vectorOC)):
+				#Using vectorOC
+				arr,ax_info = sep_util.read_file(input.vecfile)
+				hyper_in = Hypercube.hypercube(axes=[Hypercube.axis(n=axis[0],o=axis[1],d=axis[2],label=axis[3]) for axis in ax_info[:sep_util.get_num_axes(input.vecfile)]])
+				self.vec=SepVector.getSepVector(hyper_in,storage=storage_in)
+				vec_np = np.array(self.vec.getCpp(),copy=False)
+				vec_np[:] = arr
+				del arr, ax_info
+			elif(isinstance(input,np.ndarray)):
+				#Using Numpy Array
+				if(not np.isfortran(input)):
+					shape=tuple(reversed(input.shape)) #If C last axis is the "fastest"
+				else:
+					shape = input.shape
+				hyper_in = Hypercube.hypercube(axes=[Hypercube.axis(n=ii) for ii in shape])
+				self.vec=SepVector.getSepVector(hyper_in,storage=storage_in)
+				vec_np = np.array(self.vec.getCpp(),copy=False)
+				vec_np[:] = input
+			elif(isinstance(input,str)):
+				#Using SEP header file
+				arr,ax_info = sep_util.read_file(input)
+				hyper_in = Hypercube.hypercube(axes=[Hypercube.axis(n=axis[0],o=axis[1],d=axis[2],label=axis[3]) for axis in ax_info[:sep_util.get_num_axes(input)]])
+				self.vec=SepVector.getSepVector(hyper_in,storage=storage_in)
+				vec_np = np.array(self.vec.getCpp(),copy=False)
+				vec_np[:] = arr
+				del arr, ax_info
+			elif(isinstance(input,tuple)):
+				#Using an axis tuple
+				self.vec=SepVector.getSepVector(Hypercube.hypercube(axes=[Hypercube.axis(n=ii) for ii in input]),storage=storage_in)
 			else:
-				shape = input.shape
-			hyper_in = Hypercube.hypercube(axes=[Hypercube.axis(n=ii) for ii in shape])
-			self.vec=SepVector.getSepVector(hyper_in,storage=storage_in)
-			vec_np = np.array(self.vec.getCpp(),copy=False)
-			vec_np[:] = input
-		elif(isinstance(input,str)):
-			#Using SEP header file
-			arr,ax_info = sep_util.read_file(input)
-			hyper_in = Hypercube.hypercube(axes=[Hypercube.axis(n=axis[0],o=axis[1],d=axis[2],label=axis[3]) for axis in ax_info[:sep_util.get_num_axes(input)]])
-			self.vec=SepVector.getSepVector(hyper_in,storage=storage_in)
-			vec_np = np.array(self.vec.getCpp(),copy=False)
-			vec_np[:] = arr
-			del arr, ax_info
-		elif(isinstance(input,tuple)):
-			#Using an axis tuple
-			self.vec=SepVector.getSepVector(Hypercube.hypercube(axes=[Hypercube.axis(n=ii) for ii in input]),storage=storage_in)
-		else:
-			#Not supported type
-			raise ValueError("ERROR! Input variable not currently supported!")
-		hyper = self.vec.getHyper()
-		#Number of axes
-		self.ndims = hyper.getNdim()
-		#Number of elements per axis
-		self.naxis=tuple([hyper.getAxis(ii).n for ii in range(1,self.ndims+1)])
-		#Total number of elements
-		self.size = hyper.getN123()
-		#Creating ax_info
-		self.ax_info=[[hyper.getAxis(ii).n,hyper.getAxis(ii).o,hyper.getAxis(ii).d,hyper.getAxis(ii).label] for ii in range(1,self.ndims+1)]
-		return
+				#Not supported type
+				raise ValueError("ERROR! Input variable not currently supported!")
+			hyper = self.vec.getHyper()
+			#Number of axes
+			self.ndims = hyper.getNdim()
+			#Number of elements per axis
+			self.naxis=tuple([hyper.getAxis(ii).n for ii in range(1,self.ndims+1)])
+			#Total number of elements
+			self.size = hyper.getN123()
+			#Creating ax_info
+			self.ax_info=[[hyper.getAxis(ii).n,hyper.getAxis(ii).o,hyper.getAxis(ii).d,hyper.getAxis(ii).label] for ii in range(1,self.ndims+1)]
+			return
 
-	def norm(self,N=2):
-		"""Function to compute vector N-norm using Numpy"""
-		if(N == 1):
-			return self.vec.norm(N)
-		elif (N == 2):
-			return np.sqrt(self.vec.norm(N))
-		else:
-			raise NotImplementedError("ERROR! Norm different than L1 and L2 not currently supported!")
-		return
+		def norm(self,N=2):
+			"""Function to compute vector N-norm using Numpy"""
+			if(N == 1):
+				return self.vec.norm(N)
+			elif (N == 2):
+				return np.sqrt(self.vec.norm(N))
+			else:
+				raise NotImplementedError("ERROR! Norm different than L1 and L2 not currently supported!")
+			return
 
-	def zero(self):
-		"""Function to zero out a vector"""
-		self.vec.zero()
-		return
+		def zero(self):
+			"""Function to zero out a vector"""
+			self.vec.zero()
+			return
 
-	def scale(self,sc):
-		"""Function to scale a vector"""
-		self.vec.scale(sc)
-		return
+		def scale(self,sc):
+			"""Function to scale a vector"""
+			self.vec.scale(sc)
+			return
 
-	def rand(self,snr=1.0):
-		"""Fill vector with random number"""
-		self.vec.rand()
-		return
+		def rand(self,snr=1.0):
+			"""Fill vector with random number"""
+			self.vec.rand()
+			return
 
-	def clone(self):
-		"""Function to clone (deep copy) a vector"""
-		return vectorSEP(self.vec.clone())
+		def clone(self):
+			"""Function to clone (deep copy) a vector"""
+			return vectorSEP(self.vec.clone())
 
-	def cloneSpace(self):
-		"""Function to clone vector space only"""
-		return vectorSEP(self.vec.cloneSpace())
+		def cloneSpace(self):
+			"""Function to clone vector space only"""
+			return vectorSEP(self.vec.cloneSpace())
 
-	# def cloneVector(self):
-	# 	"""Function to clone/allocate vector from vector space by getting the Hypercube"""
-	# 	return vectorSEP(self.vec.getHyper())
+		# def cloneVector(self):
+		# 	"""Function to clone/allocate vector from vector space by getting the Hypercube"""
+		# 	return vectorSEP(self.vec.getHyper())
 
-	def checkSame(self,vec2):
-		"""Function to check dimensionality of vectors"""
-		#Checking whether the input is a vector or not
-		if(not isinstance(vec2,vectorSEP)): raise TypeError("ERROR! Provided input vector not a vectorSEP!")
-		return self.vec.checkSame(vec2.vec)
+		def checkSame(self,vec2):
+			"""Function to check dimensionality of vectors"""
+			#Checking whether the input is a vector or not
+			if(not isinstance(vec2,vectorSEP)): raise TypeError("ERROR! Provided input vector not a vectorSEP!")
+			return self.vec.checkSame(vec2.vec)
 
-	def writeVec(self,filename,mode='w'):
-		"""Function to write vector to file"""
-		#Check writing mode
-		if(not mode in 'wa'): raise ValueError("Mode must be appending 'a' or writing 'w' ")
-		#writing header/pointer file if not present and not append mode
-		if(not (os.path.isfile(filename) and mode in 'a')):
-			binfile = sep_util.datapath+filename.split('/')[-1]+'@'
-			with open(filename,mode) as fid:
-				#Writing axis info
-				if(self.ax_info):
-					for ii,ax_info in enumerate(self.ax_info):
-						ax_id = ii + 1
-						fid.write("n%s=%s o%s=%s d%s=%s label%s='%s'\n"%(ax_id,ax_info[0],ax_id,ax_info[1],ax_id,ax_info[2],ax_id,ax_info[3]))
-				else:
-					for ii,n_axis in enumerate(self.naxis):
-						ax_id = ii + 1
-						fid.write("n%s=%s o%s=0.0 d%s=1.0 \n"%(ax_id,n_axis,ax_id,ax_id))
-				#Writing last axis for allowing appending (unless we are dealing with a scalar)
-				if(self.naxis != (1,)):
-					ax_id = self.ndims+1
-					fid.write("n%s=%s o%s=0.0 d%s=1.0 \n"%(ax_id,1,ax_id,ax_id))
-				fid.write("in='%s'\n"%(binfile))
-			fid.close()
-		else:
-			binfile = sep_util.get_binary(filename)
-			if(mode in 'a'):
-				axes = sep_util.get_axes(filename)
-				#Number of vectors already present in the file
-				if(self.naxis == (1,)):
-					n_vec = axes[0][0]
-					append_dim = self.ndims
-				else:
-					n_vec = axes[self.ndims][0]
-					append_dim = self.ndims+1
+		def writeVec(self,filename,mode='w'):
+			"""Function to write vector to file"""
+			#Check writing mode
+			if(not mode in 'wa'): raise ValueError("Mode must be appending 'a' or writing 'w' ")
+			#writing header/pointer file if not present and not append mode
+			if(not (os.path.isfile(filename) and mode in 'a')):
+				binfile = sep_util.datapath+filename.split('/')[-1]+'@'
 				with open(filename,mode) as fid:
-					fid.write("n%s=%s o%s=0.0 d%s=1.0 \n"%(append_dim,n_vec+1,append_dim,append_dim))
+					#Writing axis info
+					if(self.ax_info):
+						for ii,ax_info in enumerate(self.ax_info):
+							ax_id = ii + 1
+							fid.write("n%s=%s o%s=%s d%s=%s label%s='%s'\n"%(ax_id,ax_info[0],ax_id,ax_info[1],ax_id,ax_info[2],ax_id,ax_info[3]))
+					else:
+						for ii,n_axis in enumerate(self.naxis):
+							ax_id = ii + 1
+							fid.write("n%s=%s o%s=0.0 d%s=1.0 \n"%(ax_id,n_axis,ax_id,ax_id))
+					#Writing last axis for allowing appending (unless we are dealing with a scalar)
+					if(self.naxis != (1,)):
+						ax_id = self.ndims+1
+						fid.write("n%s=%s o%s=0.0 d%s=1.0 \n"%(ax_id,1,ax_id,ax_id))
+					fid.write("in='%s'\n"%(binfile))
 				fid.close()
-		#Writing binary file
-		with open(binfile,mode+'b') as fid:
-			#Creating np_array from vectorSEP
-			arr = np.array(self.vec.getCpp())
-			#Writing big-ending floating point number
-			arr.astype('>f').tofile(fid)
-		fid.close()
-		return
+			else:
+				binfile = sep_util.get_binary(filename)
+				if(mode in 'a'):
+					axes = sep_util.get_axes(filename)
+					#Number of vectors already present in the file
+					if(self.naxis == (1,)):
+						n_vec = axes[0][0]
+						append_dim = self.ndims
+					else:
+						n_vec = axes[self.ndims][0]
+						append_dim = self.ndims+1
+					with open(filename,mode) as fid:
+						fid.write("n%s=%s o%s=0.0 d%s=1.0 \n"%(append_dim,n_vec+1,append_dim,append_dim))
+					fid.close()
+			#Writing binary file
+			with open(binfile,mode+'b') as fid:
+				#Creating np_array from vectorSEP
+				arr = np.array(self.vec.getCpp())
+				#Writing big-ending floating point number
+				arr.astype('>f').tofile(fid)
+			fid.close()
+			return
 
-	def copy(self,vec2):
-		"""Function to copy vector from input vector"""
-		#Checking whether the input is a vector or not
-		if(not isinstance(vec2,vectorSEP)): raise TypeError("ERROR! Provided input vector not a vectorSEP!")
-		#Checking dimensionality
-		if(not self.checkSame(vec2)): raise ValueError("ERROR! Dimensionality not equal: vec1 = %s; vec2 = %s"%(self.naxis,vec2.naxis))
-		#Element-wise copy of the input array
-		selfvec_np=np.array(self.vec.getCpp(),copy=False)
-		vec2_np=np.array(vec2.vec.getCpp(),copy=False)
-		selfvec_np[:]=vec2_np
-		return
+		def copy(self,vec2):
+			"""Function to copy vector from input vector"""
+			#Checking whether the input is a vector or not
+			if(not isinstance(vec2,vectorSEP)): raise TypeError("ERROR! Provided input vector not a vectorSEP!")
+			#Checking dimensionality
+			if(not self.checkSame(vec2)): raise ValueError("ERROR! Dimensionality not equal: vec1 = %s; vec2 = %s"%(self.naxis,vec2.naxis))
+			#Element-wise copy of the input array
+			selfvec_np=np.array(self.vec.getCpp(),copy=False)
+			vec2_np=np.array(vec2.vec.getCpp(),copy=False)
+			selfvec_np[:]=vec2_np
+			return
 
-	def scaleAdd(self,vec2,sc1=1.0,sc2=1.0):
-		"""Function to scale a vector"""
-		#Checking whether the input is a vector or not
-		if(not isinstance(vec2,vectorSEP)): raise TypeError("ERROR! Provided input vector not a vectorSEP!")
-		#Checking dimensionality
-		if(not self.checkSame(vec2)): raise ValueError("ERROR! Dimensionality not equal: vec1 = %s; vec2 = %s"%(self.naxis,vec2.naxis))
-		#Performing scaling and addition
-		self.vec.scaleAdd(vec2.vec,sc1,sc2)
-		return
+		def scaleAdd(self,vec2,sc1=1.0,sc2=1.0):
+			"""Function to scale a vector"""
+			#Checking whether the input is a vector or not
+			if(not isinstance(vec2,vectorSEP)): raise TypeError("ERROR! Provided input vector not a vectorSEP!")
+			#Checking dimensionality
+			if(not self.checkSame(vec2)): raise ValueError("ERROR! Dimensionality not equal: vec1 = %s; vec2 = %s"%(self.naxis,vec2.naxis))
+			#Performing scaling and addition
+			self.vec.scaleAdd(vec2.vec,sc1,sc2)
+			return
 
-	def dot(self,vec2):
-		"""Function to compute dot product between two vectors"""
-		#Checking whether the input is a vector or not
-		if(not isinstance(vec2,vectorSEP)): raise TypeError("ERROR! Provided input vector not a vectorSEP!")
-		#Checking size (must have same number of elements)
-		if(self.size!=vec2.size): raise ValuError("ERROR! Vector size mismatching: vec1 = %s; vec2 = %s"%(self.size,vec2.size))
-		#Checking dimensionality
-		if(not self.checkSame(vec2)): raise ValueError("ERROR! Dimensionality not equal: vec1 = %s; vec2 = %s"%(self.naxis,vec2.naxis))
-		return self.vec.dot(vec2.vec)
+		def dot(self,vec2):
+			"""Function to compute dot product between two vectors"""
+			#Checking whether the input is a vector or not
+			if(not isinstance(vec2,vectorSEP)): raise TypeError("ERROR! Provided input vector not a vectorSEP!")
+			#Checking size (must have same number of elements)
+			if(self.size!=vec2.size): raise ValuError("ERROR! Vector size mismatching: vec1 = %s; vec2 = %s"%(self.size,vec2.size))
+			#Checking dimensionality
+			if(not self.checkSame(vec2)): raise ValueError("ERROR! Dimensionality not equal: vec1 = %s; vec2 = %s"%(self.naxis,vec2.naxis))
+			return self.vec.dot(vec2.vec)
 
-	def multiply(self,vec2):
-		"""Function to multiply element-wise two vectors"""
-		#Checking whether the input is a vector or not
-		if(not isinstance(vec2,vectorSEP)): raise TypeError("ERROR! Provided input vector not a vectorSEP!")
-		#Checking size (must have same number of elements)
-		if(self.size!=vec2.size): raise ValuError("ERROR! Vector size mismatching: vec1 = %s; vec2 = %s"%(self.size,vec2.size))
-		#Checking dimensionality
-		if(not self.checkSame(vec2)): raise ValueError("ERROR! Dimensionality not equal: vec1 = %s; vec2 = %s"%(self.naxis,vec2.naxis))
-		#Performing element-wise multiplication
-		self.vec.mult(vec2.vec)
-		return
+		def multiply(self,vec2):
+			"""Function to multiply element-wise two vectors"""
+			#Checking whether the input is a vector or not
+			if(not isinstance(vec2,vectorSEP)): raise TypeError("ERROR! Provided input vector not a vectorSEP!")
+			#Checking size (must have same number of elements)
+			if(self.size!=vec2.size): raise ValuError("ERROR! Vector size mismatching: vec1 = %s; vec2 = %s"%(self.size,vec2.size))
+			#Checking dimensionality
+			if(not self.checkSame(vec2)): raise ValueError("ERROR! Dimensionality not equal: vec1 = %s; vec2 = %s"%(self.naxis,vec2.naxis))
+			#Performing element-wise multiplication
+			self.vec.mult(vec2.vec)
+			return
 
-	def isDifferent(self,vec2):
-		"""Function to check if two vectors are identical using built-in hash function"""
-		#Checking whether the input is a vector or not
-		if(not isinstance(vec2,vectorSEP)): raise TypeError("ERROR! Provided input vector not a vectorSEP!")
-		return self.vec.isDifferent(vec2.vec)
+		def isDifferent(self,vec2):
+			"""Function to check if two vectors are identical using built-in hash function"""
+			#Checking whether the input is a vector or not
+			if(not isinstance(vec2,vectorSEP)): raise TypeError("ERROR! Provided input vector not a vectorSEP!")
+			return self.vec.isDifferent(vec2.vec)
