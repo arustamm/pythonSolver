@@ -155,7 +155,7 @@ class ProblemL2Linear(Problem):
 	def resf(self,model):
 		"""Method to return residual vector r = Lm - d"""
 		#Computing Lm
-		if(model.norm()!=0.0):
+		if(model.norm(2)!=0.0):
 			self.op.forward(False,model,self.res)
 		else:
 			self.res.zero()
@@ -223,7 +223,7 @@ class ProblemLinearSymmetric(Problem):
 	def resf(self,model):
 		"""Method to return residual vector r = Am - b"""
 		#Computing Lm
-		if(model.norm()!=0.0):
+		if(model.norm(2)!=0.0):
 			self.op.forward(False,model,self.res)
 		else:
 			self.res.zero()
@@ -323,7 +323,7 @@ class ProblemL2LinearReg(Problem):
 
 	def resf(self,model):
 		"""Method to return residual vector r = [r_d; r_m]: r_d = Lm - d; r_m = Am """
-		if(model.norm()!=0.0):
+		if(model.norm(2)!=0.0):
 			self.op.forward(False,model,self.res)
 		else:
 			self.res.zero()
@@ -395,7 +395,7 @@ class ProblemL2NonLinear(Problem):
 	def resf(self,model):
 		"""Method to return residual vector r = f(m) - d"""
 		#Computing Lm
-		if(model.norm()!=0.0):
+		if(model.norm(2)!=0.0):
 			self.op.nl_op.forward(False,model,self.res)
 		else:
 			self.res.zero()
