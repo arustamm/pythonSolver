@@ -16,6 +16,8 @@ class SymLCGsolver(pySolver.Solver):
 		self.steepest=steepest
 		#Logger object to write on log file
 		self.logger=logger
+		#Overwriting logger of the Stopper object
+		self.stoppr.logger=self.logger
 		#Setting defaults for saving results
 		self.setDefaults()
 		return
