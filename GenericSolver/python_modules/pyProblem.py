@@ -375,7 +375,10 @@ class ProblemL2NonLinear(Problem):
 		#Dresidual vector
 		self.dres=self.res.clone()
 		#Setting non-linear and linearized operators
-		self.op=op
+		if(isinstance(op,pyOp.NonLinearOperator)):
+			self.op=op
+		else:
+			raise TypeError("ERROR! Not provided a non-linear operator!")
 		#Setting default variables
 		self.setDefaults()
 		self.linear=True

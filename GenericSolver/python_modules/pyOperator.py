@@ -110,7 +110,6 @@ class Operator:
 		del d1,d2,r1,r2
 		return
 
-
 	#Class methods/functions to be overridden
 	def forward(self,add,model,data):
 		"""Forward operator"""
@@ -205,4 +204,17 @@ class stackOperator(Operator):
 		self.op1.adjoint(add,model,data.vec1)
 		# m += B'd2
 		self.op2.adjoint(True,model,data.vec2)
+		return
+
+
+class NonLinearOperator:
+	"""
+		Non-linear operator class
+	"""
+
+	def __init__(self,nl_op,lin_op):
+		"""Constructor for non-linear operator class"""
+		#Setting non-linear and linearized operators
+		self.nl_op = nl_op
+		self.lin_op = lin_op
 		return
