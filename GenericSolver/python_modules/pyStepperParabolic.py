@@ -72,8 +72,8 @@ class ParabolicStep(pyStepper.Stepper):
 					itry=self.ntry #To not repeat computation of linear guess
 					continue
 			#Testing c2 scale
-			info = "	Testing point (c2=%s): m_current+c2*alpha*dm"%(self.c2)
-			solv.write_log_file(log_file,info)
+			msg = "	Testing point (c2=%s): m_current+c2*alpha*dm"%(self.c2)
+			if(logger): logger.addToLog(msg)
 			model_step.copy(modl)
 			model_step.scaleAdd(dmodl,sc2=self.c2*alpha)
 			# self.clipping(self.model,log_file)

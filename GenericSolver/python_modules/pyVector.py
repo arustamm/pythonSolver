@@ -308,7 +308,7 @@ class vectorIC(vector):
 			self.ax_info = None
 		elif(isinstance(input,vectorSEP)):
 			#VectorSEP passed to constructor
-			self.arr = np.array(input.vec)
+			self.arr = input.vec.getNdArray()
 			self.ax_info = input.ax_info
 		elif(isinstance(input,tuple)):
 			#Tuple size passed to constructor
@@ -514,14 +514,14 @@ class vectorOC(vector):
 			self.vecfile = tmp_vec #Assigning internal vector array
 			#Removing header file? (Default behavior is to remove temporary file)
 			self.remove_file = True
-		elif(isinstance(input,vectorSEP)):
-			#VectorSEP passed to constructor
-			tmp_vec = sep_util.datapath+"tmp_vectorOC"+str(int(time.time()*1000000))+".H"
-			arr = np.array(input.vec,copy=False)
-			sep_util.write_file(tmp_vec,arr,input.ax_info)
-			self.vecfile = tmp_vec #Assigning internal vector array
-			#Removing header file? (Default behavior is to remove temporary file)
-			self.remove_file = True
+		# elif(isinstance(input,vectorSEP)):
+		# 	#VectorSEP passed to constructor
+		# 	tmp_vec = sep_util.datapath+"tmp_vectorOC"+str(int(time.time()*1000000))+".H"
+		# 	arr = np.array(input.vec,copy=False)
+		# 	sep_util.write_file(tmp_vec,arr,input.ax_info)
+		# 	self.vecfile = tmp_vec #Assigning internal vector array
+		# 	#Removing header file? (Default behavior is to remove temporary file)
+		# 	self.remove_file = True
 		elif(isinstance(input,str)):
 			#Header file passed to constructor
 			self.vecfile = input #Assigning internal vector array

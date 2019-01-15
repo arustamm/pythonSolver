@@ -36,6 +36,13 @@ class Problem:
 			self.dres_updated = False
 		return
 
+	def set_residual(self,residual):
+		"""Setting internal residual vector"""
+		#Useful for linear inversion (to avoid residual computation)
+		if(self.res.isDifferent(residual)): self.res.copy(residual)
+		self.res_updated=True
+		return
+
 	def get_model(self):
 		"""Accessor for model vector"""
 		return self.model
@@ -145,13 +152,6 @@ class ProblemL2Linear(Problem):
 		"""Default destructor"""
 		return
 
-	def set_residual(self,residual):
-		"""Setting internal residual vector"""
-		#Useful for linear inversion (to avoid residual computation)
-		if(self.res.isDifferent(residual)): self.res.copy(residual)
-		self.res_updated=True
-		return
-
 	def resf(self,model):
 		"""Method to return residual vector r = Lm - d"""
 		#Computing Lm
@@ -211,13 +211,6 @@ class ProblemLinearSymmetric(Problem):
 
 	def __del__(self):
 		"""Default destructor"""
-		return
-
-	def set_residual(self,residual):
-		"""Setting internal residual vector"""
-		#Useful for linear inversion (to avoid residual computation)
-		if(self.res.isDifferent(residual)): self.res.copy(residual)
-		self.res_updated=True
 		return
 
 	def resf(self,model):
@@ -314,13 +307,6 @@ class ProblemL2LinearReg(Problem):
 		if(logger): self.logger.addToLog(msg+"\nREGULARIZED PROBLEM end log file")
 		return epsilon_balance
 
-	def set_residual(self,residual):
-		"""Setting internal residual vector"""
-		#Useful for linear inversion (to avoid residual computation)
-		if(self.res.isDifferent(residual)): self.res.copy(residual)
-		self.res_updated=True
-		return
-
 	def resf(self,model):
 		"""Method to return residual vector r = [r_d; r_m]: r_d = Lm - d; r_m = Am """
 		if(model.norm()!=0.0):
@@ -386,13 +372,6 @@ class ProblemL2NonLinear(Problem):
 
 	def __del__(self):
 		"""Default destructor"""
-		return
-
-	def set_residual(self,residual):
-		"""Setting internal residual vector"""
-		#Useful for linear inversion (to avoid residual computation)
-		if(self.res.isDifferent(residual)): self.res.copy(residual)
-		self.res_updated=True
 		return
 
 	def resf(self,model):

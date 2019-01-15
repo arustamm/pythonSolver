@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 import sys,os
-sys.path.append(os.environ.get('REPOSITORY')+"/python_solver/python_modules")
+sys.path.append("/net/server/homes/sep/ettore/research/packages/pySolver/GenericSolver/python_modules")
 import pyVector as Vec
 import pyOperator as Op
 import pyLCGsolver as LCG
@@ -101,7 +101,7 @@ if __name__ == '__main__':
 	LCGsolver = LCG.LCGsolver(Stop)
 	LCGsolver.setDefaults(inv_mod_file="inv_mod_rand.H",obj_file="obj_rand.H",model_file="mod_rand.H",res_file="res_rand.H",grad_file="grad_rand.H",iter_buffer=None,iter_sampling=10)
 	#Running the solver
-	# LCGsolver.run(L2Prob)
+	LCGsolver.run(L2Prob)
 
 	#Out-of-core run
 	#Creating model vector
@@ -114,8 +114,8 @@ if __name__ == '__main__':
 	L2Prob_outcore = Prblm.ProblemL2Linear(model_vecOC,data_vecOC,MatMultOC)
 
 	#Running the solver
-# 	LCGsolver.setDefaults()
-# 	LCGsolver.run(L2Prob_outcore)
+	LCGsolver.setDefaults()
+	LCGsolver.run(L2Prob_outcore)
 
 	#Testing inversion of a symmetric matrix (second-order derivative operator)
 	n=200
