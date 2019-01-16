@@ -388,7 +388,7 @@ class ProblemL2NonLinear(Problem):
 	def gradf(self,model,res):
 		"""Method to return gradient vector g = F'r = F'(f(m) - d)"""
 		#Setting model point on which the F is evaluated
-		self.op.lin_op.set_background(model)
+		self.op.set_background(model)
 		#Computing F'r = g
 		self.op.lin_op.adjoint(False,self.grad,res)
 		return self.grad
@@ -396,7 +396,7 @@ class ProblemL2NonLinear(Problem):
 	def dresf(self,model,dmodel):
 		"""Method to return residual vector dres = Fdm"""
 		#Setting model point on which the F is evaluated
-		self.op.lin_op.set_background(model)
+		self.op.set_background(model)
 		#Computing Fdm = dres
 		self.op.lin_op.forward(False,dmodel,self.dres)
 		return self.dres

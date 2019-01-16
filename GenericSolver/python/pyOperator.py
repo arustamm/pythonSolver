@@ -212,9 +212,10 @@ class NonLinearOperator:
 		Non-linear operator class
 	"""
 
-	def __init__(self,nl_op,lin_op):
+	def __init__(self,nl_op,lin_op,set_background_func):
 		"""Constructor for non-linear operator class"""
 		#Setting non-linear and linearized operators
 		self.nl_op = nl_op
 		self.lin_op = lin_op
+		self.set_background = set_background_func
 		return
