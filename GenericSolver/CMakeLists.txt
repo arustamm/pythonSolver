@@ -27,7 +27,7 @@ find_package(Threads)
 # Adding TBB library
 find_package(TBB REQUIRED)
 
-add_subdirectory(python_modules)
+add_subdirectory(python)
 
 include(InstallRequiredSystemLibraries)
 set(CPACK_RESOURCE_FILE_LICENSE "${PROJECT_SOURCE_DIR}/LICENSE")
