@@ -167,6 +167,32 @@ class IdentityOp(Operator):
 			model.copy(data)
 		return
 
+class ChainOperator(Operator):
+	"""
+	   		Chain of two operator class
+	   			d = B A m
+	"""
+	def __init__(self,op1,op2):
+		"""Constructor of a Chain of operators"""
+		self.setDomainRange(op1.domain,op2.range)
+		self.tmp_vec = op1.range.clone()
+		self.op1 = op1
+		self.op2 = op2
+		return
+
+	def forward(self,add,model,data):
+		"""Forward operator BAm"""
+		self.checkDomainRange(model,data)
+		self.op1.forward(False,model,self.tmp_vec)
+		self.op2.forward(add,self.tmp_vec,data)
+		return
+
+	def adjoint(self,add,model,data):
+		"""Adjoint operator A'B'd"""
+		self.checkDomainRange(model,data)
+		self.op2.adjoint(False,self.tmp_vec,data)
+		self.op1.adjoint(add,model,self.tmp_vec)
+		return
 
 class stackOperator(Operator):
 	"""
@@ -176,15 +202,11 @@ class stackOperator(Operator):
 		            | d2 |   | B |
 	"""
 
-	def __init__(self,op1,op2,domain,range):
+	def __init__(self,op1,op2):
 		"""Constructor for the stacked operator"""
-		if(not isinstance(range,Vec.superVector)):
-			raise ValueError("ERROR! Provided range vector not a superVector!")
-		self.setDomainRange(domain,range)
+		self.setDomainRange(domain,Vec.superVector(op1.range,op2.range))
 		self.op1=op1 #A
 		self.op2=op2 #B
-		self.op1.setDomainRange(domain,range.vec1)
-		self.op1.setDomainRange(domain,range.vec2)
 		return
 
 	def forward(self,add,model,data):

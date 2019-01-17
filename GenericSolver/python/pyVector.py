@@ -215,10 +215,6 @@ class superVector(vector):
 		"""Function to clone vector space"""
 		return superVector(self.vec1.cloneSpace(),self.vec2.cloneSpace())
 
-	# def cloneVector(self):
-	# 	"""Function to clone/allocate vector from vector space"""
-	# 	return superVector(self.vec1.cloneVector(),self.vec2.cloneVector())
-
 	def checkSame(self,vec_in):
 		"""Function to check to make sure the vectors exist in the same space"""
 		#Checking type
@@ -306,10 +302,10 @@ class vectorIC(vector):
 			if(np.isfortran(input)): raise TypeError("ERROR! Input array not a C contiguous array!")
 			self.arr = np.array(input,copy=False)
 			self.ax_info = None
-		elif(isinstance(input,vectorSEP)):
-			#VectorSEP passed to constructor
-			self.arr = input.vec.getNdArray()
-			self.ax_info = input.ax_info
+		# elif(isinstance(input,vectorSEP)):
+		# 	#VectorSEP passed to constructor
+		# 	self.arr = input.vec.getNdArray()
+		# 	self.ax_info = input.ax_info
 		elif(isinstance(input,tuple)):
 			#Tuple size passed to constructor
 			self.arr = np.zeros(tuple(reversed(input)))
@@ -372,14 +368,6 @@ class vectorIC(vector):
 		vec_space.ndims = self.ndims
 		vec_space.size = self.size
 		return vec_space
-
-	# def cloneVector(self):
-	# 	"""Function to clone/allocate vector from vector space"""
-	# 	vec_clone = self.clone() #Deep clone of vector
-	# 	#Checking if a vector space was provided
-	# 	if(vec_clone.arr.size == 0):
-	# 		vec_clone.arr = np.zeros(tuple(reversed(vec_clone.naxis)))
-	# 	return vec_clone
 
 	def checkSame(self,vec2):
 		"""Function to check dimensionality of vectors"""
@@ -624,26 +612,6 @@ class vectorOC(vector):
 		vec_space.binfile = None
 		vec_space.remove_file = False
 		return vec_space
-
-	# def cloneVector(self):
-	# 	"""Function to clone/allocate vector from vector space"""
-	# 	vec_clone = deepcopy(self) #Deep clone of vector
-	# 	#Checking if a vector space was provided
-	# 	if(vec_clone.vecfile == None):
-	# 		#Creating header and binary files from vector space
-	# 		#Placing temporary file into datapath folder
-	# 		tmp_vec = sep_util.datapath+"cloneVector_tmp_vector"+str(int(time.time()*1000000))+".H"
-	# 		axis_file = ""
-	# 		for iaxis,naxis in enumerate(vec_clone.naxis):
-	# 			axis_file += "n%s=%s "%(iaxis+1,naxis)
-	# 		#Creating temporary vector file
-	# 		cmd="Spike %s | Add scale=0.0 > %s"%(axis_file,tmp_vec)
-	# 		sys_util.RunShellCmd(cmd,get_stat=False,get_output=False)
-	# 		vec_clone.vecfile = tmp_vec
-	# 		vec_clone.binfile = sep_util.get_binary(vec_clone.vecfile)
-	# 		#Removing header file?
-	# 		vec_clone.remove_file = True
-	# 	return vec_clone
 
 	def checkSame(self,vec2):
 		"""Function to check dimensionality of vectors"""
