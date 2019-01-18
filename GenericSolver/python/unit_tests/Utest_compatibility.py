@@ -75,5 +75,5 @@ if __name__ == '__main__':
 	model.zero()
 	#Create L2-norm linear problem
 	L2Prob_sym = Prblm.ProblemL2Linear(model,data,MatMultSym)
-# 	LCGsolver.setDefaults(inv_mod_file="inv_mod_SEP.H",obj_file="obj_SEP.H",model_file="mod_SEP.H",res_file="res_SEP.H",grad_file="grad_SEP.H",iter_buffer=None,iter_sampling=500)
+# 	LCGsolver.setDefaults(iter_sampling=500)
 	LCGsolver.run(L2Prob_sym)

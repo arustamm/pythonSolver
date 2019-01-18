@@ -87,7 +87,7 @@ class SymLCGsolver(pySolver.Solver):
 				if(isnan(obj0)): raise ValueError("Error! Objective function value NaN!")
 
 			#Saving results
-			self.save_results(iter,prblm,force_saving=False)
+			self.save_results(iter,prblm,force_save=False)
 
 			#dmodl = beta * dmodl - res
 			cg_dmodl.scaleAdd(prblm_res,beta,-1.0) 				#update search direction
@@ -172,7 +172,7 @@ class SymLCGsolver(pySolver.Solver):
 			if (self.stoppr.run(prblm,iter,verbose=verbose)): break
 
 		#Writing last inverted model
-		self.save_results(iter,prblm,force_saving=True,force_flush=True)
+		self.save_results(iter,prblm,force_save=True,force_write=True)
 		if(self.steepest):
 			if(self.logger): self.logger.addToLog("LINEAR STEEPEST-DESCENT SOLVER FOR SYMMETRIC MATRIX log file end")
 		else:

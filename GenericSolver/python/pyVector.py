@@ -65,11 +65,6 @@ class vector:
 		raise NotImplementedError("cloneSpace must be overwritten")
 		return
 
-	# def cloneVector(self):
-	# 	"""Function to clone/allocate vector from vector space"""
-	# 	raise NotImplementedError("cloneVector must be overwritten")
-	# 	return
-
 	def checkSame(self):
 		"""Function to check to make sure the vectors exist in the same space"""
 		raise NotImplementedError("checkSame must be overwritten")

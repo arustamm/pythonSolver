@@ -99,7 +99,7 @@ if __name__ == '__main__':
 	Stop  = Stopper.BasicStopper(niter=niter)
 	#Create solver
 	LCGsolver = LCG.LCGsolver(Stop)
-	LCGsolver.setDefaults(inv_mod_file="inv_mod_rand.H",obj_file="obj_rand.H",model_file="mod_rand.H",res_file="res_rand.H",grad_file="grad_rand.H",iter_buffer=None,iter_sampling=10)
+	LCGsolver.setDefaults(iter_sampling=10)
 	#Running the solver
 	LCGsolver.run(L2Prob)
 
@@ -132,7 +132,7 @@ if __name__ == '__main__':
 	#Create L2-norm linear problem
 	L2Prob_sym = Prblm.ProblemL2Linear(model_vec_sym,data_vec_sym,MatMultSym)
 	#Running the solver
-	LCGsolver.setDefaults(inv_mod_file="inv_mod_noreg.H",obj_file="obj_noreg.H",res_file="res_noreg.H",grad_file="grad_noreg.H",iter_buffer=None,iter_sampling=100)
+	LCGsolver.setDefaults(iter_buffer=None,iter_sampling=100)
 	# LCGsolver.run(L2Prob_sym)
 
 
@@ -140,19 +140,19 @@ if __name__ == '__main__':
 	L2Prob_reg = Prblm.ProblemL2LinearReg(model_vec_sym,data_vec_sym,MatMultSym,0.0)
 	L2Prob_reg.estimate_epsilon()
 	#Running the solver
-	LCGsolver.setDefaults(inv_mod_file="inv_mod_reg.H",obj_file="obj_reg.H",res_file="res_reg.H",iter_sampling=100)
+	LCGsolver.setDefaults(iter_sampling=100)
 	# LCGsolver.run(L2Prob_reg)
 
 	#Testing LCG for symmetric systems
 	SymProb = Prblm.ProblemLinearSymmetric(model_vec_sym,data_vec_sym,MatMultSym)
 	SLCG = SymLCGsolver.SymLCGsolver(Stop)
-	SLCG.setDefaults(inv_mod_file="inv_mod_sym.H",obj_file="obj_sym.H",res_file="res_sym.H",iter_sampling=5)
+	SLCG.setDefaults(iter_sampling=5)
 	SLCG.run(SymProb)
 
 	#Testing Linear steepest-descent algorithm for symmetric systems
 	SymProb1 = Prblm.ProblemLinearSymmetric(model_vec_sym,data_vec_sym,MatMultSym)
 	SLSD = SymLCGsolver.SymLCGsolver(Stop,steepest=True)
-	SLSD.setDefaults(inv_mod_file="inv_mod_sym_sd.H",obj_file="obj_sym_sd.H",iter_sampling=100)
+	SLSD.setDefaults(iter_sampling=100)
 	SLSD.run(SymProb1)
 
 

@@ -213,7 +213,6 @@ class NLCGsolver(pySolver.Solver):
 			if(verbose): print(msg)
 			if(self.logger): self.logger.addToLog(msg)
 			self.restart.read_restart()
-			self.restart.read_restart()
 			iter = self.restart.retrieve_parameter("iter")
 			self.stepper.alpha = self.restart.retrieve_parameter("alpha")
 			initial_obj_value=self.restart.retrieve_parameter("obj_initial") #Retrieving initial objective function value
@@ -248,7 +247,7 @@ class NLCGsolver(pySolver.Solver):
 				break
 
 			#Saving results
-			self.save_results(iter,prblm,force_saving=False)
+			self.save_results(iter,prblm,force_save=False)
 
 			if(iter >= 1):
 				beta = self.beta_func(prblm_grad, cg_grad0, cg_dmodl)
@@ -299,7 +298,7 @@ class NLCGsolver(pySolver.Solver):
 			if (self.stoppr.run(prblm,iter,initial_obj_value,verbose)): break
 
 		#Writing last inverted model
-		self.save_results(iter,prblm,force_saving=True,force_flush=True)
+		self.save_results(iter,prblm,force_save=True,force_write=True)
 		if(self.beta_type == "SD"):
 			if(self.logger): self.logger.addToLog("NON-LINEAR STEEPEST-DESCENT SOLVER log file end")
 		else:

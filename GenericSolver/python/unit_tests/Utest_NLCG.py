@@ -1,6 +1,6 @@
 #!/usr/bin/env python3.5
 import sys
-sys.path.append("/net/server/homes/sep/ettore/research/packages/pySolver/GenericSolver/python_modules")
+sys.path.append("/net/server/homes/sep/ettore/research/packages/pySolver/GenericSolver/python")
 import pyNLCGsolver as NLCG
 import pyVector as Vec
 import pyOperator as Op
@@ -8,6 +8,8 @@ import pyProblem as Prblm
 import pyStopperBase as Stopper
 import numpy as np
 from sys_util import logger
+#Plotting library
+import matplotlib.pyplot as plt
 
 
 
@@ -73,14 +75,16 @@ if __name__ == '__main__':
 	Stop  = Stopper.BasicStopper(niter=niter,tolr=1e-32,tolg=1e-32)
 	#Create solver
 	NLCGsolver = NLCG.NLCGsolver(Stop,logger=logger("Rosenbrock_NLCG_log.txt"))
+	NLCGsolver.setDefaults(save_obj=False,save_model=True)
 	NLCGsolver.run(Ros_prob)
 	print("optimal NLCG x: ", Ros_prob.model.arr[0])
 	print("optimal NLCG y: ", Ros_prob.model.arr[1])
+	print(NLCGsolver.model)
 
 	#Testing Steepest-descent method
 	Ros_prob = Rosenbrock_prblm(x_init,y_init)
 	NLSDsolver = NLCG.NLCGsolver(Stop,beta_type="SD",logger=logger("Rosenbrock_NLSD_log.txt"))
-	NLSDsolver.run(Ros_prob)
+	# NLSDsolver.run(Ros_prob)
 	print("optimal NLSD x: ", Ros_prob.model.arr[0])
 	print("optimal NLSD y: ", Ros_prob.model.arr[1])
 

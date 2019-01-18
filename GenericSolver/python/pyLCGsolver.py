@@ -92,7 +92,7 @@ class LCGsolver(pySolver.Solver):
 			prblm_gradd=prblm.get_dres(cg_mdl,prblm_grad)	#Project gradient in the data space
 
 			#Saving results
-			self.save_results(iter,prblm,force_saving=False)
+			self.save_results(iter,prblm,force_save=False)
 
 			if(iter==0 or self.steepest):
 				#Steepest descent
@@ -183,7 +183,7 @@ class LCGsolver(pySolver.Solver):
 			if (self.stoppr.run(prblm,iter,initial_obj_value,verbose)): break
 
 		#Writing last inverted model
-		self.save_results(iter,prblm,force_saving=True,force_flush=True)
+		self.save_results(iter,prblm,force_save=True,force_flush=True)
 		if(self.steepest):
 			if(self.logger): self.logger.addToLog("LINEAR STEEPEST-DESCENT SOLVER log file end")
 		else:
