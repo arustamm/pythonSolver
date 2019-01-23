@@ -8,7 +8,9 @@ class LCGsolver(pySolver.Solver):
 
 	#Default class methods/functions
 	def __init__(self,stoppr,steepest=False,logger=None):
-		"""Constructor for LCG Solver"""
+		"""
+		   Constructor for LCG Solver
+		"""
 		#Defining stopper object
 		self.stoppr=stoppr
 		#Whether to run steepest descent or not
@@ -183,7 +185,7 @@ class LCGsolver(pySolver.Solver):
 			if (self.stoppr.run(prblm,iter,initial_obj_value,verbose)): break
 
 		#Writing last inverted model
-		self.save_results(iter,prblm,force_save=True,force_flush=True)
+		self.save_results(iter,prblm,force_save=True,force_write=True)
 		if(self.steepest):
 			if(self.logger): self.logger.addToLog("LINEAR STEEPEST-DESCENT SOLVER log file end")
 		else:

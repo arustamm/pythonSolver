@@ -75,11 +75,12 @@ if __name__ == '__main__':
 	Stop  = Stopper.BasicStopper(niter=niter,tolr=1e-32,tolg=1e-32)
 	#Create solver
 	NLCGsolver = NLCG.NLCGsolver(Stop,logger=logger("Rosenbrock_NLCG_log.txt"))
-	NLCGsolver.setDefaults(save_obj=False,save_model=True)
+	NLCGsolver.setDefaults(save_obj=True,save_model=True)
 	NLCGsolver.run(Ros_prob)
 	print("optimal NLCG x: ", Ros_prob.model.arr[0])
 	print("optimal NLCG y: ", Ros_prob.model.arr[1])
-	print(NLCGsolver.model)
+	plt.plot(NLCGsolver.obj)
+	plt.show()
 
 	#Testing Steepest-descent method
 	Ros_prob = Rosenbrock_prblm(x_init,y_init)

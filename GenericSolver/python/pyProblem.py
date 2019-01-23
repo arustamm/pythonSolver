@@ -257,11 +257,13 @@ class ProblemL2LinearReg(Problem):
 		#Setting linear operators
 		#Assuming identity operator if regularization operator was not provided
 		if(reg_op == None): reg_op = pyOp.IdentityOp(self.model)
-		self.op=pyOp.stackOperator(op,reg_op,model,Vec.superVector(self.data,reg_op.range)) #Modeling operator
+		self.op=pyOp.stackOperator(op,reg_op) #Modeling operator
 		self.epsilon=epsilon #Regularization weight
 		#Residual vector (data and model residual vectors)
 		self.res=self.op.range.clone()
 		self.res.zero()
+		#Temporary vector for scaled residuals (necessary for gradient computation)
+		self.res_reg_tmp=self.res.vec2.clone()
 		#Dresidual vector
 		self.dres=self.res.clone()
 		#Setting default variables
@@ -308,7 +310,7 @@ class ProblemL2LinearReg(Problem):
 		return epsilon_balance
 
 	def resf(self,model):
-		"""Method to return residual vector r = [r_d; r_m]: r_d = Lm - d; r_m = Am """
+		"""Method to return residual vector r = [r_d; r_m]: r_d = Lm - d; r_m = epsilon * Am """
 		if(model.norm()!=0.0):
 			self.op.forward(False,model,self.res)
 		else:
@@ -321,14 +323,16 @@ class ProblemL2LinearReg(Problem):
 
 	def gradf(self,model,res):
 		"""Method to return gradient vector g = L'r_d + epsilon*A'r_m"""
-		#Scaling by epsilon the model residual vector
+		#Scaling by epsilon the model residual vector (saving temporarily residual regularization)
+		self.res_reg_tmp.copy(res.vec2)
 		res.vec2.scale(self.epsilon)
 		#g = L'r_d + A'(epsilon*r_m)
 		self.op.adjoint(False,self.grad,res)
+		res.vec2.copy(self.res_reg_tmp)
 		return self.grad
 
 	def dresf(self,model,dmodel):
-		"""Method to return residual vector dres = Ldm"""
+		"""Method to return residual vector dres = (L + epsilon * A)dm"""
 		#Computing Ldm = dres_d
 		self.op.forward(False,dmodel,self.dres)
 		#Scaling by epsilon
@@ -367,7 +371,7 @@ class ProblemL2NonLinear(Problem):
 			raise TypeError("ERROR! Not provided a non-linear operator!")
 		#Setting default variables
 		self.setDefaults()
-		self.linear=True
+		self.linear=False
 		return
 
 	def __del__(self):
@@ -376,11 +380,7 @@ class ProblemL2NonLinear(Problem):
 
 	def resf(self,model):
 		"""Method to return residual vector r = f(m) - d"""
-		#Computing Lm
-		if(model.norm()!=0.0):
-			self.op.nl_op.forward(False,model,self.res)
-		else:
-			self.res.zero()
+		self.op.nl_op.forward(False,model,self.res)
 		#Computing f(m) - d
 		self.res.scaleAdd(self.data,1.,-1.)
 		return self.res
@@ -403,5 +403,138 @@ class ProblemL2NonLinear(Problem):
 
 	def objf(self,res):
 		"""Method to return objective function value 1/2|f(m)-d|_2"""
+		obj=0.5*res.dot(res)
+		return obj
+
+class ProblemL2NonLinearLinearReg(Problem):
+	"""Linear inverse problem regularized of the form 1/2*|f(m)-d|_2 + epsilon^2/2*|Am|_2"""
+
+	def __init__(self,model,data,op,epsilon,reg_op=None):
+		"""Constructor of linear problem"""
+		#Setting internal vector
+		self.model=model.clone()
+		self.dmodel=model.clone()
+		self.dmodel.zero()
+		#Gradient vector
+		self.grad=self.dmodel.clone()
+		#Copying the pointer to data vector
+		self.data=data
+		#Setting linear operators
+		#Assuming identity operator if regularization operator was not provided
+		if(reg_op == None): reg_op = pyOp.IdentityOp(self.model)
+		#Setting non-linear and linearized operators
+		if(not isinstance(op,pyOp.NonLinearOperator)):
+			raise TypeError("ERROR! Not provided a non-linear operator!")
+		#Setting non-linear stack of operators
+		self.op = pyOp.NonLinearOperator(pyOp.stackOperator(op.nl_op,reg_op),pyOp.stackOperator(op.lin_op,reg_op),op.set_background)
+		self.epsilon=epsilon #Regularization weight
+		#Residual vector (data and model residual vectors)
+		self.res=self.op.range.clone()
+		self.res.zero()
+		#Temporary vector for scaled residuals (necessary for gradient computation)
+		self.res_reg_tmp=self.res.vec2.clone()
+		#Dresidual vector
+		self.dres=self.res.clone()
+		#Setting default variables
+		self.setDefaults()
+		self.linear=False
+		return
+
+	def __del__(self):
+		"""Default destructor"""
+		return
+
+	def estimate_epsilon(self,verbose=True,logger=None):
+		"""Method returning epsilon that balances the two terms of the objective function"""
+		msg="Epsilon Scale evaluation"
+		if(verbose): print(msg)
+		if(logger): self.logger.addToLog("REGULARIZED PROBLEM log file\n"+msg)
+		#Keeping the initial model vector
+		prblm_mdl = self.get_model()
+		mdl_tmp = prblm_mdl.clone()
+		#Keeping user-predefined epsilon if any
+		epsilon = self.epsilon
+		#Setting epsilon to one to evaluate the scale
+		self.epsilon=1.0
+		prblm_res = self.get_res(prblm_mdl)	#Compute residual arising from the gradient
+		#Balancing the two terms of the objective function
+		res_data_norm=prblm_res.vec1.norm()
+		res_model_norm=prblm_res.vec2.norm()
+		if (isnan(res_model_norm) or isnan(res_data_norm)):
+			raise ValueError("ERROR! Obtained NaN: Residual-data-side-norm = %s, Residual-model-side-norm = %s"%(res_data_norm,res_model_norm))
+		if(res_model_norm == 0.0):
+			msg = "Trying to perform a linearized step"
+			if(verbose): print(msg)
+			prblm_grad = self.get_grad(prblm_mdl)  #Compute first gradient
+			#Gradient in the data space
+			prblm_dgrad=self.get_dres(prblm_mdl,prblm_grad)
+			#Computing linear step length
+			dgrad0_res=prblm_res.vec1.dot(prblm_dgrad.vec1)
+			dgrad0_dgrad0=prblm_dgrad.vec1.dot(prblm_dgrad.vec1)
+			if (isnan(dgrad0_res) or isnan(dgrad0_dgrad0)):
+				raise ValueError("ERROR! Obtained NaN: gradient-dataspace-norm = %s, gradient-dataspace-dot-residuals = %s"%(dgrad0_dgrad0,dgrad0_res))
+			if(dgrad0_dgrad0 != 0.0):
+				alpha=-dgrad0_res/dgrad0_dgrad0
+			else:
+				msg = "Cannot compute linearized alpha for the given problem! Provide a different initial model"
+				if(logger): self.logger.addToLog(msg)
+				raise ValueError(msg)
+			#model=model+alpha*grad
+			prblm_mdl.scaleAdd(prblm_grad,1.0,alpha)
+			prblm_res=self.resf(prblm_mdl)
+			#Recompute the new objective function terms
+			res_data_norm=prblm_res.vec1.norm()
+			res_model_norm=prblm_res.vec2.norm()
+			#If regularization term is still zero, stop the solver
+			if(res_model_norm == 0.0):
+				msg = "Model residual component norm is zero, cannot find epsilon scale! Provide a different initial model"
+				if(logger): self.logger.addToLog(msg)
+				raise ValueError(msg)
+		#Resetting user-predefined epsilon if any
+		self.epsilon = epsilon
+		#Resetting problem initial model vector
+		self.set_model(mdl_tmp)
+		del mdl_tmp
+		epsilon_balance = res_data_norm/res_model_norm
+		#Resetting feval
+		self.fevals = 0
+		msg = "	Epsilon balancing the the two objective function terms is: %s"%(epsilon_balance)
+		if(verbose): print(msg)
+		if(logger): self.logger.addToLog(msg+"\nREGULARIZED PROBLEM end log file")
+		return epsilon_balance
+
+	def resf(self,model):
+		"""Method to return residual vector r = [r_d; r_m]: r_d = f(m) - d; r_m = Am """
+		self.op.nl_op.forward(False,model,self.res)
+		#Computing r_d = f(m) - d
+		self.res.vec1.scaleAdd(self.data,1.,-1.)
+		#Scaling by epsilon epsilon*r_m
+		self.res.vec2.scale(self.epsilon)
+		return self.res
+
+	def gradf(self,model,res):
+		"""Method to return gradient vector g = F'r_d + epsilon*A'r_m"""
+		#Setting model point on which the F is evaluated
+		self.op.set_background(model)
+		#Scaling by epsilon the model residual vector (saving temporarily residual regularization)
+		self.res_reg_tmp.copy(res.vec2)
+		res.vec2.scale(self.epsilon)
+		#g = F'r_d + A'(epsilon*r_m)
+		self.op.lin_op.adjoint(False,self.grad,res)
+		res.vec2.copy(self.res_reg_tmp)
+		return self.grad
+
+	def dresf(self,model,dmodel):
+		"""Method to return residual vector dres = (F + epsilon * A)dm"""
+		#Setting model point on which the F is evaluated
+		self.op.set_background(model)
+		#Computing Ldm = dres_d
+		self.op.lin_op.forward(False,dmodel,self.dres)
+		#Scaling by epsilon
+		self.dres.vec2.scale(self.epsilon)
+		return self.dres
+
+	def objf(self,res):
+		"""Method to return objective function value 1/2|f(m)-d|_2 + epsilon^2/2*|Am|_2"""
 		obj=0.5*res.dot(res)
 		return obj

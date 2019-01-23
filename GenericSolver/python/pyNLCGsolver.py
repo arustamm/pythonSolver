@@ -139,7 +139,9 @@ class NLCGsolver(pySolver.Solver):
 
 	#Default class methods/functions
 	def __init__(self,stoppr,stepper=pyStepperParabolic.ParabolicStep(),beta_type="FR",logger=None):
-		"""Constructor for LCG Solver"""
+		"""
+		   Constructor for NLCG Solver
+		"""
 		#Defining stopper object
 		self.stoppr=stoppr
 		#Defining stepper object

@@ -175,6 +175,9 @@ class ChainOperator(Operator):
 	def __init__(self,op1,op2):
 		"""Constructor of a Chain of operators"""
 		self.setDomainRange(op1.domain,op2.range)
+		#Checking if domain of the operators is the same
+		if(not op1.range.checkSame(op2.domain)):
+			raise ValueError("ERROR! Domain and range of the two operators are not compatible")
 		self.tmp_vec = op1.range.clone()
 		self.op1 = op1
 		self.op2 = op2
@@ -204,7 +207,10 @@ class stackOperator(Operator):
 
 	def __init__(self,op1,op2):
 		"""Constructor for the stacked operator"""
-		self.setDomainRange(domain,Vec.superVector(op1.range,op2.range))
+		#Checking if domain of the operators is the same
+		if(not op1.domain.checkSame(op2.domain)):
+			raise ValueError("ERROR! The two provided operators have different domains")
+		self.setDomainRange(op1.domain,Vec.superVector(op1.range,op2.range))
 		self.op1=op1 #A
 		self.op2=op2 #B
 		return
@@ -229,7 +235,7 @@ class stackOperator(Operator):
 		return
 
 
-class NonLinearOperator:
+class NonLinearOperator(Operator):
 	"""
 		Non-linear operator class
 	"""
@@ -240,4 +246,17 @@ class NonLinearOperator:
 		self.nl_op = nl_op
 		self.lin_op = lin_op
 		self.set_background = set_background_func
+		#Checking if domain of the operators is the same
+		if(not nl_op.domain.checkSame(lin_op.domain)):
+			raise ValueError("ERROR! The two provided operators have different domains")
+		if(not nl_op.range.checkSame(lin_op.range)):
+			raise ValueError("ERROR! The two provided operators have different ranges")
+		self.setDomainRange(nl_op.domain,nl_op.range)
+		return
+
+	def dotTest(self):
+		"""
+		   Raising an exception, dot-product test must be performed directly onto linear operator.
+		"""
+		raise NotImplementedError("ERROR! Perform dot-product test directly onto linear operator.")
 		return

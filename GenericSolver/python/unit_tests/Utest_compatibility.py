@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 import sys,os
-sys.path.append(os.environ.get('REPOSITORY')+"/python_solver/python_modules")
+sys.path.append("/net/server/homes/sep/ettore/research/packages/pySolver/GenericSolver/python")
 import numpy as np
 import pyOperator as Op
 import pyProblem as Prblm

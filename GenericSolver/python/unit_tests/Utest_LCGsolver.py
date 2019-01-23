@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 import sys,os
-sys.path.append("/net/server/homes/sep/ettore/research/packages/pySolver/GenericSolver/python_modules")
+sys.path.append("/net/server/homes/sep/ettore/research/packages/pySolver/GenericSolver/python")
 import pyVector as Vec
 import pyOperator as Op
 import pyLCGsolver as LCG
@@ -9,6 +9,9 @@ import pyProblem as Prblm
 import pyStopperBase as Stopper
 import sep_util as sep
 import numpy as np
+
+#Testing the NLCG to solver a regularized linear problem treated as if it was non linear
+import pyNLCGsolver as NLCG
 
 class MatMult_incore(Op.Operator):
 	"""Operator class to perform matrix-vector multiplication"""
@@ -80,6 +83,10 @@ class MatMult_outcore(Op.Operator):
 		sep.write_file(model.vecfile,model_arr,model_axis)
 		return
 
+#Function necessary to construct a non-linear operator out of a linear one
+def dummy_func(dummy_arg):
+	return
+
 if __name__ == '__main__':
 	#In-core run
 	#Creating model vector
@@ -101,7 +108,7 @@ if __name__ == '__main__':
 	LCGsolver = LCG.LCGsolver(Stop)
 	LCGsolver.setDefaults(iter_sampling=10)
 	#Running the solver
-	LCGsolver.run(L2Prob)
+	# LCGsolver.run(L2Prob)
 
 	#Out-of-core run
 	#Creating model vector
@@ -115,7 +122,7 @@ if __name__ == '__main__':
 
 	#Running the solver
 	LCGsolver.setDefaults()
-	LCGsolver.run(L2Prob_outcore)
+	# LCGsolver.run(L2Prob_outcore)
 
 	#Testing inversion of a symmetric matrix (second-order derivative operator)
 	n=200
@@ -137,24 +144,30 @@ if __name__ == '__main__':
 
 
 	#Testing LCG with regularized problem
-	L2Prob_reg = Prblm.ProblemL2LinearReg(model_vec_sym,data_vec_sym,MatMultSym,0.0)
+	L2Prob_reg = Prblm.ProblemL2LinearReg(model_vec_sym,data_vec_sym,MatMultSym,0.)
 	L2Prob_reg.estimate_epsilon()
 	#Running the solver
 	LCGsolver.setDefaults(iter_sampling=100)
-	# LCGsolver.run(L2Prob_reg)
+	LCGsolver.run(L2Prob_reg)
 
 	#Testing LCG for symmetric systems
 	SymProb = Prblm.ProblemLinearSymmetric(model_vec_sym,data_vec_sym,MatMultSym)
 	SLCG = SymLCGsolver.SymLCGsolver(Stop)
 	SLCG.setDefaults(iter_sampling=5)
-	SLCG.run(SymProb)
+	# SLCG.run(SymProb)
 
 	#Testing Linear steepest-descent algorithm for symmetric systems
 	SymProb1 = Prblm.ProblemLinearSymmetric(model_vec_sym,data_vec_sym,MatMultSym)
 	SLSD = SymLCGsolver.SymLCGsolver(Stop,steepest=True)
 	SLSD.setDefaults(iter_sampling=100)
-	SLSD.run(SymProb1)
+	# SLSD.run(SymProb1)
 
+	#Testing non-linear regularized problem
+	non_lin_op = Op.NonLinearOperator(MatMultSym,MatMultSym,dummy_func)
+	L2NLRegProb = Prblm.ProblemL2NonLinearLinearReg(model_vec_sym,data_vec_sym,non_lin_op,0.)
+	L2NLRegProb.estimate_epsilon()
+	NLCGsolver = NLCG.NLCGsolver(Stop)
+	NLCGsolver.run(L2NLRegProb)
 
 
 
