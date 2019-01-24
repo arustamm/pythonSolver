@@ -54,7 +54,7 @@ class nl_reg_prob(solv.problem):
 		return
 
 	def epsilon_scale(self,log_file=None):
-		"""Function to obtain epsilon that balances the first gradient in the extended-data space"""
+		"""Function to obtain epsilon that balances the first objective function values"""
 		solv.write_log_file(log_file,info="REGULARIZED PROBLEM log file\n")
 		info = "Epsilon Scale evaluation"
 		print info

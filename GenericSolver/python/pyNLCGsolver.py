@@ -1,8 +1,8 @@
 #Module containing Non-Linear Conjugate-Gradient Solver class
 #It can also handle steppest-descent algorithm
-from math import isnan
 import pySolver
 import pyStepperParabolic
+from math import isnan
 
 def betaFR(grad,grad0,dir,logger):
 	"""Fletcher and Reeves method"""
@@ -135,17 +135,20 @@ def betaSD(grad,grad0,dir,logger):
 #From A SURVEY OF NONLINEAR CONJUGATE GRADIENT METHODS
 
 class NLCGsolver(pySolver.Solver):
-	"""Non-Linear Conjugate Gradient and Steepest-Descent Solver parent object"""
+	"""Non-Linear Conjugate Gradient and Steepest-Descent Solver object"""
 
 	#Default class methods/functions
-	def __init__(self,stoppr,stepper=pyStepperParabolic.ParabolicStep(),beta_type="FR",logger=None):
+	def __init__(self,stoppr,stepper=None,beta_type="FR",logger=None):
 		"""
 		   Constructor for NLCG Solver
 		"""
 		#Defining stopper object
 		self.stoppr=stoppr
 		#Defining stepper object
-		self.stepper=stepper
+		if(stepper != None):
+			self.stepper=stepper
+		else:
+			self.stepper=pyStepperParabolic.ParabolicStep()
 		#Beta function to use during the inversion
 		self.beta_type=beta_type
 		#Logger object to write on log file
@@ -187,7 +190,6 @@ class NLCGsolver(pySolver.Solver):
 
 	def run(self,prblm,verbose=True,restart=False):
 		"""Running NLCG or steppest-descent solver"""
-		#Writing first line in log file if present
 		if(not restart):
 			if(self.beta_type == "SD"):
 				msg="NON-LINEAR STEEPEST-DESCENT SOLVER log file\n"
