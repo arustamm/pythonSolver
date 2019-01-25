@@ -139,7 +139,7 @@ if __name__ == '__main__':
 	#Create L2-norm linear problem
 	L2Prob_sym = Prblm.ProblemL2Linear(model_vec_sym,data_vec_sym,MatMultSym)
 	#Running the solver
-	LCGsolver.setDefaults(iter_buffer=None,iter_sampling=100)
+	LCGsolver.setDefaults(iter_buffer_size=None,iter_sampling=100)
 	# LCGsolver.run(L2Prob_sym)
 
 

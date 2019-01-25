@@ -6,6 +6,16 @@ import numpy as np
 from collections import deque
 from math import isnan
 
+#Testing if genericIO and SepVector module is present
+import imp
+try:
+	imp.find_module('genericIO')
+	import genericIO
+	SepVector=genericIO.SepVector
+	genIO_found = True
+except ImportError:
+	genIO_found = False
+
 
 
 class LBFGSsolver(pySolver.Solver):
@@ -48,8 +58,14 @@ class LBFGSsolver(pySolver.Solver):
 		if(self.prefix != None):
 			step_filename = self.prefix + "step_vector_%s.H"%(iter)
 			grad_diff_filename = self.prefix + "grad_diff_vector_%s.H"%(iter)
-			self.step_vectors[index].writeVec(step_filename)
-			self.grad_diff_vectors[index].writeVec(grad_diff_filename)
+			if(genIO_found and self.use_SepVector): #Writing using genericIO and SepVector
+				genericIO.defaultIO.appendVector(step_filename,self.step_vectors[index])
+				genericIO.defaultIO.closeAppendFile(step_filename)
+				genericIO.defaultIO.appendVector(grad_diff_filename,self.grad_diff_vectors[index])
+				genericIO.defaultIO.closeAppendFile(grad_diff_filename)
+			else:
+				self.step_vectors[index].writeVec(step_filename)
+				self.grad_diff_vectors[index].writeVec(grad_diff_filename)
 		return
 
 	def check_rho(self,denom_dot,step_index,iter):
@@ -192,6 +208,10 @@ class LBFGSsolver(pySolver.Solver):
 		success = True
 		self.tmp_vector = bfgs_dmodl.clone()
 		self.tmp_vector.zero()
+		#For saving estimated Hessian vector
+		self.use_SepVector = False
+		if(genIO_found):
+			self.use_SepVector = isinstance(prblm_mod,SepVector.vector)
 
 
 		#Inversion loop

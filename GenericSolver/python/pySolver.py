@@ -100,7 +100,7 @@ class Solver:
 		if(genIO_found):
 			self.use_SepVector = isinstance(prblm_mod,SepVector.vector)
 		#Save if it is forced to or if the solver hits a sampled iteration number
-		#The objective function is always saved every iteration if requested
+		#The objective function is saved every iteration if requested
 		if(self.save_obj):
 			self.obj.append(objf_value)
 		if(iter%self.iter_sampling == 0 or force_save):

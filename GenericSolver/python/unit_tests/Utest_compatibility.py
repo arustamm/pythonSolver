@@ -82,5 +82,5 @@ if __name__ == '__main__':
 	model.zero()
 	#Create L2-norm linear problem
 	L2Prob_sym = Prblm.ProblemL2Linear(model,data,MatMultSym)
-	LCGsolver.setDefaults(iter_sampling=100,save_obj=True,iter_buffer_size=100,save_model=True,prefix="temp")
+	LCGsolver.setDefaults(iter_sampling=100,save_obj=True,iter_buffer_size=100,save_model=True,prefix="compatibility_inversion")
 	LCGsolver.run(L2Prob_sym)
