@@ -1,6 +1,13 @@
 #!/usr/bin/env python3
-import sys,os
+import sys,os,imp
 sys.path.append("/net/server/homes/sep/ettore/research/packages/pySolver/GenericSolver/python")
+try:
+	imp.find_module('genericIO')
+	import genericIO
+	SepVector=genericIO.SepVector
+except ImportError:
+	print("Cannot load required module: \"genericIO\". Quitting the program.")
+	quit()
 import numpy as np
 import pyOperator as Op
 import pyProblem as Prblm
@@ -13,8 +20,8 @@ class MatMult_SepVector(Op.Operator):
 
 	def __init__(self,A,domain,range):
 		"""Constructor for the class: A = matrix to use; domain = domain vector; range = range vector"""
-		if(not isinstance(domain,pyVector.vectorSEP)): raise TypeError("ERROR! Domain vector not a Vector object")
-		if(not isinstance(range,pyVector.vectorSEP)): raise TypeError("ERROR! Range vector not a Vector object")
+		if(not isinstance(domain,SepVector.vector)): raise TypeError("ERROR! Domain vector not a Vector object")
+		if(not isinstance(range,SepVector.vector)): raise TypeError("ERROR! Range vector not a Vector object")
 		#Setting domain and range of operator and matrix to use during application of the operator
 		self.setDomainRange(domain,range)
 		self.A = np.matrix(A)
@@ -23,24 +30,24 @@ class MatMult_SepVector(Op.Operator):
 	def forward(self,add,model,data):
 		"""Method to compute d = A m"""
 		self.checkDomainRange(model,data)
-		if(not isinstance(model,pyVector.vectorSEP)): raise TypeError("ERROR! Model vector not a Vector object")
-		if(not isinstance(data,pyVector.vectorSEP)): raise TypeError("ERROR! Data vector not a Vector object")
+		if(not isinstance(model,SepVector.vector)): raise TypeError("ERROR! Model vector not a Vector object")
+		if(not isinstance(data,SepVector.vector)): raise TypeError("ERROR! Data vector not a Vector object")
 		if(not add): data.zero()
 		#Converting to numpy arrays
-		data_np=np.array(data.vec.getCpp(),copy=False)
-		model_np=np.array(model.vec.getCpp(),copy=False)
+		data_np=data.getNdArray()
+		model_np=model.getNdArray()
 		data_np+=np.matmul(A,model_np)
 		return
 
 	def adjoint(self,add,model,data):
 		"""Method to compute m = A d"""
 		self.checkDomainRange(model,data)
-		if(not isinstance(model,pyVector.vectorSEP)): raise TypeError("ERROR! Model vector not a Vector object")
-		if(not isinstance(data,pyVector.vectorSEP)): raise TypeError("ERROR! Data vector not a Vector object")
+		if(not isinstance(model,SepVector.vector)): raise TypeError("ERROR! Model vector not a Vector object")
+		if(not isinstance(data,SepVector.vector)): raise TypeError("ERROR! Data vector not a Vector object")
 		if(not add): model.zero()
 		#Converting to numpy arrays
-		data_np=np.array(data.vec.getCpp(),copy=False)
-		model_np=np.array(model.vec.getCpp(),copy=False)
+		data_np=data.getNdArray()
+		model_np=model.getNdArray()
 		model_np+=np.matmul(A.H,data_np)
 		return
 
@@ -53,10 +60,10 @@ if __name__ == '__main__':
 	#Create solver
 	LCGsolver = LCG.LCGsolver(Stop)
 	#Create a sepVector
-	model=pyVector.vectorSEP((1,200))
-	data=pyVector.vectorSEP((1,200))
-	n=200
-	A = np.matrix(np.zeros((n,n),dtype=np.float64))
+	nsamp=200
+	model=SepVector.getSepVector(ns=[1,nsamp],storage="dataDouble")
+	data=SepVector.getSepVector(ns=[1,nsamp],storage="dataDouble")
+	A = np.matrix(np.zeros((nsamp,nsamp),dtype=np.float64))
 	np.fill_diagonal(A, -2)
 	np.fill_diagonal(A[1:], 1)
 	np.fill_diagonal(A[:,1:], 1)
@@ -70,10 +77,10 @@ if __name__ == '__main__':
 	print(data.norm())
 	print(model.norm())
 	#Testing solver
-	data_np = np.array(data.vec,copy=False)
+	data_np = data.getNdArray()
 	data_np.fill(1.)
 	model.zero()
 	#Create L2-norm linear problem
 	L2Prob_sym = Prblm.ProblemL2Linear(model,data,MatMultSym)
-# 	LCGsolver.setDefaults(iter_sampling=500)
+	LCGsolver.setDefaults(iter_sampling=100,save_obj=True,iter_buffer_size=100,save_model=True,prefix="temp")
 	LCGsolver.run(L2Prob_sym)

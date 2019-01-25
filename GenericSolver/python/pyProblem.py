@@ -1,4 +1,4 @@
-#Module containing the definition of an abstract inverse problem (phi(m) = |f(m)-d|_2)
+#Module containing the definition of abstract inverse problems
 import pyVector as Vec
 import pyOperator as pyOp
 from math import isnan

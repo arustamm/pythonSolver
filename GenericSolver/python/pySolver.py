@@ -6,10 +6,21 @@ import os
 #Functions and modules necessary for writing on disk
 import pickle
 import atexit
+from sep_util import write_file
 from sys_util import mkdir
 from shutil import rmtree
 import datetime
 import sep_util
+
+#Testing if genericIO and SepVector module is present
+import imp
+try:
+	imp.find_module('genericIO')
+	import genericIO
+	SepVector=genericIO.SepVector
+	genIO_found = True
+except ImportError:
+	genIO_found = False
 
 class Solver:
 	"""Solver parent object"""
@@ -23,7 +34,7 @@ class Solver:
 		"""Default destructor"""
 		return
 
-	def setDefaults(self,save_obj=False,save_res=False,save_grad=False,save_model=False,prefix=None,iter_buffer=None,iter_sampling=1,restart_folder=None,flush_memory=False):
+	def setDefaults(self,save_obj=False,save_res=False,save_grad=False,save_model=False,prefix=None,iter_buffer_size=None,iter_sampling=1,restart_folder=None,flush_memory=False):
 		"""
 		   Function to set parameters for result saving.
 		   save_obj    = [False]; Flag to save objective function values into the list self.obj
@@ -31,7 +42,7 @@ class Solver:
 		   save_grad   = [False]; Flag to save gradient vectors into the list self.grad
 		   save_model  = [False]; Flag to save model vectors into the list self.model. It will also say the last inverted model vector into self.inv_model
 		   prefix = [None]; Prefix of the files in which requested results will be saved; If prefix is None, then nothing is going to be saved on disk
-		   iter_buffer = [None]; Number of steps to save before flushing results to disk (by default the solver waits until all iterations are done)
+		   iter_buffer_size = [None]; Number of steps to save before flushing results to disk (by default the solver waits until all iterations are done)
 		   iter_sampling = [1]; Sampling of the iteration axis
 		   flush_memory = [False]; Whether to keep results into the object lists or clean those once inversion is completed or results have been written on disk
 		   restart_folder = [None]; Restart folder name if disk restart is necessary. If a restart is needed within a Python session, then this argument is unneccessary
@@ -41,7 +52,7 @@ class Solver:
 		self.save_obj = save_obj							#Flag to save objective function value
 		self.save_res = save_res							#Flag to save residual vector
 		self.save_grad= save_grad							#Flag to save gradient vector
-		self.save_model = save_model							#Flag to save model vector
+		self.save_model = save_model						#Flag to save model vector
 		#Prefix of the saved files (if provided the results will be written on disk)
 		self.prefix = prefix								#Prefix for saving inversion results on disk
 		self.flush_memory = flush_memory					#Keep the results in the RAM or flush memory every time results are written on disk
@@ -55,7 +66,7 @@ class Solver:
 			if(self.save_grad): self.grad_file=self.prefix+"_gradient.H"				#File name in which the gradient vector is saved
 
 		#Iteration axis-sampling parameters
-		self.iter_buffer=iter_buffer				#Number of steps to save before flushing results to disk (by default the solver waits until all iterations are done)
+		self.iter_buffer_size=iter_buffer_size		#Number of steps to save before flushing results to disk (by default the solver waits until all iterations are done)
 		self.iter_sampling=iter_sampling			#Sampling of the iteration axis
 
 		#Lists of the results
@@ -77,17 +88,22 @@ class Solver:
 	def save_results(self,iter,prblm,force_save=False,force_write=False):
 		"""
 		   Method to save results
-		   force_saving => Flag to ignore iteration sampling
-		   force_write => Force writing on disk if necessary (used to handle last iteration)
+		   force_saving = [False]; Flag to ignore iteration sampling
+		   force_write  = [False]; Force writing on disk if necessary (used to handle last iteration)
 		"""
 		if(not isinstance(prblm,pyProblem.Problem)): raise TypeError("Input variable is not a Problem object")
 		#Obtaining objective function value
 		prblm_mod = prblm.get_model()
 		objf_value=prblm.get_obj(prblm_mod)
+		#Verify that SepVectors are used
+		self.use_SepVector = False
+		if(genIO_found):
+			self.use_SepVector = isinstance(prblm_mod,SepVector.vector)
 		#Save if it is forced to or if the solver hits a sampled iteration number
+		#The objective function is always saved every iteration if requested
+		if(self.save_obj):
+			self.obj.append(objf_value)
 		if(iter%self.iter_sampling == 0 or force_save):
-			if(self.save_obj):
-				self.obj.append(objf_value)
 			if(self.save_model):
 				self.model.append(prblm_mod.clone())
 				#Storing model vector into a temporary vector
@@ -105,11 +121,11 @@ class Solver:
 
 	def _write_steps(self,force_write=False):
 		"""Method to write inversion results on disk if forced to or if buffer is filled"""
-
 		save = False
 		#Save results if buffer size is hit
-		if(self.iter_buffer!=None):
-			if(len(self.obj) >= self.iter_buffer or len(self.model) >= self.iter_buffer or len(self.res) >= self.iter_buffer or len(self.grad) >= self.iter_buffer): save = True
+		if(self.iter_buffer_size!=None):
+			current_buffer_size = max(len(range(self.iter_written,len(self.model))),len(range(self.iter_written,len(self.res))),len(range(self.iter_written,len(self.grad))))
+			if(current_buffer_size >= self.iter_buffer_size): save = True
 		#Save if requested
 		if(force_write): save = True
 
@@ -117,22 +133,42 @@ class Solver:
 		if(save):
 			#Writing objective function value on disk if requested
 			if(self.save_obj and self.prefix != None):
-				raise NotImplementedError("Writing of the objective function not currently supported")
+				write_file(self.obj_file,np.array(self.obj))
 			#Writing current inverted model and model vectors on disk if requested
 			if(self.save_model and self.prefix != None):
-				self.inv_model.writeVec(self.inv_mod_file,mode='w') #Overwriting previous written model
-				for ivec in range(self.iter_written,len(self.model)):
-					self.model[ivec].writeVec(self.model_file,mode='a') #Appending to previous written vectors if any
+				if(genIO_found and self.use_SepVector): #Writing using genericIO and SepVector
+					genericIO.defaultIO.writeVector(self.inv_mod_file,self.inv_model) #Overwriting previous written model
+					for ivec in range(self.iter_written,len(self.model)):
+						#Appending to previous written vectors if any
+						genericIO.defaultIO.appendVector(self.model_file,self.model[ivec],flush=self.iter_buffer_size)
+					genericIO.defaultIO.closeAppendFile(self.model_file)
+				else:
+					self.inv_model.writeVec(self.inv_mod_file,mode='w') #Overwriting previous written model
+					for ivec in range(self.iter_written,len(self.model)):
+						self.model[ivec].writeVec(self.model_file,mode='a') #Appending to previous written vectors if any
 			#Writing gradient vectors on disk if requested
 			if(self.save_grad and self.prefix != None):
-				for ivec in range(self.iter_written,len(self.grad)):
-					self.grad[ivec].writeVec(self.grad_file,mode='a') #Appending to previous written vectors if any
+				if(genIO_found and self.use_SepVector): #Writing using genericIO and SepVector
+					for ivec in range(self.iter_written,len(self.grad)):
+						#Appending to previous written vectors if any
+						genericIO.defaultIO.appendVector(self.grad_file,self.grad[ivec],flush=self.iter_buffer_size)
+					genericIO.defaultIO.closeAppendFile(self.grad_file)
+				else:
+					for ivec in range(self.iter_written,len(self.grad)):
+						self.grad[ivec].writeVec(self.grad_file,mode='a') #Appending to previous written vectors if any
 			#Writing residual vectors on disk if requested
 			if(self.save_res and self.prefix != None):
-				for ivec in range(self.iter_written,len(self.res)):
-					self.res[ivec].writeVec(self.res_file,mode='a') #Appending to previous written vectors if any
+				if(genIO_found and self.use_SepVector): #Writing using genericIO and SepVector
+					for ivec in range(self.iter_written,len(self.res)):
+						#Appending to previous written vectors if any
+						genericIO.defaultIO.appendVector(self.res_file,self.res[ivec],flush=self.iter_buffer_size)
+					genericIO.defaultIO.closeAppendFile(self.res_file)
+				else:
+					for ivec in range(self.iter_written,len(self.res)):
+						self.res[ivec].writeVec(self.res_file,mode='a') #Appending to previous written vectors if any
+
 			#Setting the counter of the vectors already written
-			self.iter_written = max(len(self.obj),len(self.model),len(self.res),len(self.grad))
+			self.iter_written = max(len(self.model),len(self.res),len(self.grad))
 			if(self.flush_memory):
 				#Cleaning result lists if not requested to be kept in memory
 				del self.obj;   self.obj   = list()
