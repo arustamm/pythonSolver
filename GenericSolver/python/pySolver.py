@@ -37,15 +37,15 @@ class Solver:
 	def setDefaults(self,save_obj=False,save_res=False,save_grad=False,save_model=False,prefix=None,iter_buffer_size=None,iter_sampling=1,restart_folder=None,flush_memory=False):
 		"""
 		   Function to set parameters for result saving.
-		   save_obj    = [False]; Flag to save objective function values into the list self.obj
-		   save_res    = [False]; Flag to save residual vectors into the list self.res
-		   save_grad   = [False]; Flag to save gradient vectors into the list self.grad
-		   save_model  = [False]; Flag to save model vectors into the list self.model. It will also say the last inverted model vector into self.inv_model
-		   prefix = [None]; Prefix of the files in which requested results will be saved; If prefix is None, then nothing is going to be saved on disk
-		   iter_buffer_size = [None]; Number of steps to save before flushing results to disk (by default the solver waits until all iterations are done)
-		   iter_sampling = [1]; Sampling of the iteration axis
-		   flush_memory = [False]; Whether to keep results into the object lists or clean those once inversion is completed or results have been written on disk
-		   restart_folder = [None]; Restart folder name if disk restart is necessary. If a restart is needed within a Python session, then this argument is unneccessary
+		   save_obj    = [False] - boolian; Flag to save objective function values into the list self.obj
+		   save_res    = [False] - boolian; Flag to save residual vectors into the list self.res
+		   save_grad   = [False] - boolian; Flag to save gradient vectors into the list self.grad
+		   save_model  = [False] - boolian; Flag to save model vectors into the list self.model. It will also say the last inverted model vector into self.inv_model
+		   prefix = [None] - string; Prefix of the files in which requested results will be saved; If prefix is None, then nothing is going to be saved on disk
+		   iter_buffer_size = [None] - int; Number of steps to save before flushing results to disk (by default the solver waits until all iterations are done)
+		   iter_sampling = [1] - int; Sampling of the iteration axis
+		   flush_memory = [False] - boolian; Whether to keep results into the object lists or clean those once inversion is completed or results have been written on disk
+		   restart_folder = [None] - string; Restart folder name if disk restart is necessary. If a restart is needed within a Python session, then this argument is unneccessary
 		"""
 
 		#Parameter for saving results

@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import sys,os,imp
 sys.path.append("/net/server/homes/sep/ettore/research/packages/pySolver/GenericSolver/python")
+sys.path.append("/net/server/homes/sep/ettore/research/packages/acoustic_isotropic_operators/local/lib/python")
 try:
 	imp.find_module('genericIO')
 	import genericIO
