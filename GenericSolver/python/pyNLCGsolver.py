@@ -188,7 +188,7 @@ class NLCGsolver(pySolver.Solver):
 			raise ValueError("ERROR! Requested Beta function type not existing")
 		return beta
 
-	def run(self,prblm,verbose=True,restart=False):
+	def run(self,prblm,verbose=False,restart=False):
 		"""Running NLCG or steppest-descent solver"""
 		if(not restart):
 			if(self.beta_type == "SD"):

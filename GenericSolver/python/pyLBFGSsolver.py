@@ -144,7 +144,7 @@ class LBFGSsolver(pySolver.Solver):
 				dmodl.scaleAdd(self.step_vectors[ii],1.0,alpha[ii]-beta)
 		return
 
-	def run(self,prblm,verbose=True,restart=False):
+	def run(self,prblm,verbose=False,restart=False):
 		"""Running LBFGS solver"""
 
 		#Preliminary variables for Hessian inverse estimation

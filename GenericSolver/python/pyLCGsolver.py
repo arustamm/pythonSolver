@@ -27,7 +27,7 @@ class LCGsolver(pySolver.Solver):
 		"""Default destructor"""
 		return
 
-	def run(self,prblm,verbose=True,restart=False):
+	def run(self,prblm,verbose=False,restart=False):
 		"""Running LCG and steppest-descent solver"""
 		if(not restart):
 			if(self.steepest):
