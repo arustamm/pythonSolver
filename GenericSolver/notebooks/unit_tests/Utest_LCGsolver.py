@@ -148,7 +148,7 @@ if __name__ == '__main__':
 	L2Prob_reg.estimate_epsilon()
 	#Running the solver
 	LCGsolver.setDefaults(iter_sampling=100)
-	LCGsolver.run(L2Prob_reg)
+	LCGsolver.run(L2Prob_reg,verbose=True)
 
 	#Testing LCG for symmetric systems
 	SymProb = Prblm.ProblemLinearSymmetric(model_vec_sym,data_vec_sym,MatMultSym)
@@ -167,7 +167,7 @@ if __name__ == '__main__':
 	L2NLRegProb = Prblm.ProblemL2NonLinearLinearReg(model_vec_sym,data_vec_sym,non_lin_op,0.)
 	L2NLRegProb.estimate_epsilon()
 	NLCGsolver = NLCG.NLCGsolver(Stop)
-	NLCGsolver.run(L2NLRegProb)
+	NLCGsolver.run(L2NLRegProb,verbose=True)
 
 
 

@@ -262,8 +262,6 @@ class ProblemL2LinearReg(Problem):
 		#Residual vector (data and model residual vectors)
 		self.res=self.op.range.clone()
 		self.res.zero()
-		#Temporary vector for scaled residuals (necessary for gradient computation)
-		self.res_reg_tmp=self.res.vec2.clone()
 		#Dresidual vector
 		self.dres=self.res.clone()
 		#Setting default variables
@@ -324,11 +322,11 @@ class ProblemL2LinearReg(Problem):
 	def gradf(self,model,res):
 		"""Method to return gradient vector g = L'r_d + epsilon*A'r_m"""
 		#Scaling by epsilon the model residual vector (saving temporarily residual regularization)
-		self.res_reg_tmp.copy(res.vec2)
-		res.vec2.scale(self.epsilon)
-		#g = L'r_d + A'(epsilon*r_m)
-		self.op.adjoint(False,self.grad,res)
-		res.vec2.copy(self.res_reg_tmp)
+		#g = epsilon*A'r_m
+		self.op.op2.adjoint(False,self.grad,res.vec2)
+		self.grad.scale(self.epsilon)
+		#g = L'r_d + epsilon*A'r_m
+		self.op.op1.adjoint(True,self.grad,res.vec1)
 		return self.grad
 
 	def dresf(self,model,dmodel):
@@ -431,8 +429,6 @@ class ProblemL2NonLinearLinearReg(Problem):
 		#Residual vector (data and model residual vectors)
 		self.res=self.op.range.clone()
 		self.res.zero()
-		#Temporary vector for scaled residuals (necessary for gradient computation)
-		self.res_reg_tmp=self.res.vec2.clone()
 		#Dresidual vector
 		self.dres=self.res.clone()
 		#Setting default variables
@@ -516,12 +512,11 @@ class ProblemL2NonLinearLinearReg(Problem):
 		"""Method to return gradient vector g = F'r_d + epsilon*A'r_m"""
 		#Setting model point on which the F is evaluated
 		self.op.set_background(model)
-		#Scaling by epsilon the model residual vector (saving temporarily residual regularization)
-		self.res_reg_tmp.copy(res.vec2)
-		res.vec2.scale(self.epsilon)
+		#g = epsilon*A'r_m
+		self.op.lin_op.op2.adjoint(False,self.grad,res.vec2)
+		self.grad.scale(self.epsilon)
 		#g = F'r_d + A'(epsilon*r_m)
-		self.op.lin_op.adjoint(False,self.grad,res)
-		res.vec2.copy(self.res_reg_tmp)
+		self.op.lin_op.op1.adjoint(True,self.grad,res.vec1)
 		return self.grad
 
 	def dresf(self,model,dmodel):
