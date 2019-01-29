@@ -102,6 +102,15 @@ class vector:
 		raise NotImplementedError("isDifferent must be overwritten")
 		return
 
+	def bounding(self,vec2,mode):
+		"""
+		   Function to bound vector values based on input vector
+		   vec2 = [no default] - vector class; Provided vector bounds
+		   mode = [no default] - string; ['max','min'] clipping the maximum  or minimum values of the vector
+		"""
+		raise NotImplementedError("bounding must be overwritten")
+		return
+
 #Sep library (Importing after vector since SepVector uses it) if present
 if genIO_found:
 	import Hypercube
