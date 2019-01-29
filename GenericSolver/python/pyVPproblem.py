@@ -105,6 +105,8 @@ class ProblemL2VpReg(pyProb.Problem):
 		#Setting default variables
 		self.setDefaults()
 		self.linear=False
+		#Linear component of the inverted model
+		self.model_lin = model_lin
         return
 
 	def __del__(self):
