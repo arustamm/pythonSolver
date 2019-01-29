@@ -242,9 +242,9 @@ class ProblemLinearSymmetric(Problem):
 		return obj
 
 class ProblemL2LinearReg(Problem):
-	"""Linear inverse problem regularized of the form 1/2*|Lm-d|_2 + epsilon^2/2*|Am|_2"""
+	"""Linear inverse problem regularized of the form 1/2*|Lm-d|_2 + epsilon^2/2*|Am-m_prior|_2"""
 
-	def __init__(self,model,data,op,epsilon,reg_op=None):
+	def __init__(self,model,data,op,epsilon,reg_op=None,prior_model=None):
 		"""Constructor of linear problem"""
 		#Setting internal vector
 		self.model=model.clone()
@@ -254,9 +254,15 @@ class ProblemL2LinearReg(Problem):
 		self.grad=self.dmodel.clone()
 		#Copying the pointer to data vector
 		self.data=data
+		#Setting a prior model (if any)
+		self.prior_model=prior_model
 		#Setting linear operators
 		#Assuming identity operator if regularization operator was not provided
 		if(reg_op == None): reg_op = pyOp.IdentityOp(self.model)
+		#Checking if space of the prior model is constistent with range of regularization operator
+		if(self.prior_model != None):
+			if(not self.prior_model.checkSame(reg_op.range)):
+				raise ValueError("ERROR! Prior model space no constistent with range of regularization operator")
 		self.op=pyOp.stackOperator(op,reg_op) #Modeling operator
 		self.epsilon=epsilon #Regularization weight
 		#Residual vector (data and model residual vectors)
@@ -308,13 +314,16 @@ class ProblemL2LinearReg(Problem):
 		return epsilon_balance
 
 	def resf(self,model):
-		"""Method to return residual vector r = [r_d; r_m]: r_d = Lm - d; r_m = epsilon * Am """
+		"""Method to return residual vector r = [r_d; r_m]: r_d = Lm - d; r_m = epsilon * (Am - m_prior) """
 		if(model.norm()!=0.0):
 			self.op.forward(False,model,self.res)
 		else:
 			self.res.zero()
 		#Computing r_d = Lm - d
 		self.res.vec1.scaleAdd(self.data,1.,-1.)
+		#Computing r_m = Am - m_prior
+		if(self.prior_model != None):
+			self.res.vec2.scaleAdd(self.prior_model,1.,-1.)
 		#Scaling by epsilon epsilon*r_m
 		self.res.vec2.scale(self.epsilon)
 		return self.res
@@ -338,7 +347,7 @@ class ProblemL2LinearReg(Problem):
 		return self.dres
 
 	def objf(self,res):
-		"""Method to return objective function value 1/2|Lm-d|_2 + epsilon^2/2*|Am|_2"""
+		"""Method to return objective function value 1/2|Lm-d|_2 + epsilon^2/2*|Am-m_prior|_2"""
 		obj=0.5*res.dot(res)
 		return obj
 
@@ -405,9 +414,14 @@ class ProblemL2NonLinear(Problem):
 		return obj
 
 class ProblemL2NonLinearLinearReg(Problem):
-	"""Linear inverse problem regularized of the form 1/2*|f(m)-d|_2 + epsilon^2/2*|Am|_2"""
+	"""
+	   Linear inverse problem regularized of the form
+	   		1/2*|f(m)-d|_2 + epsilon^2/2*|Am - m_prior|_2
+				or with a non-linear regularization
+			1/2*|f(m)-d|_2 + epsilon^2/2*|g(m) - m_prior|_2
+	"""
 
-	def __init__(self,model,data,op,epsilon,reg_op=None):
+	def __init__(self,model,data,op,epsilon,reg_op=None,prior_model=None):
 		"""Constructor of linear problem"""
 		#Setting internal vector
 		self.model=model.clone()
@@ -417,14 +431,25 @@ class ProblemL2NonLinearLinearReg(Problem):
 		self.grad=self.dmodel.clone()
 		#Copying the pointer to data vector
 		self.data=data
+		#Setting a prior model (if any)
+		self.prior_model=prior_model
 		#Setting linear operators
 		#Assuming identity operator if regularization operator was not provided
 		if(reg_op == None): reg_op = pyOp.IdentityOp(self.model)
+		#Checking if space of the prior model is constistent with range of regularization operator
+		if(self.prior_model != None):
+			if(not self.prior_model.checkSame(reg_op.range)):
+				raise ValueError("ERROR! Prior model space no constistent with range of regularization operator")
 		#Setting non-linear and linearized operators
 		if(not isinstance(op,pyOp.NonLinearOperator)):
 			raise TypeError("ERROR! Not provided a non-linear operator!")
 		#Setting non-linear stack of operators
-		self.op = pyOp.NonLinearOperator(pyOp.stackOperator(op.nl_op,reg_op),pyOp.stackOperator(op.lin_op,reg_op),op.set_background)
+		if(isinstance(reg_op,pyOp.NonLinearOperator)):
+			self.op = pyOp.NonLinearOperator(pyOp.stackOperator(op.nl_op,reg_op.nl_op),pyOp.stackOperator(op.lin_op,reg_op.lin_op),op.set_background)
+			self.op_reg_set_background = reg_op.set_background
+		else:
+			self.op = pyOp.NonLinearOperator(pyOp.stackOperator(op.nl_op,reg_op),pyOp.stackOperator(op.lin_op,reg_op),op.set_background)
+			self.op_reg_set_background = None
 		self.epsilon=epsilon #Regularization weight
 		#Residual vector (data and model residual vectors)
 		self.res=self.op.range.clone()
@@ -500,18 +525,24 @@ class ProblemL2NonLinearLinearReg(Problem):
 		return epsilon_balance
 
 	def resf(self,model):
-		"""Method to return residual vector r = [r_d; r_m]: r_d = f(m) - d; r_m = Am """
+		"""Method to return residual vector r = [r_d; r_m]: r_d = f(m) - d; r_m = Am - m_prior or r_m = g(m) - m_prior"""
 		self.op.nl_op.forward(False,model,self.res)
 		#Computing r_d = f(m) - d
 		self.res.vec1.scaleAdd(self.data,1.,-1.)
+		#Computing r_m = Am - m_prior
+		if(self.prior_model != None):
+			self.res.vec2.scaleAdd(self.prior_model,1.,-1.)
 		#Scaling by epsilon epsilon*r_m
 		self.res.vec2.scale(self.epsilon)
 		return self.res
 
 	def gradf(self,model,res):
-		"""Method to return gradient vector g = F'r_d + epsilon*A'r_m"""
+		"""Method to return gradient vector g = F'r_d + (epsilon*A'r_m or epsilon*G'r_m)"""
 		#Setting model point on which the F is evaluated
 		self.op.set_background(model)
+		#Setting background model for regularization if it was non linear
+		if(self.op_reg_set_background != None):
+			self.op_reg_set_background(model)
 		#g = epsilon*A'r_m
 		self.op.lin_op.op2.adjoint(False,self.grad,res.vec2)
 		self.grad.scale(self.epsilon)
@@ -520,9 +551,12 @@ class ProblemL2NonLinearLinearReg(Problem):
 		return self.grad
 
 	def dresf(self,model,dmodel):
-		"""Method to return residual vector dres = (F + epsilon * A)dm"""
+		"""Method to return residual vector dres = [F + epsilon * (A or G)]dm"""
 		#Setting model point on which the F is evaluated
 		self.op.set_background(model)
+		#Setting background model for regularization if it was non linear
+		if(self.op_reg_set_background != None):
+			self.op_reg_set_background(model)
 		#Computing Ldm = dres_d
 		self.op.lin_op.forward(False,dmodel,self.dres)
 		#Scaling by epsilon
@@ -530,6 +564,6 @@ class ProblemL2NonLinearLinearReg(Problem):
 		return self.dres
 
 	def objf(self,res):
-		"""Method to return objective function value 1/2|f(m)-d|_2 + epsilon^2/2*|Am|_2"""
+		"""Method to return objective function value 1/2|f(m)-d|_2 + (epsilon^2/2*|Am-m_prior|_2 or epsilon^2/2*|g(m)-m_prior|_2)"""
 		obj=0.5*res.dot(res)
 		return obj

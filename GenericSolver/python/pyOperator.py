@@ -186,6 +186,7 @@ class ChainOperator(Operator):
 	def forward(self,add,model,data):
 		"""Forward operator BAm"""
 		self.checkDomainRange(model,data)
+		if(not add): data.zero()
 		self.op1.forward(False,model,self.tmp_vec)
 		self.op2.forward(add,self.tmp_vec,data)
 		return
@@ -193,6 +194,7 @@ class ChainOperator(Operator):
 	def adjoint(self,add,model,data):
 		"""Adjoint operator A'B'd"""
 		self.checkDomainRange(model,data)
+		if(not add): model.zero()
 		self.op2.adjoint(False,self.tmp_vec,data)
 		self.op1.adjoint(add,model,self.tmp_vec)
 		return
@@ -218,6 +220,7 @@ class stackOperator(Operator):
 	def forward(self,add,model,data):
 		"""Forward operator Cm"""
 		self.checkDomainRange(model,data)
+		if(not add): data.zero()
 		# d1 = Am
 		self.op1.forward(add,model,data.vec1)
 		# d2 = Bm
@@ -228,6 +231,7 @@ class stackOperator(Operator):
 	def adjoint(self,add,model,data):
 		"""Adjoint operator C'r = A'r1 + B'r2"""
 		self.checkDomainRange(model,data)
+		if(not add): model.zero()
 		# m = A'd1
 		self.op1.adjoint(add,model,data.vec1)
 		# m += B'd2
