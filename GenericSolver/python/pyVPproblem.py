@@ -1,6 +1,7 @@
 #Module containing the definition of inverse problems where Variable-Projection method is used (Golub and Pereyra, 1973)
 import pyProblem as pyProb
 import pyOperator as pyOp
+import pyVector as pyVec
 
 
 class VpOperator(pyOp.Operator):
@@ -20,6 +21,9 @@ class VpOperator(pyOp.Operator):
 			raise TypeError("ERROR! Not provided a non-linear operator class for h_nl")
 		self.h_nl=h_nl
 		self.h_lin=h_lin
+		#Checking the range spaces
+		if(not h_nl.nl_op.range.checkSame(h_lin.range)):
+			raise ValueError("ERROR! The two provided operators have different ranges")
 		self.set_nl=set_nl
 		self.set_lin=set_lin
 		return
@@ -54,10 +58,53 @@ class ProblemL2VpReg(pyProb.Problem):
 			g_op_reg   	= [None] - non-linear operator class; Fully non-linear additional operator for regularization term
 			h_op_reg	= [None] - Vp operator class; Variable projection operator for regularization term
 			data_reg   	= [None] - vector class; Data vector for regularization term
-			epsilon 	= [None] - float; Regularization term weight
+			epsilon 	= [None] - float; Regularization term weight (must be provided if a regularization is needed)
 		"""
 		if(not isinstance(h_op,VpOperator)):
 			raise TypeError("ERROR! Not provided an operator class for the variable projection problem")
+		#Setting internal vector
+		self.model=model_nl.clone()
+		self.dmodel=model_nl.clone()
+		self.dmodel.zero()
+		#Copying the pointer to data vector
+		self.data=data
+		#Setting non-linear/linear operator
+		self.h_op=h_op
+		#Setting non-linear operator (if any)
+		self.g_op=g_op
+		#Verifying if a regularization is requested
+		self.epsilon=epsilon
+		#Residual vector
+		if(self.epsilon != None):
+			#Setting non-linear regularization operator
+			self.g_op_reg=g_op_reg
+			#Setting non-linear/linear operator
+			self.h_op_reg=h_op_reg
+			#Setting data term in regularization
+			self.data_reg=data_reg
+			#Creating regularization residual vector
+			res_reg = None
+			if(self.g_op_reg != None):
+				res_reg = self.g_op_reg.nl_op.range.clone()
+			elif(self.h_op_reg != None):
+				res_reg = self.h_op_reg.h_lin.range.clone()
+			elif(self.data_reg != None):
+				res_reg = self.data_reg.clone()
+			#Checking if a residual vector for the regularization term was created
+			if(res_reg == None):
+				raise ValueError("ERROR! If epsilon was provided, then a regularization term must be provided")
+			self.res = pyVec.superVector(data.clone(),res_reg)
+		else:
+			self.res=data.clone()
+		#Zeroing out the residual vector
+		self.res.zero()
+		#Dresidual vector
+		self.dres=self.res.clone()
+		#Gradient vector
+		self.grad=self.dmodel.clone()
+		#Setting default variables
+		self.setDefaults()
+		self.linear=False
         return
 
 	def __del__(self):

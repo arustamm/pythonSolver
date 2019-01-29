@@ -77,7 +77,7 @@ if __name__ == '__main__':
 	#Create solver
 	NLCGsolver = NLCG.NLCGsolver(Stop,logger=logger("Rosenbrock_NLCG_log.txt"))
 	NLCGsolver.setDefaults(save_obj=True,save_model=True)
-	NLCGsolver.run(Ros_prob)
+	NLCGsolver.run(Ros_prob,verbose=True)
 	print("optimal NLCG x: ", Ros_prob.model.arr[0])
 	print("optimal NLCG y: ", Ros_prob.model.arr[1])
 	# plt.plot(NLCGsolver.obj)
@@ -94,14 +94,14 @@ if __name__ == '__main__':
 	#Testing BFGS algorithm
 	Ros_prob = Rosenbrock_prblm(x_init,y_init)
 	BFGSsolver = LBFGS.LBFGSsolver(Stop,logger=logger("Rosenbrock_BFGS_log.txt"))
-	BFGSsolver.run(Ros_prob)
+	BFGSsolver.run(Ros_prob,verbose=True)
 	print("optimal BFGS x: ", Ros_prob.model.arr[0])
 	print("optimal BFGS y: ", Ros_prob.model.arr[1])
 
 	#Testing LBFGS algorithm
 	Ros_prob = Rosenbrock_prblm(x_init,y_init)
 	LBFGSsolver = LBFGS.LBFGSsolver(Stop,m_steps=1,logger=logger("Rosenbrock_LBFGS_log.txt"))
-	LBFGSsolver.run(Ros_prob)
+	LBFGSsolver.run(Ros_prob,verbose=True)
 	print("optimal LBFGS x: ", Ros_prob.model.arr[0])
 	print("optimal LBFGS y: ", Ros_prob.model.arr[1])
 
