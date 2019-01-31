@@ -164,7 +164,7 @@ if __name__ == '__main__':
 
 	#Testing non-linear regularized problem
 	non_lin_op = Op.NonLinearOperator(MatMultSym,MatMultSym,dummy_func)
-	L2NLRegProb = Prblm.ProblemL2NonLinearLinearReg(model_vec_sym,data_vec_sym,non_lin_op,0.)
+	L2NLRegProb = Prblm.ProblemL2NonLinearReg(model_vec_sym,data_vec_sym,non_lin_op,0.)
 	L2NLRegProb.estimate_epsilon()
 	NLCGsolver = NLCG.NLCGsolver(Stop)
 	NLCGsolver.run(L2NLRegProb,verbose=True)

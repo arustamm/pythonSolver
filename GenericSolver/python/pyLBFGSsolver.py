@@ -165,7 +165,7 @@ class LBFGSsolver(pySolver.Solver):
 				msg = "Broyden-Fletcher-Goldfarb-Shanno (BFGS) algorithm log file"
 			#Printing restart folder
 			msg+="Restart folder: %s\n"%(self.restart.restart_folder)
-			if(verbose): print(msg)
+			if(verbose): print(msg.replace("log file",""))
 			if(self.logger): self.logger.addToLog(msg)
 
 			#Setting internal vectors (model, search direction, and previous gradient vectors)

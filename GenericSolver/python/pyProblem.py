@@ -413,7 +413,7 @@ class ProblemL2NonLinear(Problem):
 		obj=0.5*res.dot(res)
 		return obj
 
-class ProblemL2NonLinearLinearReg(Problem):
+class ProblemL2NonLinearReg(Problem):
 	"""
 	   Linear inverse problem regularized of the form
 	   		1/2*|f(m)-d|_2 + epsilon^2/2*|Am - m_prior|_2
