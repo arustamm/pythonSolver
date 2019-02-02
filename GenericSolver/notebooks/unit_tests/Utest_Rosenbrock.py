@@ -25,6 +25,8 @@ class Rosenbrock_prblm(Prblm.Problem):
 
 	def __init__(self,x_initial,y_initial):
 		"""Constructor of linear problem"""
+		#Setting the bounds (if any)
+		super(Rosenbrock_prblm,self).__init__(None,None)
 		self.model  = Vec.vectorIC(np.array((x_initial,y_initial)))
 		self.dmodel = self.model.clone()
 		self.dmodel.zero()
