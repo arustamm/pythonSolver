@@ -40,7 +40,11 @@ class ParabolicStep(pyStepper.Stepper):
 			if(logger): logger.addToLog("	initial-steplength=%s"%(alpha))
 			#Find the first guess as if the problem was linear (Tangent method)
 			if((itry==self.ntry) or (alpha == 0.)):
-				dres=prblm.get_dres(modl,dmodl)
+				try:
+					dres=prblm.get_dres(modl,dmodl)
+				except NotImplementedError:
+					if(logger): logger.addToLog("WARNING! dresf not implemented; stepper could not find a new step-length initial guess (i.e., line search unsuccessful)")
+					break
 				res=prblm.get_res(modl)
 				dres_res=res.dot(dres)
 				dres_dres=dres.dot(dres)

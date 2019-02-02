@@ -31,7 +31,7 @@ class MatMult_incore(Op.Operator):
 		if(not isinstance(model,Vec.vectorIC)): raise TypeError("ERROR! Model vector not a vectorIC object")
 		if(not isinstance(data,Vec.vectorIC)): raise TypeError("ERROR! Data vector not a vectorIC object")
 		if(not add): data.zero()
-		data.arr+=np.matmul(A,model.arr)
+		data.arr+=np.matmul(self.A,model.arr)
 		return
 
 	def adjoint(self,add,model,data):
@@ -40,7 +40,7 @@ class MatMult_incore(Op.Operator):
 		if(not isinstance(model,Vec.vectorIC)): raise TypeError("ERROR! Model vector not a vectorIC object")
 		if(not isinstance(data,Vec.vectorIC)): raise TypeError("ERROR! Data vector not a vectorIC object")
 		if(not add): model.zero()
-		model.arr+=np.matmul(A.H,data.arr)
+		model.arr+=np.matmul(self.A.H,data.arr)
 		return
 
 class MatMult_outcore(Op.Operator):
@@ -64,7 +64,7 @@ class MatMult_outcore(Op.Operator):
 		#Reading model and data vector files
 		[model_arr,_]=sep.read_file(model.vecfile)
 		[data_arr,data_axis]=sep.read_file(data.vecfile)
-		data_arr+=np.matmul(A,model_arr)
+		data_arr+=np.matmul(self.A,model_arr)
 		#writing data vector file
 		sep.write_file(data.vecfile,data_arr,data_axis)
 		return
@@ -78,7 +78,7 @@ class MatMult_outcore(Op.Operator):
 		#Reading model and data vector files
 		[model_arr,model_axis]=sep.read_file(model.vecfile)
 		[data_arr,_]=sep.read_file(data.vecfile)
-		model_arr+=np.matmul(A.H,data_arr)
+		model_arr+=np.matmul(self.A.H,data_arr)
 		#writing data vector file
 		sep.write_file(model.vecfile,model_arr,model_axis)
 		return

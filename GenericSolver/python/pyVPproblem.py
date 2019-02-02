@@ -43,17 +43,17 @@ class VpOperator(pyOp.Operator):
 
 class ProblemL2VpReg(pyProb.Problem):
 	"""
-       Non-linear inverse problem in which part of the model parameters define a quadratic function
-       The non-linear component is solved using the variable-projection method (Golub and Pereyra, 1973)
-       Problem form: phi(m) = 1/2*|g(m_nl) + h(m_nl)m_lin - d|_2 + epsilon^2/2*|g'(m_nl) + h'(m_nl)m_lin - d'|_2
-    """
+	   Non-linear inverse problem in which part of the model parameters define a quadratic function
+	   The non-linear component is solved using the variable-projection method (Golub and Pereyra, 1973)
+	   Problem form: phi(m) = 1/2*|g(m_nl) + h(m_nl)m_lin - d|_2 + epsilon^2/2*|g'(m_nl) + h'(m_nl)m_lin - d'|_2
+	"""
 
-	def __init__(self,model_nl,model_lin,h_op,data,lin_solver,g_op=None,g_op_reg=None,h_op_reg=None,data_reg=None,epsilon=None):
+	def __init__(self,model_nl,lin_model,h_op,data,lin_solver,g_op=None,g_op_reg=None,h_op_reg=None,data_reg=None,epsilon=None):
 		"""
 			Constructor for solving a inverse problem using the variable-projection method
 			Required arguments:
 			model_nl    = [no default] - vector class; Initial non-linear model component of the objective function
-			model_lin   = [no default] - vector class; Initial quadritic (Linear) model component of the objective function (will be zeroed out)
+			lin_model   = [no default] - vector class; Initial quadritic (Linear) model component of the objective function (will be zeroed out)
 			h_op   		= [no default] - Vp operator class; Variable projection operator
 			data   		= [no default] - vector class; Data vector
 			lin_solver	= [no default] - solver class; Linear solver to invert for linear component of the model
@@ -70,6 +70,9 @@ class ProblemL2VpReg(pyProb.Problem):
 		self.model=model_nl.clone()
 		self.dmodel=model_nl.clone()
 		self.dmodel.zero()
+		#Linear component of the inverted model
+		self.lin_model = lin_model.clone()
+		self.lin_model.zero()
 		#Copying the pointer to data vector
 		self.data=data
 		#Setting non-linear/linear operator
@@ -80,14 +83,16 @@ class ProblemL2VpReg(pyProb.Problem):
 		self.g_op=g_op
 		#Verifying if a regularization is requested
 		self.epsilon=epsilon
+		#Setting non-linear regularization operator
+		self.g_op_reg=g_op_reg
+		#Setting non-linear/linear operator
+		self.h_op_reg=h_op_reg
+		#Setting data term in regularization
+		self.data_reg=data_reg
+		if(self.h_op_reg != None and self.epsilon == None):
+			raise ValueError("ERROR! Epsilon value must be provided if a regularization term is requested.")
 		#Residual vector
 		if(self.epsilon != None):
-			#Setting non-linear regularization operator
-			self.g_op_reg=g_op_reg
-			#Setting non-linear/linear operator
-			self.h_op_reg=h_op_reg
-			#Setting data term in regularization
-			self.data_reg=data_reg
 			#Creating regularization residual vector
 			res_reg = None
 			if(self.g_op_reg != None):
@@ -106,9 +111,9 @@ class ProblemL2VpReg(pyProb.Problem):
 			self.res=data.clone()
 		#Instantiating linear inversion problem
 		if(self.h_op_reg != None):
-			self.vp_linear_prob = pyProb.ProblemL2LinearReg(self.model_lin,self.data,self.h_op.h_lin,self.epsilon,reg_op=self.h_op_reg.h_lin,prior_model=self.data_reg)
+			self.vp_linear_prob = pyProb.ProblemL2LinearReg(self.lin_model,self.data,self.h_op.h_lin,self.epsilon,reg_op=self.h_op_reg.h_lin,prior_model=self.data_reg)
 		else:
-			self.vp_linear_prob = pyProb.ProblemL2Linear(self.model_lin,self.data,self.h_op.h_lin)
+			self.vp_linear_prob = pyProb.ProblemL2Linear(self.lin_model,self.data,self.h_op.h_lin)
 		#Zeroing out the residual vector
 		self.res.zero()
 		#Dresidual vector
@@ -118,12 +123,9 @@ class ProblemL2VpReg(pyProb.Problem):
 		#Setting default variables
 		self.setDefaults()
 		self.linear=False
-		#Linear component of the inverted model
-		self.model_lin = model_lin.clone()
-		self.model_lin.zero()
 		#Linear solver for inverting quadratic component
 		self.lin_solver=lin_solver
-        return
+		return
 
 	def __del__(self):
 		"""Default destructor"""
@@ -138,9 +140,9 @@ class ProblemL2VpReg(pyProb.Problem):
 		res = self.res
 		if(self.epsilon != None): res = self.res.vec1
 		#Computing non-linear part g(m) (if any)
-		if(self.g_op != None): self.g_op.nl_op(False,model,res)
+		if(self.g_op != None): self.g_op.nl_op.forward(False,model,res)
 		#Computing non-linear part g_reg(m) (if any)
-		if(self.g_op_reg != None): self.g_op_reg.nl_op(False,model,self.res.vec2)
+		if(self.g_op_reg != None): self.g_op_reg.nl_op.forward(False,model,self.res.vec2)
 
 		##################################
 		#Setting data for linear inversion
@@ -162,26 +164,26 @@ class ProblemL2VpReg(pyProb.Problem):
 		#Getting fevals for saving linear inversion results
 		fevals = self.get_fevals()
 		#Setting initial linear inversion model
-		self.model_lin.zero()
-		self.vp_linear_prob.set_model(self.model_lin)
+		self.lin_model.zero()
+		self.vp_linear_prob.set_model(self.lin_model)
 		#Setting non-linear component of the model
 		self.h_op.set_nl(model)
 		if(self.h_op_reg != None):
 			self.h_op_reg.set_nl(model)
 		#Resetting inversion problem variables
 		self.vp_linear_prob.setDefaults()
-		self.lin_solver.run(self.vp_linear_prob)
+		self.lin_solver.run(self.vp_linear_prob,verbose=False)
 		#Copying inverted linear optimal model
-		self.model_lin.copy(self.vp_linear_prob.get_model())
+		self.lin_model.copy(self.vp_linear_prob.get_model())
 
 		##################################
 		#Obtaining the residuals
 		if((self.epsilon != None) and not("epsilon" in dir(self.vp_linear_prob))):
 			#Regularization contains a non-linear operator only
-			self.res.vec1.copy(self.vp_linear_prob.get_res())
+			self.res.vec1.copy(self.vp_linear_prob.get_res(self.lin_model))
 			self.res.vec2.scale(self.epsilon)
 		else:
-			self.res.copy(self.vp_linear_prob.get_res())
+			self.res.copy(self.vp_linear_prob.get_res(self.lin_model))
 		return self.res
 
 	def gradf(self,model,res):
@@ -192,10 +194,10 @@ class ProblemL2VpReg(pyProb.Problem):
 		#Zero-out gradient vector
 		self.grad.zero()
 		#Setting the optimal linear model component and background of the Jacobian matrices
-		self.h_op.set_lin_jac(self.model_lin) #H(_,m_lin_opt)
+		self.h_op.set_lin_jac(self.lin_model) #H(_,m_lin_opt)
 		self.h_op.h_nl.set_background(model) #H(m_nl,m_lin_opt)
 		if(self.h_op_reg != None):
-			self.h_op_reg.set_lin_jac(self.model_lin) #H'(_,m_lin_opt)
+			self.h_op_reg.set_lin_jac(self.lin_model) #H'(_,m_lin_opt)
 			self.h_op_reg.h_nl.set_background(model) #H'(m_nl,m_lin_opt)
 		if(self.g_op != None): self.g_op.set_background(model) #G(m_nl)
 		if(self.g_op_reg != None): self.g_op_reg.set_background(model) #G'(m_nl)
