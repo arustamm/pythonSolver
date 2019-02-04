@@ -225,6 +225,7 @@ class NLCGsolver(pySolver.Solver):
 			cg_grad0 = self.restart.retrieve_vector("cg_grad0")
 			#Setting the model and residuals to avoid residual twice computation
 			prblm.set_model(cg_mdl)
+			prblm_mdl=prblm.get_model()
 			#Setting residual vector to avoid its unnecessary computation
 			prblm.set_residual(self.restart.retrieve_vector("prblm_res"))
 

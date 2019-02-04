@@ -63,6 +63,7 @@ class LCGsolver(pySolver.Solver):
 			cg_dres = self.restart.retrieve_vector("cg_dres")
 			#Setting the model and residuals to avoid residual twice computation
 			prblm.set_model(cg_mdl)
+			prblm_mdl=prblm.get_model()
 			#Setting residual vector to avoid its unnecessary computation
 			prblm.set_residual(self.restart.retrieve_vector("prblm_res"))
 
@@ -138,22 +139,39 @@ class LCGsolver(pySolver.Solver):
 
 			#dmodl = alpha * grad + beta * dmodl
 			cg_dmodl.scaleAdd(prblm_grad,beta,alpha) 			#update search direction
-			#dres  = alpha * gradd + beta * dres
-			cg_dres.scaleAdd(prblm_gradd,beta,alpha)			#update residual step
 			#modl = modl + dmodl
 			cg_mdl.scaleAdd(cg_dmodl)							#Update model
-			#res = res + dres
-			prblm_res.scaleAdd(cg_dres)							#Update residuals
-
-			# clipped=self.stpr.clipping(modl,log_file)
 
 			#Increasing iteration counter
 			iter = iter + 1
-			#Setting the model and residuals to avoid residual twice computation
+			#Setting the model
 			prblm.set_model(cg_mdl)
+			#Projecting model onto the bounds (if any)
+			prblm.bounds.apply(cg_mdl)
 
-			#Setting residual vector to avoid its unnecessary computation
-			prblm.set_residual(prblm_res)
+			if(prblm_mdl.isDifferent(cg_mdl)):
+				#Model went out of the bounds
+				msg="Model hit provided bounds. Projecting it onto them."
+				if(self.logger): self.logger.addToLog(msg)
+				#Recomputing m_current = m_new - dmodl
+				prblm_mdl.scaleAdd(cg_dmodl,1.0,-1.0)
+				#Finding the projected dmodl = m_new_clipped - m_current
+				cg_dmodl.copy(cg_mdl)
+				cg_dmodl.scaleAdd(prblm_mdl,1.0,-1.0)
+				#copying previos residuals dres = res_old
+				cg_dres.copy(prblm_res)
+				prblm.set_model(cg_mdl)
+				#Computing actual change in the residual vector dres = res_new - res_old
+				prblm_res=prblm.get_res(cg_mdl) #New residual vector
+				cg_dres.scaleAdd(prblm_res,-1.0,1.0)
+			else:
+				#Setting residual vector to avoid its unnecessary computation (if model was not clipped)
+				#dres  = alpha * gradd + beta * dres
+				cg_dres.scaleAdd(prblm_gradd,beta,alpha)			#update residual step
+				#res = res + dres
+				prblm_res.scaleAdd(cg_dres)							#Update residuals
+				prblm.set_residual(prblm_res)
+
 
 			#Computing new objective function value
 			obj1=prblm.get_obj(cg_mdl)

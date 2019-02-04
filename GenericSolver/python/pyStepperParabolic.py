@@ -59,6 +59,8 @@ class ParabolicStep(pyStepper.Stepper):
 			if(logger): logger.addToLog("	Testing point (c1=%s): m_current+c1*alpha*dm"%(self.c1))
 			model_step.copy(modl)
 			model_step.scaleAdd(dmodl,sc2=self.c1*alpha)
+			#Projecting model onto the bounds (if any)
+			prblm.bounds.apply(model_step)
 			# self.clipping(self.model,log_file)
 			obj1=prblm.get_obj(model_step)
 			#Copying residuals for point c1
@@ -80,6 +82,8 @@ class ParabolicStep(pyStepper.Stepper):
 			if(logger): logger.addToLog(msg)
 			model_step.copy(modl)
 			model_step.scaleAdd(dmodl,sc2=self.c2*alpha)
+			#Projecting model onto the bounds (if any)
+			prblm.bounds.apply(model_step)
 			# self.clipping(self.model,log_file)
 			obj2=prblm.get_obj(model_step)
 			#Copying residuals for point c1
@@ -116,6 +120,8 @@ class ParabolicStep(pyStepper.Stepper):
 			#Compute new objective function at the minimum of the parabolic approximation
 			model_step.copy(modl)
 			model_step.scaleAdd(dmodl,sc2=step_scale*alpha)
+			#Projecting model onto the bounds (if any)
+			prblm.bounds.apply(model_step)
 			# self.clipping(self.model,log_file)
 			obj3=prblm.get_obj(model_step)
 			#Copying residuals for point c1
@@ -153,7 +159,6 @@ class ParabolicStep(pyStepper.Stepper):
 		if(success):
 			#Line search has finished, update model
 			self.alpha=alpha
-			model_step.scaleAdd(dmodl,sc2=self.alpha)
 			modl.scaleAdd(dmodl,sc2=self.alpha)
 			# self.clipping(modl)
 		#Delete temporary vectors

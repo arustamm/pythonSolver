@@ -3,12 +3,55 @@ import pyVector as Vec
 import pyOperator as pyOp
 from math import isnan
 
+class Bounds:
+	"""
+	   Class used to enforce boundary constraints during the inversion
+	"""
+
+	def __init__(self,minBound=None,maxBound=None):
+		"""
+		   Bounds constructor
+		   minBound    = [None] - vector class; vector containing minimum values of the model vector
+		   maxBound    = [None] - vector class; vector containing maximum values of the model vector
+		"""
+		self.minBound = minBound
+		self.maxBound = maxBound
+		if(minBound != None):
+			self.minBound = minBound.clone()
+		if(maxBound != None):
+			self.maxBound = maxBound.clone()
+		#If only the lower bound was provided we use the opposite of the lower bound to clip the values
+		if(self.minBound != None and self.maxBound == None):
+			self.minBound.scale(-1.0)
+		return
+
+	def apply(self,input_vec):
+		"""
+		   Function for applying the model bounds
+		"""
+		if(self.minBound != None and self.maxBound == None):
+			if(not input_vec.checkSame(self.minBound)):
+				raise ValueError("ERROR! Input vector not consistent with bound space")
+			input_vec.scale(-1.0)
+			input_vec.clipVector(input_vec,self.minBound)
+			input_vec.scale(-1.0)
+		elif(self.minBound == None  and self.maxBound != None):
+			if(not input_vec.checkSame(self.maxBound)):
+				raise ValueError("ERROR! Input vector not consistent with bound space")
+			input_vec.clipVector(input_vec,self.maxBound)
+		elif(self.minBound != None and self.maxBound != None):
+			if(not (input_vec.checkSame(self.minBound) and input_vec.checkSame(self.maxBound))):
+				raise ValueError("ERROR! Input vector not consistent with bound space")
+			input_vec.clipVector(self.minBound,self.maxBound)
+		return
+
 class Problem:
 	"""Problem parent object"""
 
 	#Default class methods/functions
-	def __init__(self):
+	def __init__(self,minBound=None,maxBound=None):
 		"""Default class constructor for Problem"""
+		self.bounds=Bounds(minBound,maxBound) #Setting the bounds of the problem (if necessary)
 		return
 
 	def __del__(self):
@@ -126,8 +169,10 @@ class Problem:
 class ProblemL2Linear(Problem):
 	"""Linear inverse problem of the form 1/2*|Lm-d|_2"""
 
-	def __init__(self,model,data,op):
+	def __init__(self,model,data,op,minBound=None,maxBound=None):
 		"""Constructor of linear problem"""
+		#Setting the bounds (if any)
+		super(ProblemL2Linear,self).__init__(minBound,maxBound)
 		#Setting internal vector
 		self.model=model.clone()
 		self.dmodel=model.clone()
@@ -184,8 +229,10 @@ class ProblemL2Linear(Problem):
 class ProblemLinearSymmetric(Problem):
 	"""Linear inverse problem of the form 1/2m'Am - m'b"""
 
-	def __init__(self,model,data,op):
+	def __init__(self,model,data,op,minBound=None,maxBound=None):
 		"""Constructor of linear problem"""
+		#Setting the bounds (if any)
+		super(ProblemLinearSymmetric,self).__init__(minBound,maxBound)
 		#Checking range and domain are the same
 		if(not model.checkSame(data)):
 			raise ValueError("ERROR! Data and model vector live in different spaces!")
@@ -244,8 +291,10 @@ class ProblemLinearSymmetric(Problem):
 class ProblemL2LinearReg(Problem):
 	"""Linear inverse problem regularized of the form 1/2*|Lm-d|_2 + epsilon^2/2*|Am-m_prior|_2"""
 
-	def __init__(self,model,data,op,epsilon,reg_op=None,prior_model=None):
+	def __init__(self,model,data,op,epsilon,reg_op=None,prior_model=None,minBound=None,maxBound=None):
 		"""Constructor of linear problem"""
+		#Setting the bounds (if any)
+		super(ProblemL2LinearReg,self).__init__(minBound,maxBound)
 		#Setting internal vector
 		self.model=model.clone()
 		self.dmodel=model.clone()
@@ -356,8 +405,10 @@ class ProblemL2LinearReg(Problem):
 class ProblemL2NonLinear(Problem):
 	"""Non-linear inverse problem of the form 1/2*|f(m)-d|_2"""
 
-	def __init__(self,model,data,op):
+	def __init__(self,model,data,op,minBound=None,maxBound=None):
 		"""Constructor of linear problem"""
+		#Setting the bounds (if any)
+		super(ProblemL2NonLinear,self).__init__(minBound,maxBound)
 		#Setting internal vector
 		self.model=model.clone()
 		self.dmodel=model.clone()
@@ -421,8 +472,10 @@ class ProblemL2NonLinearReg(Problem):
 			1/2*|f(m)-d|_2 + epsilon^2/2*|g(m) - m_prior|_2
 	"""
 
-	def __init__(self,model,data,op,epsilon,reg_op=None,prior_model=None):
+	def __init__(self,model,data,op,epsilon,reg_op=None,prior_model=None,minBound=None,maxBound=None):
 		"""Constructor of linear problem"""
+		#Setting the bounds (if any)
+		super(ProblemL2NonLinearReg,self).__init__(minBound,maxBound)
 		#Setting internal vector
 		self.model=model.clone()
 		self.dmodel=model.clone()

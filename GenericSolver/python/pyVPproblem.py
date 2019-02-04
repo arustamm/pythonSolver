@@ -48,7 +48,7 @@ class ProblemL2VpReg(pyProb.Problem):
 	   Problem form: phi(m) = 1/2*|g(m_nl) + h(m_nl)m_lin - d|_2 + epsilon^2/2*|g'(m_nl) + h'(m_nl)m_lin - d'|_2
 	"""
 
-	def __init__(self,model_nl,lin_model,h_op,data,lin_solver,g_op=None,g_op_reg=None,h_op_reg=None,data_reg=None,epsilon=None):
+	def __init__(self,model_nl,lin_model,h_op,data,lin_solver,g_op=None,g_op_reg=None,h_op_reg=None,data_reg=None,epsilon=None,minBound=None,maxBound=None):
 		"""
 			Constructor for solving a inverse problem using the variable-projection method
 			Required arguments:
@@ -66,6 +66,8 @@ class ProblemL2VpReg(pyProb.Problem):
 		"""
 		if(not isinstance(h_op,VpOperator)):
 			raise TypeError("ERROR! Not provided an operator class for the variable projection problem")
+		#Setting the bounds (if any)
+		super(ProblemL2VpReg,self).__init__(minBound,maxBound)
 		#Setting internal vector
 		self.model=model_nl.clone()
 		self.dmodel=model_nl.clone()

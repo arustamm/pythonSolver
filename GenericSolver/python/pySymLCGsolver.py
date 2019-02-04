@@ -65,6 +65,7 @@ class SymLCGsolver(pySolver.Solver):
 			cg_dmodl  = self.restart.retrieve_vector("cg_dmodl")
 			#Setting the model and residuals to avoid residual double computation
 			prblm.set_model(cg_mdl)
+			prblm_mdl=prblm.get_model()
 			#Setting residual vector to avoid its unnecessary computation
 			prblm.set_residual(self.restart.retrieve_vector("prblm_res"))
 
@@ -115,20 +116,42 @@ class SymLCGsolver(pySolver.Solver):
 
 			alpha = dot_res/dot_dmodl_ddmodl
 			if(self.logger): self.logger.addToLog("Alpha step length: %s"%(alpha))
-			#res  = res + alpha * dres =  res + alpha * A * dmodl
-			prblm_res.scaleAdd(prblm_ddmodl,sc2=alpha) #update residuals
+
 			#modl = modl + alpha * dmodl
 			cg_mdl.scaleAdd(cg_dmodl,sc2=alpha) #Update model
-
-			# clipped=self.stpr.clipping(modl,log_file)
 
 			#Increasing iteration counter
 			iter = iter + 1
 			#Setting the model and residuals to avoid residual twice computation
 			prblm.set_model(cg_mdl)
 
-			#Setting residual vector to avoid its unnecessary computation
-			prblm.set_residual(prblm_res)
+			#Projecting model onto the bounds (if any)
+			prblm.bounds.apply(cg_mdl)
+
+			if(prblm_mdl.isDifferent(cg_mdl)):
+				#Model went out of the bounds
+				msg="Model hit provided bounds. Projecting it onto them."
+				if(self.logger): self.logger.addToLog(msg)
+				#Recomputing m_current = m_new - alpha * dmodl
+				prblm_mdl.scaleAdd(cg_dmodl,1.0,-alpha)
+				#Finding the projected dmodl = m_new_clipped - m_current
+				cg_dmodl.copy(cg_mdl)
+				cg_dmodl.scaleAdd(prblm_mdl,1.0,-1.0)
+				#dmodl is scaled by the inverse of the step length
+				cg_dmodl.scale(1.0/alpha)
+				#copying previos residuals dres = res_old
+				prblm_ddmodl.copy(prblm_res)
+				prblm.set_model(cg_mdl)
+				#Computing actual change in the residual vector dres = res_new - res_old
+				prblm_res=prblm.get_res(cg_mdl) #New residual vector
+				prblm_ddmodl.scaleAdd(prblm_res,-1.0,1.0)
+				#dres is scaled by the inverse of the step length
+				prblm_ddmodl.scale(1.0/alpha)
+			else:
+				#Setting residual vector to avoid its unnecessary computation (if model was not clipped)
+				#res  = res + alpha * dres =  res + alpha * A * dmodl
+				prblm_res.scaleAdd(prblm_ddmodl,sc2=alpha) #update residuals
+				prblm.set_residual(prblm_res)
 
 			#Computing new objective function value
 			obj1=prblm.get_obj(cg_mdl)
@@ -147,7 +170,7 @@ class SymLCGsolver(pySolver.Solver):
 					#Writing on log file
 					if(self.logger): self.logger.addToLog(msg)
 					#Stepping back to the previous solution
-					cg_mdl.scaleAdd(cg_dmodl,1.0,-1.0)
+					cg_mdl.scaleAdd(cg_dmodl,1.0,-alpha)
 					prblm.set_model(cg_mdl)
 					break
 				obj_old = obj0 #Saving objective function at iter-1
