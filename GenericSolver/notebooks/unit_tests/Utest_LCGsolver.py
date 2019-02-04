@@ -179,8 +179,8 @@ if __name__ == '__main__':
 	L2Prob_sym = Prblm.ProblemL2Linear(model_vec_sym,data_vec_sym,MatMultSym,minBound=low_bound)
 	# L2Prob_sym = Prblm.ProblemL2Linear(model_vec_sym,data_vec_sym,MatMultSym)
 	#Running the solver
-	# LCGsolver.run(L2Prob_sym,verbose=True)
-	# print(L2Prob_sym.model.arr)
+	LCGsolver.run(L2Prob_sym,verbose=True)
+	print(L2Prob_sym.model.arr)
 
 
 
