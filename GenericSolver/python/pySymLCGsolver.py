@@ -126,7 +126,7 @@ class SymLCGsolver(pySolver.Solver):
 			prblm.set_model(cg_mdl)
 
 			#Projecting model onto the bounds (if any)
-			prblm.bounds.apply(cg_mdl)
+			if("bounds" in dir(prblm)): prblm.bounds.apply(cg_mdl)
 
 			if(prblm_mdl.isDifferent(cg_mdl)):
 				#Model went out of the bounds

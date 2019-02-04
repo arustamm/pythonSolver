@@ -212,7 +212,7 @@ class LBFGSsolver(pySolver.Solver):
 		#For saving estimated Hessian vector
 		self.use_SepVector = False
 		if(genIO_found):
-			self.use_SepVector = isinstance(prblm_mod,SepVector.vector)
+			self.use_SepVector = isinstance(prblm_mdl,SepVector.vector)
 
 
 		#Inversion loop

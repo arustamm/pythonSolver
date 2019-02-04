@@ -1,4 +1,5 @@
 #Module containing Parabolic Stepper definition
+#Note that it will modify the search direction if the model hits the inversion bounds
 import pyStepper
 from math import isnan
 
@@ -27,6 +28,8 @@ class ParabolicStep(pyStepper.Stepper):
 		obj0=prblm.get_obj(modl)
 		#Model temporary vector
 		model_step = modl.clone()
+		#Getting pointer to problem's model vector
+		prblm_mdl = prblm.get_model()
 		#Initial step length value
 		alpha=self.alpha
 		itry=1
@@ -59,8 +62,14 @@ class ParabolicStep(pyStepper.Stepper):
 			if(logger): logger.addToLog("	Testing point (c1=%s): m_current+c1*alpha*dm"%(self.c1))
 			model_step.copy(modl)
 			model_step.scaleAdd(dmodl,sc2=self.c1*alpha)
+			#Checking if model parameters hit the bounds
+			prblm.set_model(model_step)
 			#Projecting model onto the bounds (if any)
 			prblm.bounds.apply(model_step)
+			if(prblm_mdl.isDifferent(model_step)):
+				#Model hit bounds
+				msg="	Model hit provided bounds. Projecting it onto them."
+				if(logger): self.logger.addToLog(msg)
 			# self.clipping(self.model,log_file)
 			obj1=prblm.get_obj(model_step)
 			#Copying residuals for point c1
@@ -82,8 +91,14 @@ class ParabolicStep(pyStepper.Stepper):
 			if(logger): logger.addToLog(msg)
 			model_step.copy(modl)
 			model_step.scaleAdd(dmodl,sc2=self.c2*alpha)
+			#Checking if model parameters hit the bounds
+			prblm.set_model(model_step)
 			#Projecting model onto the bounds (if any)
 			prblm.bounds.apply(model_step)
+			if(prblm_mdl.isDifferent(model_step)):
+				#Model hit bounds
+				msg="	Model hit provided bounds. Projecting it onto them."
+				if(logger): self.logger.addToLog(msg)
 			# self.clipping(self.model,log_file)
 			obj2=prblm.get_obj(model_step)
 			#Copying residuals for point c1
@@ -120,13 +135,16 @@ class ParabolicStep(pyStepper.Stepper):
 			#Compute new objective function at the minimum of the parabolic approximation
 			model_step.copy(modl)
 			model_step.scaleAdd(dmodl,sc2=step_scale*alpha)
+			#Checking if model parameters hit the bounds
+			prblm.set_model(model_step)
 			#Projecting model onto the bounds (if any)
 			prblm.bounds.apply(model_step)
+			if(prblm_mdl.isDifferent(model_step)):
+				#Model hit bounds
+				msg="	Model hit provided bounds. Projecting it onto them."
+				if(logger): self.logger.addToLog(msg)
 			# self.clipping(self.model,log_file)
 			obj3=prblm.get_obj(model_step)
-			#Copying residuals for point c1
-			res_prblm=prblm.get_res(model_step)
-			res3=res_prblm.clone()
 			if(logger): logger.addToLog("		Objective function value of %s"%(obj3))
 
 			#Writing info to log file
@@ -159,8 +177,17 @@ class ParabolicStep(pyStepper.Stepper):
 		if(success):
 			#Line search has finished, update model
 			self.alpha=alpha
-			modl.scaleAdd(dmodl,sc2=self.alpha)
-			# self.clipping(modl)
+			model_step.copy(modl) # model_step = m_current
+			model_step.scaleAdd(dmodl,sc2=self.alpha)
+			#Projecting model onto the bounds (if any)
+			prblm.bounds.apply(model_step)
+			if(prblm_mdl.isDifferent(model_step)):
+				#Computing true scaled search direction dm = m_new_clipped - m_current
+				dmodl.copy(model_step)
+				dmodl.scaleAdd(modl,1.0,-1.0)
+				#Scaled by the inverse of the step length
+				dmodl.scale(1.0/self.alpha)
+			modl.copy(model_step)
 		#Delete temporary vectors
-		del model_step, res1, res2, res3
+		del model_step, res1, res2
 		return alpha,success
