@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 import sys,os
-sys.path.append("/net/server/homes/sep/ettore/research/packages/pySolver/GenericSolver/python")
+sys.path.insert(0, "/net/server/homes/sep/ettore/research/packages/pySolver/GenericSolver/python")
 import pyVector as Vec
 import pyOperator as Op
 import pyLCGsolver as LCG
@@ -108,7 +108,7 @@ if __name__ == '__main__':
 	LCGsolver = LCG.LCGsolver(Stop)
 	LCGsolver.setDefaults(iter_sampling=10)
 	#Running the solver
-	# LCGsolver.run(L2Prob)
+	# LCGsolver.run(L2Prob,verbose=True)
 
 	#Out-of-core run
 	#Creating model vector
@@ -148,13 +148,16 @@ if __name__ == '__main__':
 	L2Prob_reg.estimate_epsilon()
 	#Running the solver
 	LCGsolver.setDefaults(iter_sampling=100)
-	LCGsolver.run(L2Prob_reg,verbose=True)
+	# LCGsolver.run(L2Prob_reg,verbose=True)
 
 	#Testing LCG for symmetric systems
-	SymProb = Prblm.ProblemLinearSymmetric(model_vec_sym,data_vec_sym,MatMultSym)
+	low_bound = model_vec_sym.clone()
+	low_bound.set(-2000.)
+	SymProb = Prblm.ProblemLinearSymmetric(model_vec_sym,data_vec_sym,MatMultSym,minBound=low_bound)
 	SLCG = SymLCGsolver.SymLCGsolver(Stop)
 	SLCG.setDefaults(iter_sampling=5)
-	# SLCG.run(SymProb)
+	SLCG.run(SymProb,verbose=True)
+	print(SymProb.model.arr)
 
 	#Testing Linear steepest-descent algorithm for symmetric systems
 	SymProb1 = Prblm.ProblemLinearSymmetric(model_vec_sym,data_vec_sym,MatMultSym)
@@ -167,7 +170,17 @@ if __name__ == '__main__':
 	L2NLRegProb = Prblm.ProblemL2NonLinearReg(model_vec_sym,data_vec_sym,non_lin_op,0.)
 	L2NLRegProb.estimate_epsilon()
 	NLCGsolver = NLCG.NLCGsolver(Stop)
-	NLCGsolver.run(L2NLRegProb,verbose=True)
+	# NLCGsolver.run(L2NLRegProb,verbose=True)
+
+	#Bounded problem
+	#Creating the bounds
+	model_vec_sym.zero()
+	#Create L2-norm linear problem
+	L2Prob_sym = Prblm.ProblemL2Linear(model_vec_sym,data_vec_sym,MatMultSym,minBound=low_bound)
+	# L2Prob_sym = Prblm.ProblemL2Linear(model_vec_sym,data_vec_sym,MatMultSym)
+	#Running the solver
+	# LCGsolver.run(L2Prob_sym,verbose=True)
+	# print(L2Prob_sym.model.arr)
 
 
 
