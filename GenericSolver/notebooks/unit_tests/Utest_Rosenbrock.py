@@ -1,6 +1,6 @@
 #!/usr/bin/env python3.5
 import sys
-sys.path.append("/net/server/homes/sep/ettore/research/packages/pySolver/GenericSolver/python")
+sys.path.insert(0, "/net/server/homes/sep/ettore/research/packages/pySolver/GenericSolver/python")
 import pyNLCGsolver as NLCG
 import pyLBFGSsolver as LBFGS
 import pyVector as Vec
@@ -27,6 +27,7 @@ class Rosenbrock_prblm(Prblm.Problem):
 		"""Constructor of linear problem"""
 		#Setting the bounds (if any)
 		super(Rosenbrock_prblm,self).__init__(None,None)
+		#Setting initial model
 		self.model  = Vec.vectorIC(np.array((x_initial,y_initial)))
 		self.dmodel = self.model.clone()
 		self.dmodel.zero()

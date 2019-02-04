@@ -7,11 +7,13 @@ import pyLCGsolver as LCG
 import pySymLCGsolver as SymLCGsolver
 import pyProblem as Prblm
 import pyStopperBase as Stopper
+from sys_util import logger
 import sep_util as sep
 import numpy as np
 
 #Testing the NLCG to solver a regularized linear problem treated as if it was non linear
 import pyNLCGsolver as NLCG
+import pyLBFGSsolver as BFGS
 
 class MatMult_incore(Op.Operator):
 	"""Operator class to perform matrix-vector multiplication"""
@@ -172,6 +174,19 @@ if __name__ == '__main__':
 	NLCGsolver = NLCG.NLCGsolver(Stop)
 	# NLCGsolver.run(L2NLRegProb,verbose=True)
 
+
+	#Testing non-linear bounded problem with NLCG
+	L2NLProb = Prblm.ProblemL2NonLinear(model_vec_sym,data_vec_sym,non_lin_op,minBound=low_bound)
+	NLCGsolver = NLCG.NLCGsolver(Stop)
+	# NLCGsolver.run(L2NLProb,verbose=False)
+	# print(L2NLProb.model.arr)
+
+	#Testing non-linear bounded problem with BFGS
+	L2NLProb = Prblm.ProblemL2NonLinear(model_vec_sym,data_vec_sym,non_lin_op,minBound=low_bound)
+	BFGSsolver = BFGS.LBFGSsolver(Stop)
+	BFGSsolver.run(L2NLProb,verbose=True)
+	print(L2NLProb.model.arr)
+
 	#Bounded problem
 	#Creating the bounds
 	model_vec_sym.zero()
@@ -179,7 +194,7 @@ if __name__ == '__main__':
 	L2Prob_sym = Prblm.ProblemL2Linear(model_vec_sym,data_vec_sym,MatMultSym,minBound=low_bound)
 	# L2Prob_sym = Prblm.ProblemL2Linear(model_vec_sym,data_vec_sym,MatMultSym)
 	#Running the solver
-	LCGsolver.run(L2Prob_sym,verbose=True)
+	LCGsolver.run(L2Prob_sym,verbose=False)
 	print(L2Prob_sym.model.arr)
 
 
