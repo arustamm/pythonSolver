@@ -183,7 +183,7 @@ if __name__ == '__main__':
 
 	#Testing non-linear bounded problem with BFGS
 	L2NLProb = Prblm.ProblemL2NonLinear(model_vec_sym,data_vec_sym,non_lin_op,minBound=low_bound)
-	BFGSsolver = BFGS.LBFGSsolver(Stop,logger=logger("test.txt"))
+	BFGSsolver = BFGS.LBFGSsolver(Stop)
 	BFGSsolver.run(L2NLProb,verbose=True)
 	print(L2NLProb.model.arr)
 

@@ -38,9 +38,60 @@ class Operator:
 			raise ValueError("Provided data vector does not match operator range")
 		return
 
-	def powerMethod(self,verbose=False,tol=1e-6,n_app=None):
-		"""Function to estimate maximum (and minimum, if requested) eigenvalue of the operator"""
-		return eigenvalues
+	def powerMethod(self,verbose=False,tol=1e-6,n_iter=None,square=False,return_vec=False):
+		"""
+		   Function to estimate maximum eigenvalue of the operator
+		   verbose    = [False] - boolean; Flag to print information to screen as the method is being run
+		   tol    	  = [1e-6] - float; Tolerance on the change of the estimated eigenvalues
+		   n_iter  	  = [None] - int; Maximum number of operator applications (if not provided, the function will continue until the tolerance is reached)
+		   square  	  = [False] - boolean; If True, only the forward will be applied (i.e., operator is a square matrix).
+		   return_vec = [False] - boolean; If True, the function will return the estimated eigenvector as well
+		"""
+		#Cloning input and output vectors
+		if(verbose): print("Running power method to estimate maximum eigenvalue (operator L2 norm)")
+		x = self.domain.clone()
+		if(not square):
+			if(verbose): print("Note: operator is not square, the eigenvalue is associated to A'A not A!")
+			d_temp = self.range.clone()
+		y = self.domain.clone()
+		#randomize the input vector
+		x.rand()
+		x.scale(1.0/x.norm()) #Normalizing the initial vector
+		y.zero()
+		iter = 0
+		eigen  = 0.0 #Current estimated eigenvalue
+		eigen_old = 0.0 #Previous estimated eigenvalue
+		#Starting the power iteration loop
+		if(verbose): print("Starting iterative process")
+		while True:
+			#Applying adjoint if forward not square
+			if(not square):
+				self.forward(False,x,d_temp) #d = A x
+				self.adjoint(False,y,d_temp) #y = A' d = A' A x
+			else:
+				self.forward(False,x,y)		 #y = A x
+
+			#Estimating eigenvalue (Rayleigh quotient)
+			eigen = x.dot(y)				 #eigen_i = x' A x / (x'x = 1.0)
+			#x = y
+			x.copy(y)
+			#Normalization of the operator
+			x.scale(1.0/x.norm())
+			#Stopping criteria (first number of iterations and then tolerance)
+			iter += 1
+			if(verbose): print("	Estimated maximum eigenvalue at iter %s: %s"%(iter,eigen))
+			if(n_iter != None):
+				if(iter >= n_iter):
+					if(verbose): print("Maximum number of iteration reached! Stopping iterative process!")
+					break
+			#Checking change on the eigenvalue estimated value
+			if(abs(eigen-eigen_old) <  abs(tol * eigen_old)):
+				if(verbose): print("Tolerance value reached! Stopping iterative process!")
+				break
+			#eigen_(i-1) = eigen_i
+			eigen_old = eigen
+		if(return_vec): return eigen,x
+		return eigen
 
 	def dotTest(self,verb=False,maxError=.0001):
 		"""Function to perform dot-product test
