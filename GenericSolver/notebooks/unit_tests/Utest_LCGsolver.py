@@ -158,8 +158,8 @@ if __name__ == '__main__':
 	SymProb = Prblm.ProblemLinearSymmetric(model_vec_sym,data_vec_sym,MatMultSym,minBound=low_bound)
 	SLCG = SymLCGsolver.SymLCGsolver(Stop)
 	SLCG.setDefaults(iter_sampling=5)
-	SLCG.run(SymProb,verbose=True)
-	print(SymProb.model.arr)
+	# SLCG.run(SymProb,verbose=True)
+	# print(SymProb.model.arr)
 
 	#Testing Linear steepest-descent algorithm for symmetric systems
 	SymProb1 = Prblm.ProblemLinearSymmetric(model_vec_sym,data_vec_sym,MatMultSym)
@@ -183,7 +183,7 @@ if __name__ == '__main__':
 
 	#Testing non-linear bounded problem with BFGS
 	L2NLProb = Prblm.ProblemL2NonLinear(model_vec_sym,data_vec_sym,non_lin_op,minBound=low_bound)
-	BFGSsolver = BFGS.LBFGSsolver(Stop)
+	BFGSsolver = BFGS.LBFGSsolver(Stop,logger=logger("test.txt"))
 	BFGSsolver.run(L2NLProb,verbose=True)
 	print(L2NLProb.model.arr)
 
@@ -194,8 +194,8 @@ if __name__ == '__main__':
 	L2Prob_sym = Prblm.ProblemL2Linear(model_vec_sym,data_vec_sym,MatMultSym,minBound=low_bound)
 	# L2Prob_sym = Prblm.ProblemL2Linear(model_vec_sym,data_vec_sym,MatMultSym)
 	#Running the solver
-	LCGsolver.run(L2Prob_sym,verbose=False)
-	print(L2Prob_sym.model.arr)
+	# LCGsolver.run(L2Prob_sym,verbose=False)
+	# print(L2Prob_sym.model.arr)
 
 
 

@@ -38,6 +38,10 @@ class Operator:
 			raise ValueError("Provided data vector does not match operator range")
 		return
 
+	def powerMethod(self,verbose=False,tol=1e-6,n_app=None):
+		"""Function to estimate maximum (and minimum, if requested) eigenvalue of the operator"""
+		return eigenvalues
+
 	def dotTest(self,verb=False,maxError=.0001):
 		"""Function to perform dot-product test
 		   If passing the dot-product test, the function does not throw a Warning
