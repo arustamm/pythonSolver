@@ -2,6 +2,7 @@
 import pyProblem as pyProb
 import pyOperator as pyOp
 import pyVector as pyVec
+from math import isnan
 
 
 class VpOperator(pyOp.Operator):
@@ -133,6 +134,43 @@ class ProblemL2VpReg(pyProb.Problem):
 		"""Default destructor"""
 		return
 
+	def estimate_epsilon(self,verbose=False,logger=None):
+		"""Method returning epsilon that balances the two terms of the objective function"""
+		if(self.epsilon == None):
+			raise ValueError("ERROR! Problem is not regularized, cannot evaluate epsilon value!")
+		msg="Epsilon Scale evaluation"
+		if(verbose): print(msg)
+		if(logger): self.logger.addToLog("REGULARIZED PROBLEM log file\n"+msg)
+		#Keeping the initial model vector
+		prblm_mdl = self.get_model()
+		mdl_tmp = prblm_mdl.clone()
+		#Keeping user-predefined epsilon if any
+		epsilon = self.epsilon
+		#Setting epsilon to one to evaluate the scale
+		self.epsilon=1.0
+		prblm_res = self.get_res(prblm_mdl)	#Compute residual arising from the gradient
+		#Balancing the two terms of the objective function
+		res_data_norm=prblm_res.vec1.norm()
+		res_model_norm=prblm_res.vec2.norm()
+		if (isnan(res_model_norm) or isnan(res_data_norm)):
+			raise ValueError("ERROR! Obtained NaN: Residual-data-side-norm = %s, Residual-model-side-norm = %s"%(res_data_norm,res_model_norm))
+		if(res_model_norm == 0.0):
+			msg = "Model residual component norm is zero, cannot find epsilon scale! Provide a different initial model"
+			if(logger): self.logger.addToLog(msg)
+			raise ValueError(msg)
+		#Resetting user-predefined epsilon if any
+		self.epsilon = epsilon
+		#Resetting problem initial model vector
+		self.set_model(mdl_tmp)
+		del mdl_tmp
+		epsilon_balance = res_data_norm/res_model_norm
+		#Resetting feval
+		self.fevals = 0
+		msg = "	Epsilon balancing the the two objective function terms is: %s"%(epsilon_balance)
+		if(verbose): print(msg)
+		if(logger): self.logger.addToLog(msg+"\nREGULARIZED PROBLEM end log file")
+		return epsilon_balance
+
 	def resf(self,model):
 		"""Method to return residual vector"""
 		#Zero-out residual vector
@@ -155,7 +193,7 @@ class ProblemL2VpReg(pyProb.Problem):
 
 		# regularization data term = [g_reg(m) - data_reg if any]
 		if(self.data_reg != None):
-			self.res.vec2(self.data_reg,1.0,-1.0)
+			self.res.vec2.scaleAdd(self.data_reg,1.0,-1.0)
 		#Data term for linear regularization term
 		if("epsilon" in dir(self.vp_linear_prob)):
 			self.res.vec2.scale(-1.0)

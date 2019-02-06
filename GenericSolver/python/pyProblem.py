@@ -328,7 +328,7 @@ class ProblemL2LinearReg(Problem):
 		"""Default destructor"""
 		return
 
-	def estimate_epsilon(self,verbose=True,logger=None):
+	def estimate_epsilon(self,verbose=False,logger=None):
 		"""Method returning epsilon that balances the first gradient in the 'extended-data' space"""
 		msg="Epsilon Scale evaluation"
 		if(verbose): print(msg)
@@ -518,7 +518,7 @@ class ProblemL2NonLinearReg(Problem):
 		"""Default destructor"""
 		return
 
-	def estimate_epsilon(self,verbose=True,logger=None):
+	def estimate_epsilon(self,verbose=False,logger=None):
 		"""Method returning epsilon that balances the two terms of the objective function"""
 		msg="Epsilon Scale evaluation"
 		if(verbose): print(msg)

@@ -142,9 +142,9 @@ if __name__ == '__main__':
 	exp_vp_op = VPprblm.VpOperator(exp_nl_op,expon_lin,expon_lin.set_nl,expon_nl_jac.set_lin,set_lin=expon_nl.set_lin)
 	#Creating VP inversion problem
 	a_init = a_true.clone()
-	a_init.arr = np.array([5.0,20.0,3.0])
+	a_init.arr = np.array([5.0,20.0,3.5])
 	b_init = b_true.clone()
-	b_init.arr = np.array([0.3,1.0])
+	b_init.arr = np.array([0.4,1.2])
 	#Create stopper
 	niter = 300
 	#Create solver
@@ -156,7 +156,15 @@ if __name__ == '__main__':
 	NLCGsolver.setDefaults()
 
 	#Intial step-length value
-	NLCGsolver.stepper.alpha=1.0
+	NLCGsolver.stepper.alpha=0.5
 	NLCGsolver.run(VPproblem,verbose=True)
 	print("a optimal",VPproblem.lin_model.arr)
 	print("b optimal",VPproblem.model.arr)
+
+	#Testing regularization term by adding the same problem in the regularization term
+	VPproblemReg = VPprblm.ProblemL2VpReg(b_init,a_init,exp_vp_op,data_true,LCGsolver,h_op_reg=exp_vp_op,epsilon=1.0,data_reg=data_true)
+	VPproblemReg.estimate_epsilon(verbose=True)
+	NLCGsolver.stepper.alpha=0.25 #Resetting initial step length value
+	NLCGsolver.run(VPproblemReg,verbose=True)
+	print("a optimal",VPproblemReg.lin_model.arr)
+	print("b optimal",VPproblemReg.model.arr)
