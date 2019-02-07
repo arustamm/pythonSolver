@@ -64,6 +64,9 @@ class ProblemL2VpReg(pyProb.Problem):
 			h_op_reg	= [None] - Vp operator class; Variable projection operator for regularization term
 			data_reg   	= [None] - vector class; Data vector for regularization term
 			epsilon 	= [None] - float; Regularization term weight (must be provided if a regularization is needed)
+			####################################################################################################################################
+			Note that to save the results of the linear inversion the user has to specify the saving parameters within the setDefaults of the
+			linear solver. The results can only be saved on files. To the prefix specified within the lin_solver f_eval_# will be added.
 		"""
 		if(not isinstance(h_op,VpOperator)):
 			raise TypeError("ERROR! Not provided an operator class for the variable projection problem")
@@ -128,6 +131,8 @@ class ProblemL2VpReg(pyProb.Problem):
 		self.linear=False
 		#Linear solver for inverting quadratic component
 		self.lin_solver=lin_solver
+		self.lin_solver.flush_memory = True
+		self.lin_solver_prefix = self.lin_solver.prefix
 		return
 
 	def __del__(self):
@@ -140,7 +145,7 @@ class ProblemL2VpReg(pyProb.Problem):
 			raise ValueError("ERROR! Problem is not regularized, cannot evaluate epsilon value!")
 		msg="Epsilon Scale evaluation"
 		if(verbose): print(msg)
-		if(logger): self.logger.addToLog("REGULARIZED PROBLEM log file\n"+msg)
+		if(logger): logger.addToLog("REGULARIZED PROBLEM log file\n"+msg)
 		#Keeping the initial model vector
 		prblm_mdl = self.get_model()
 		mdl_tmp = prblm_mdl.clone()
@@ -156,7 +161,7 @@ class ProblemL2VpReg(pyProb.Problem):
 			raise ValueError("ERROR! Obtained NaN: Residual-data-side-norm = %s, Residual-model-side-norm = %s"%(res_data_norm,res_model_norm))
 		if(res_model_norm == 0.0):
 			msg = "Model residual component norm is zero, cannot find epsilon scale! Provide a different initial model"
-			if(logger): self.logger.addToLog(msg)
+			if(logger): logger.addToLog(msg)
 			raise ValueError(msg)
 		#Resetting user-predefined epsilon if any
 		self.epsilon = epsilon
@@ -168,7 +173,7 @@ class ProblemL2VpReg(pyProb.Problem):
 		self.fevals = 0
 		msg = "	Epsilon balancing the the two objective function terms is: %s"%(epsilon_balance)
 		if(verbose): print(msg)
-		if(logger): self.logger.addToLog(msg+"\nREGULARIZED PROBLEM end log file")
+		if(logger): logger.addToLog(msg+"\nREGULARIZED PROBLEM end log file")
 		return epsilon_balance
 
 	def resf(self,model):
@@ -212,7 +217,18 @@ class ProblemL2VpReg(pyProb.Problem):
 			self.h_op_reg.set_nl(model)
 		#Resetting inversion problem variables
 		self.vp_linear_prob.setDefaults()
+		#Saving linear inversion results if requested
+		if(self.lin_solver_prefix != None):
+			self.lin_solver.setPrefix(self.lin_solver_prefix + "_feval%s"%(fevals))
+
+		#Printing non-linear inversion information
+		if(self.lin_solver.logger != None):
+			#Writing linear inversion log information if requested (i.e., a logger is present in the solver)
+			msg  = "NON_LINEAR INVERSION INFO:\n	objective function evaluation\n"
+			msg += "#########################################################################################\n"
+			self.lin_solver.logger.addToLog(msg+"Linear inversion for non-linear function evaluation # %s"%(fevals))
 		self.lin_solver.run(self.vp_linear_prob,verbose=False)
+		if(self.lin_solver.logger != None): self.lin_solver.logger.addToLog("#########################################################################################\n")
 		#Copying inverted linear optimal model
 		self.lin_model.copy(self.vp_linear_prob.get_model())
 
@@ -255,6 +271,7 @@ class ProblemL2VpReg(pyProb.Problem):
 		if(self.g_op != None): self.g_op.lin_op.adjoint(True,self.grad,res)
 		# H(m_nl,m_lin_opt)' r_d
 		self.h_op.h_nl.lin_op.adjoint(True,self.grad,res)
+		if(self.lin_solver.logger != None): self.lin_solver.logger.addToLog("NON_LINEAR INVERSION INFO:\n	Gradient has been evaluated, current objective function value: %s;\n 	Stepping!"%(self.objf(res)))
 		return self.grad
 
 	def dresf(self,model,dmodel):

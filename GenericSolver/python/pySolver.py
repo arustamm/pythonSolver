@@ -34,6 +34,13 @@ class Solver:
 		"""Default destructor"""
 		return
 
+	def setPrefix(self,prefix):
+		"""
+		   Mutator to change prefix and file names for saving inversion results
+		"""
+		self.prefix = prefix
+		return
+
 	def setDefaults(self,save_obj=False,save_res=False,save_grad=False,save_model=False,prefix=None,iter_buffer_size=None,iter_sampling=1,restart_folder=None,flush_memory=False):
 		"""
 		   Function to set parameters for result saving.
@@ -53,17 +60,10 @@ class Solver:
 		self.save_res = save_res							#Flag to save residual vector
 		self.save_grad= save_grad							#Flag to save gradient vector
 		self.save_model = save_model						#Flag to save model vector
-		#Prefix of the saved files (if provided the results will be written on disk)
-		self.prefix = prefix								#Prefix for saving inversion results on disk
 		self.flush_memory = flush_memory					#Keep the results in the RAM or flush memory every time results are written on disk
 
-		#Default parameters
-		if(self.prefix != None):
-			if(self.save_obj): self.obj_file=self.prefix+"_obj.H"						#File name in which the objective function is saved
-			if(self.save_model): self.inv_mod_file=self.prefix+"_inv_mod.H"				#File name in which the current inverted model is saved
-			if(self.save_model): self.model_file=self.prefix+"_model.H"					#File name in which the model vector is saved
-			if(self.save_res): self.res_file=self.prefix+"_residual.H"					#File name in which the residual vector is saved
-			if(self.save_grad): self.grad_file=self.prefix+"_gradient.H"				#File name in which the gradient vector is saved
+		#Prefix of the saved files (if provided the results will be written on disk)
+		self.prefix = prefix								#Prefix for saving inversion results on disk
 
 		#Iteration axis-sampling parameters
 		self.iter_buffer_size=iter_buffer_size		#Number of steps to save before flushing results to disk (by default the solver waits until all iterations are done)
@@ -133,39 +133,44 @@ class Solver:
 		if(save):
 			#Writing objective function value on disk if requested
 			if(self.save_obj and self.prefix != None):
-				write_file(self.obj_file,np.array(self.obj))
+				obj_file = self.prefix+"_obj.H"						#File name in which the objective function is saved
+				write_file(obj_file,np.array(self.obj))
 			#Writing current inverted model and model vectors on disk if requested
 			if(self.save_model and self.prefix != None):
+				inv_mod_file = self.prefix+"_inv_mod.H"				#File name in which the current inverted model is saved
+				model_file   = self.prefix+"_model.H"				#File name in which the model vector is saved
 				if(genIO_found and self.use_SepVector): #Writing using genericIO and SepVector
-					genericIO.defaultIO.writeVector(self.inv_mod_file,self.inv_model) #Overwriting previous written model
+					genericIO.defaultIO.writeVector(inv_mod_file,self.inv_model) #Overwriting previous written model
 					for ivec in range(self.iter_written,len(self.model)):
 						#Appending to previous written vectors if any
-						genericIO.defaultIO.appendVector(self.model_file,self.model[ivec],flush=self.iter_buffer_size)
-					genericIO.defaultIO.closeAppendFile(self.model_file)
+						genericIO.defaultIO.appendVector(model_file,self.model[ivec],flush=self.iter_buffer_size)
+					genericIO.defaultIO.closeAppendFile(model_file)
 				else:
-					self.inv_model.writeVec(self.inv_mod_file,mode='w') #Overwriting previous written model
+					self.inv_model.writeVec(inv_mod_file,mode='w') #Overwriting previous written model
 					for ivec in range(self.iter_written,len(self.model)):
-						self.model[ivec].writeVec(self.model_file,mode='a') #Appending to previous written vectors if any
+						self.model[ivec].writeVec(model_file,mode='a') #Appending to previous written vectors if any
 			#Writing gradient vectors on disk if requested
 			if(self.save_grad and self.prefix != None):
+				grad_file = self.prefix+"_residual.H"					#File name in which the residual vector is saved
 				if(genIO_found and self.use_SepVector): #Writing using genericIO and SepVector
 					for ivec in range(self.iter_written,len(self.grad)):
 						#Appending to previous written vectors if any
-						genericIO.defaultIO.appendVector(self.grad_file,self.grad[ivec],flush=self.iter_buffer_size)
-					genericIO.defaultIO.closeAppendFile(self.grad_file)
+						genericIO.defaultIO.appendVector(grad_file,self.grad[ivec],flush=self.iter_buffer_size)
+					genericIO.defaultIO.closeAppendFile(grad_file)
 				else:
 					for ivec in range(self.iter_written,len(self.grad)):
-						self.grad[ivec].writeVec(self.grad_file,mode='a') #Appending to previous written vectors if any
+						self.grad[ivec].writeVec(grad_file,mode='a') #Appending to previous written vectors if any
 			#Writing residual vectors on disk if requested
 			if(self.save_res and self.prefix != None):
+				res_file = self.prefix+"_gradient.H"				#File name in which the gradient vector is saved
 				if(genIO_found and self.use_SepVector): #Writing using genericIO and SepVector
 					for ivec in range(self.iter_written,len(self.res)):
 						#Appending to previous written vectors if any
-						genericIO.defaultIO.appendVector(self.res_file,self.res[ivec],flush=self.iter_buffer_size)
-					genericIO.defaultIO.closeAppendFile(self.res_file)
+						genericIO.defaultIO.appendVector(res_file,self.res[ivec],flush=self.iter_buffer_size)
+					genericIO.defaultIO.closeAppendFile(res_file)
 				else:
 					for ivec in range(self.iter_written,len(self.res)):
-						self.res[ivec].writeVec(self.res_file,mode='a') #Appending to previous written vectors if any
+						self.res[ivec].writeVec(res_file,mode='a') #Appending to previous written vectors if any
 
 			#Setting the counter of the vectors already written
 			self.iter_written = max(len(self.model),len(self.res),len(self.grad))

@@ -332,7 +332,7 @@ class ProblemL2LinearReg(Problem):
 		"""Method returning epsilon that balances the first gradient in the 'extended-data' space"""
 		msg="Epsilon Scale evaluation"
 		if(verbose): print(msg)
-		if(logger): self.logger.addToLog("REGULARIZED PROBLEM log file\n"+msg)
+		if(logger): logger.addToLog("REGULARIZED PROBLEM log file\n"+msg)
 		#Keeping the initial model vector
 		prblm_mdl = self.get_model()
 		mdl_tmp = prblm_mdl.clone()
@@ -359,7 +359,7 @@ class ProblemL2LinearReg(Problem):
 		self.fevals = 0
 		msg = "	Epsilon balancing the data-space gradients is: %s"%(epsilon_balance)
 		if(verbose): print(msg)
-		if(logger): self.logger.addToLog(msg+"\nREGULARIZED PROBLEM end log file")
+		if(logger): logger.addToLog(msg+"\nREGULARIZED PROBLEM end log file")
 		return epsilon_balance
 
 	def resf(self,model):
@@ -522,7 +522,7 @@ class ProblemL2NonLinearReg(Problem):
 		"""Method returning epsilon that balances the two terms of the objective function"""
 		msg="Epsilon Scale evaluation"
 		if(verbose): print(msg)
-		if(logger): self.logger.addToLog("REGULARIZED PROBLEM log file\n"+msg)
+		if(logger): logger.addToLog("REGULARIZED PROBLEM log file\n"+msg)
 		#Keeping the initial model vector
 		prblm_mdl = self.get_model()
 		mdl_tmp = prblm_mdl.clone()
@@ -551,7 +551,7 @@ class ProblemL2NonLinearReg(Problem):
 				alpha=-dgrad0_res/dgrad0_dgrad0
 			else:
 				msg = "Cannot compute linearized alpha for the given problem! Provide a different initial model"
-				if(logger): self.logger.addToLog(msg)
+				if(logger): logger.addToLog(msg)
 				raise ValueError(msg)
 			#model=model+alpha*grad
 			prblm_mdl.scaleAdd(prblm_grad,1.0,alpha)
@@ -562,7 +562,7 @@ class ProblemL2NonLinearReg(Problem):
 			#If regularization term is still zero, stop the solver
 			if(res_model_norm == 0.0):
 				msg = "Model residual component norm is zero, cannot find epsilon scale! Provide a different initial model"
-				if(logger): self.logger.addToLog(msg)
+				if(logger): logger.addToLog(msg)
 				raise ValueError(msg)
 		#Resetting user-predefined epsilon if any
 		self.epsilon = epsilon
@@ -574,7 +574,7 @@ class ProblemL2NonLinearReg(Problem):
 		self.fevals = 0
 		msg = "	Epsilon balancing the the two objective function terms is: %s"%(epsilon_balance)
 		if(verbose): print(msg)
-		if(logger): self.logger.addToLog(msg+"\nREGULARIZED PROBLEM end log file")
+		if(logger): logger.addToLog(msg+"\nREGULARIZED PROBLEM end log file")
 		return epsilon_balance
 
 	def resf(self,model):
