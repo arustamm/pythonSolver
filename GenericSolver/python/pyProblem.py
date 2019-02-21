@@ -2,6 +2,7 @@
 import pyVector as Vec
 import pyOperator as pyOp
 from math import isnan
+import numpy as np
 
 class Bounds:
 	"""
@@ -401,7 +402,83 @@ class ProblemL2LinearReg(Problem):
 		return obj
 
 
+class ProblemL1LinearRegISTC(Problem):
+	"""Linear problem 1/2*| y - Am |_2 + lambda*| m |_1 to be used in connection with ISTC solver"""
+	def set_prob(self,model,data,op,op_norm=None,minBound=None,maxBound=None):
+		"""
+		   Linear L1-norm inversion problem for ISTC solver
+		"""
+		#Setting the bounds (if any)
+		super(ProblemL2LinearReg,self).__init__(minBound,maxBound)
+		#Setting internal vector
+		self.model=model.clone()
+		self.dmodel=model.clone()
+		self.dmodel.zero()
+		#Gradient vector
+		self.grad=self.dmodel.clone()
+		#Copying the pointer to data vector
+		self.data=data
+		#Setting linear operator
+		self.op=op #Modeling operator
+		#Residual vector (data and model residual vectors)
+		self.res=Vec.superVector(op.range.clone(),op.domain.clone())
+		self.res.zero()
+		#Dresidual vector
+		self.dres=None #Not necessary for the inversion
+		#Setting default variables
+		self.setDefaults()
+		self.linear=True
+		if(op_norm != None):
+			#Using user-provided A operator norm
+			self.op_norm = op_norm #Operator Norm necessary for solver
+		else:
+			#Evaluating operator norm using power method
+			self.op_norm = self.op.powerMethod()
+		self.scale_precond = 0.99 * math.sqrt(2) / math.sqrt(self.op_norm); #scaling factor applied to operator A for preconditioning
+		self.lambda_value=None
+		return
 
+	def set_lambda(self,lambda_in):
+		#Set lambda
+		self.lambda_value=lambda_in
+		return
+
+	def objf(self,res):
+		"""Method to return objective function value 1/2*| y - Am |_2 + lambda*| m |_1"""
+		obj=0.5*res.vec1.dot(res.vec1)+self.lambda_value*res.vec2.norm(1)
+		return obj
+
+	# define function that computes residuals
+	def resf(self,model):
+		""" y - alpha * A m = rd (self.res[0]) and m = rm (self.res[1]); alpha = preconditioning factor based on operator norm"""
+		if(model.norm()!=0.0):
+			self.op.forward(False,model,self.res.vec1)
+			self.res.vec1.scale(self.scale_precond)
+		else:
+			self.res.zero()
+		#Computing r_d = Lm - d
+		self.res.vec1.scaleAdd(self.data,-1.,1.)
+		#Run regularization part
+		self.res.vec2.copy(self.model)
+		return self.res
+
+	# function that projects search direction into data space (Not necessary for ISTC)
+	def dresf(self,model,dmodel):
+		"""Linear projection of the model perturbation onto the data space. Method not implemented"""
+		raise NotImplementedError("dresf is not necessary for ISTC; DO NOT CALL THIS METHOD");
+		return
+
+	# function to compute gradient (Soft thresholding applied outside in the solver)
+	def gradf(self,model,res):
+		"""- A'r_data (residual[0]) = g"""
+		#Apply an adjoint modeling
+		self.op.adjoint(False,res.vec1,self.grad)
+		#Applying preconditioning scaling factor
+		self.grad.scale(-self.scale_precond)
+		return self.grad
+
+
+#Non-linear problem classes
 class ProblemL2NonLinear(Problem):
 	"""Non-linear inverse problem of the form 1/2*|f(m)-d|_2"""
 
