@@ -241,7 +241,6 @@ class ChainOperator(Operator):
 	def forward(self,add,model,data):
 		"""Forward operator BAm"""
 		self.checkDomainRange(model,data)
-		if(not add): data.zero()
 		self.op1.forward(False,model,self.tmp_vec)
 		self.op2.forward(add,self.tmp_vec,data)
 		return
@@ -249,7 +248,6 @@ class ChainOperator(Operator):
 	def adjoint(self,add,model,data):
 		"""Adjoint operator A'B'd"""
 		self.checkDomainRange(model,data)
-		if(not add): model.zero()
 		self.op2.adjoint(False,self.tmp_vec,data)
 		self.op1.adjoint(add,model,self.tmp_vec)
 		return
@@ -275,7 +273,6 @@ class stackOperator(Operator):
 	def forward(self,add,model,data):
 		"""Forward operator Cm"""
 		self.checkDomainRange(model,data)
-		if(not add): data.zero()
 		# d1 = Am
 		self.op1.forward(add,model,data.vec1)
 		# d2 = Bm
@@ -286,7 +283,6 @@ class stackOperator(Operator):
 	def adjoint(self,add,model,data):
 		"""Adjoint operator C'r = A'r1 + B'r2"""
 		self.checkDomainRange(model,data)
-		if(not add): model.zero()
 		# m = A'd1
 		self.op1.adjoint(add,model,data.vec1)
 		# m += B'd2
@@ -318,4 +314,38 @@ class NonLinearOperator(Operator):
 		   Raising an exception, dot-product test must be performed directly onto linear operator.
 		"""
 		raise NotImplementedError("ERROR! Perform dot-product test directly onto linear operator.")
+		return
+
+class CombNonlinearOp(NonLinearOperator):
+	"""
+	   Combination of non-linear opeartors: f(g(m))
+	"""
+	def __init__(self,nl_op1,nl_op2):
+		"""
+		   Constructor for non-linear operator class
+		"""
+		#Checking if non-linear operators were provided
+		if(not (isinstance(nl_op1,NonLinearOperator) and isinstance(nl_op2,NonLinearOperator))):
+			raise TypeError("ERROR! Provided operators must be NonLinearOperator instances")
+		#Defining f(g(m))
+		self.nl_op = ChainOperator(nl_op2.nl_op,nl_op1.nl_op)
+		#Defining F(g(m0))G(m0)
+		self.lin_op = ChainOperator(nl_op2.lin_op,nl_op1.lin_op)
+		#Defining internal set_background functions
+		self.set_background1 = nl_op1.set_background
+		self.set_background2 = nl_op2.set_background
+		#Defining non_linear operator g(m) for Jacobian definition
+		self.g_nl_op = nl_op1.nl_op
+		self.g_range_tmp = nl_op1.nl_op.range.clone()
+		return
+
+	def set_background(self,model):
+		"""
+		   Set background function for the chain of Jacobian
+		"""
+		#Setting G(m0)
+		self.set_background1(model)
+		#Setting F(g(m0))
+		self.g_nl_op.forward(False,model,self.g_range_tmp)
+		self.set_background2(self.g_range_tmp)
 		return

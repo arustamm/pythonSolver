@@ -34,6 +34,10 @@ class vector:
 		return
 
 	#Class vector operations
+	def getNdArray(self):
+		"""Function to return Ndarray of the vector"""
+		raise NotImplementedError("getNdArray must be overwritten")
+		return
 
 	def norm(self,N=2):
 		"""Function to compute vector N-norm"""
@@ -182,6 +186,11 @@ class superVector(vector):
 		del self.vec1
 		del self.vec2
 		return
+
+	def getNdArray(self):
+		"""Function to return Ndarray of the vector"""
+		#The function returns a tuple/list containing the pointers to the Ndarrays
+		return [self.vec1.getNdArray(),self.vec2.getNdArray()]
 
 	def norm(self,N=2):
 		"""Function to compute vector N-norm"""
@@ -340,6 +349,10 @@ class vectorIC(vector):
 		"""VectorIC destructor"""
 		del self.arr
 		return
+
+	def getNdArray(self):
+		"""Function to return Ndarray of the vector"""
+		return self.arr
 
 	def norm(self,N=2):
 		"""Function to compute vector N-norm using Numpy"""
@@ -562,6 +575,11 @@ class vectorOC(vector):
 			#Removing both header and binary files (using os.system to make module compatible with python3.5)
 			os.system("rm -f %s %s"%(self.vecfile,self.binfile))
 		return
+
+	def getNdArray(self):
+		"""Function to return Ndarray of the vector"""
+		ndarray,_ = sep_util.read_file(self.vecfile)
+		return ndarray
 
 	def norm(self,N=2):
 		"""Function to compute vector N-norm"""

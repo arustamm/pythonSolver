@@ -151,7 +151,7 @@ class Solver:
 						self.model[ivec].writeVec(model_file,mode='a') #Appending to previous written vectors if any
 			#Writing gradient vectors on disk if requested
 			if(self.save_grad and self.prefix != None):
-				grad_file = self.prefix+"_residual.H"					#File name in which the residual vector is saved
+				grad_file = self.prefix+"_gradient.H"					#File name in which the gradient vector is saved
 				if(genIO_found and self.use_SepVector): #Writing using genericIO and SepVector
 					for ivec in range(self.iter_written,len(self.grad)):
 						#Appending to previous written vectors if any
@@ -162,7 +162,7 @@ class Solver:
 						self.grad[ivec].writeVec(grad_file,mode='a') #Appending to previous written vectors if any
 			#Writing residual vectors on disk if requested
 			if(self.save_res and self.prefix != None):
-				res_file = self.prefix+"_gradient.H"				#File name in which the gradient vector is saved
+				res_file = self.prefix+"_residual.H"				#File name in which the residual vector is saved
 				if(genIO_found and self.use_SepVector): #Writing using genericIO and SepVector
 					for ivec in range(self.iter_written,len(self.res)):
 						#Appending to previous written vectors if any
