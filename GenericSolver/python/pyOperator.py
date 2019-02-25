@@ -328,9 +328,9 @@ class CombNonlinearOp(NonLinearOperator):
 		if(not (isinstance(nl_op1,NonLinearOperator) and isinstance(nl_op2,NonLinearOperator))):
 			raise TypeError("ERROR! Provided operators must be NonLinearOperator instances")
 		#Defining f(g(m))
-		self.nl_op = ChainOperator(nl_op2.nl_op,nl_op1.nl_op)
+		self.nl_op = ChainOperator(nl_op1.nl_op,nl_op2.nl_op)
 		#Defining F(g(m0))G(m0)
-		self.lin_op = ChainOperator(nl_op2.lin_op,nl_op1.lin_op)
+		self.lin_op = ChainOperator(nl_op1.lin_op,nl_op2.lin_op)
 		#Defining internal set_background functions
 		self.set_background1 = nl_op1.set_background
 		self.set_background2 = nl_op2.set_background
@@ -341,7 +341,7 @@ class CombNonlinearOp(NonLinearOperator):
 
 	def set_background(self,model):
 		"""
-		   Set background function for the chain of Jacobian
+		   Set background function for the chain of Jacobian matrices
 		"""
 		#Setting G(m0)
 		self.set_background1(model)
