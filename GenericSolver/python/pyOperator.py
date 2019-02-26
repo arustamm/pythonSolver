@@ -290,6 +290,13 @@ class stackOperator(Operator):
 		return
 
 
+#Dummy function to use Non-linear operator class for Linear ones
+def dummy_set_background(dummy_arg):
+	"""
+	   Dummy function to use Non-linear operator class for Linear ones (it takes one argument and does nothing)
+	"""
+	return
+
 class NonLinearOperator(Operator):
 	"""
 		Non-linear operator class
