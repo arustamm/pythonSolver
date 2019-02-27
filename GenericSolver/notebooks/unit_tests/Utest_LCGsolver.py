@@ -157,7 +157,7 @@ if __name__ == '__main__':
 	low_bound.set(-2000.)
 	SymProb = Prblm.ProblemLinearSymmetric(model_vec_sym,data_vec_sym,MatMultSym,minBound=low_bound)
 	SLCG = SymLCGsolver.SymLCGsolver(Stop)
-	SLCG.setDefaults(iter_sampling=5)
+	SLCG.setDefaults(iter_sampling=5,save_obj=True,save_res=True,save_grad=True,save_model=True,prefix="test")
 	# SLCG.run(SymProb,verbose=True)
 	# print(SymProb.model.arr)
 
@@ -172,7 +172,8 @@ if __name__ == '__main__':
 	L2NLRegProb = Prblm.ProblemL2NonLinearReg(model_vec_sym,data_vec_sym,non_lin_op,0.)
 	L2NLRegProb.estimate_epsilon()
 	NLCGsolver = NLCG.NLCGsolver(Stop)
-	# NLCGsolver.run(L2NLRegProb,verbose=True)
+	NLCGsolver.setDefaults(iter_sampling=5,save_obj=True,save_res=True,save_grad=True,save_model=True,prefix="test")
+	NLCGsolver.run(L2NLRegProb,verbose=True)
 
 
 	#Testing non-linear bounded problem with NLCG
@@ -184,8 +185,8 @@ if __name__ == '__main__':
 	#Testing non-linear bounded problem with BFGS
 	L2NLProb = Prblm.ProblemL2NonLinear(model_vec_sym,data_vec_sym,non_lin_op,minBound=low_bound)
 	BFGSsolver = BFGS.LBFGSsolver(Stop)
-	BFGSsolver.run(L2NLProb,verbose=True)
-	print(L2NLProb.model.arr)
+	# BFGSsolver.run(L2NLProb,verbose=True)
+	# print(L2NLProb.model.arr)
 
 	#Bounded problem
 	#Creating the bounds

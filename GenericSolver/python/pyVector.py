@@ -11,10 +11,11 @@ from sys import version_info
 #other modules
 import sys_util
 import sep_util
-#Verify if GenericIO modules are presents
+#Verify if SepVector modules are presents
 try:
 	imp.find_module('Hypercube')
 	imp.find_module('SepVector')
+	imp.find_module('genericIO')
 	genIO_found = True
 except ImportError:
 	genIO_found = False
@@ -122,6 +123,7 @@ class vector:
 if genIO_found:
 	import Hypercube
 	import SepVector
+	import genericIO
 
 #Set of vectors (useful to store results and same-Space vectors together)
 class vectorSet:
@@ -129,7 +131,6 @@ class vectorSet:
 
 	def __init__(self):
 		"""Default constructor"""
-		self.Space = None #Space of the vectors
 		self.vecSet = [] #List of vectors of the set
 		return
 
@@ -137,23 +138,12 @@ class vectorSet:
 		"""Default destructor"""
 		return
 
-	def setSpace(self,vec_space):
-		"""Method to set vector Space of the set"""
-		#Checking type
-		if(not isinstance(vec_space,vector)): raise TypeError("Input variable is not a vector")
-		#Checking if space has already been assigned
-		if(self.Space != None): raise AttributeError("Vector Space of the set already provided")
-		self.Space = vec_space.cloneSpace() #setting space
-		return
-
 	def append(self,vec_in,copy=True):
 		"""Method to add vector to the set"""
-		#Check if setSpace was set
-		if(self.Space == None): raise AttributeError("ERROR! Vector Set has no Space; call sepSpace first!")
-		#Checking type
-		if(not isinstance(vec_in,vector)): raise TypeError("ERROR! Input variable is not a vector")
-		#Checking dimensionality
-		if(not self.Space.checkSame(vec_in)): raise ValueError("ERROR! Provided vector not in the same Space of the vector set")
+		#Checking dimensionality if a vector is present
+		if(self.vecSet):
+			if(not self.vecSet[0].checkSame(vec_in)):
+				raise ValueError("ERROR! Provided vector not in the same Space of the vector set")
 		if(copy):
 			#Copying input vector
 			self.vecSet.append(vec_in.clone())
@@ -164,14 +154,28 @@ class vectorSet:
 
 	def writeSet(self,filename):
 		"""Method to write to SEPlib file (by default it appends vectors to file)"""
-		#Writing binary
-		for ivector in self.vecSet:
-			ivector.writeVec(filename,mode='a')
-		#Remove vectors within the set from memory
-		del self.vecSet
-		self.vecSet=[]
+		for ivec in self.vecSet:
+			self.writeVec(filename,ivec)
+		self.vecSet = [] #List of vectors of the set
 		return
 
+	def writeVec(self,filename,vec):
+		"""Method to write to vector to file within a Vector set"""
+		#Checking what kind of vector to write
+		if(isinstance(vec,vectorIC) or isinstance(vec,vectorOC)):
+			vec.writeVec(filename,mode="a")
+		elif(isinstance(vec,superVector)):
+			#Writing two files for the two components
+			filename_comp1 = "".join(filename.split('.')[:-1])+"_comp1.H"
+			filename_comp2 = "".join(filename.split('.')[:-1])+"_comp2.H"
+			#Writing files (recursively)
+			self.writeVec(filename_comp1,vec.vec1)
+			self.writeVec(filename_comp2,vec.vec2)
+		elif(genIO_found):
+			if(isinstance(vec,SepVector.vector)):
+				genericIO.defaultIO.appendVector(filename,vec,flush=1)
+				genericIO.defaultIO.closeAppendFile(filename)
+		return
 
 class superVector(vector):
 	"""Column-wise concatenation of vectors [vec1^T vec2^T]^T"""
@@ -197,7 +201,6 @@ class superVector(vector):
 		norm = np.power(self.vec1.norm(N),N)
 		norm += np.power(self.vec2.norm(N),N)
 		return np.power(norm,1./N)
-
 
 	def set(self,val):
 		"""Function to set all values in the vector"""
@@ -241,16 +244,6 @@ class superVector(vector):
 		if(not checkspace1): print("WARNING! First vector component not in the same space vec1_component1 = %s; vec2_component1 = %s"%(self.vec1.naxis,vec_in.vec1.naxis))
 		if(not checkspace2): print("WARNING! First vector component not in the same space vec1_component2 = %s; vec2_component2 = %s"%(self.vec2.naxis,vec_in.vec2.naxis))
 		return (checkspace1 and checkspace2)
-
-	def writeVec(self,filename,mode='w'):
-		"""Function to write vector to file"""
-		#Writing two files for the two components
-		filename_comp1 = "".join(filename.split('.')[:-1])+"_comp1.H"
-		filename_comp2 = "".join(filename.split('.')[:-1])+"_comp2.H"
-		#Writing files
-		self.vec1.writeVec(filename_comp1,mode)
-		self.vec2.writeVec(filename_comp2,mode)
-		return
 
 	#Combination of different vectors
 	def copy(self,vec_in):
