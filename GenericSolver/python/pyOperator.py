@@ -176,6 +176,25 @@ class Operator:
 		raise NotImplementedError("Adjoint must be overwritten")
 		return
 
+class Transpose(Operator):
+	"""
+	   Class of transposition of provided operator
+	"""
+	def __init__(self,op):
+		self.setDomainRange(op.range,op.domain)
+		self.op=op
+		return
+
+	def forward(self,add,model,data):
+		self.checkDomainRange(model,data)
+		self.op.adjoint(add,data,model)
+		return
+
+	def adjoint(self,add,model,data):
+		self.checkDomainRange(model,data)
+		self.op.forward(add,data,model)
+		return
+
 
 class scalingOp(Operator):
 	"""Simple operator for testing Operator class"""
