@@ -298,7 +298,6 @@ class stackOperator(Operator):
 		self.op2.forward(add,model,data.vec2)
 		return
 
-
 	def adjoint(self,add,model,data):
 		"""Adjoint operator C'r = A'r1 + B'r2"""
 		self.checkDomainRange(model,data)
@@ -307,7 +306,6 @@ class stackOperator(Operator):
 		# m += B'd2
 		self.op2.adjoint(True,model,data.vec2)
 		return
-
 
 #Dummy function to use Non-linear operator class for Linear ones
 def dummy_set_background(dummy_arg):
@@ -374,4 +372,38 @@ class CombNonlinearOp(NonLinearOperator):
 		#Setting F(g(m0))
 		self.g_nl_op.forward(False,model,self.g_range_tmp)
 		self.set_background2(self.g_range_tmp)
+		return
+
+class stackNonOperator(NonLinearOperator):
+	"""
+		    Stack of operators class
+	        		| d1 |   | f(m) |
+   			 h(m) = |    | = |      |
+		            | d2 |   | g(m) |
+	"""
+
+	def __init__(self,nl_op1,nl_op2):
+		"""Constructor for the stacked operator"""
+		#Checking if domain of the operators is the same
+		if(not (isinstance(nl_op1,NonLinearOperator) and isinstance(nl_op2,NonLinearOperator))):
+			raise TypeError("ERROR! Provided operators must be NonLinearOperator instances")
+		self.nl_op1=nl_op1 #f(m)
+		self.nl_op2=nl_op2 #g(m)
+		#Defining f(g(m))
+		self.nl_op = stackOperator(nl_op1.nl_op,nl_op2.nl_op)
+		#Defining F(g(m0))G(m0)
+		self.lin_op = stackOperator(nl_op1.lin_op,nl_op2.lin_op)
+		#Defining internal set_background functions
+		self.set_background1 = nl_op1.set_background
+		self.set_background2 = nl_op2.set_background
+		return
+
+	def set_background(self,model):
+		"""
+		   Set background function for the stack of Jacobian matrices
+		"""
+		#Setting F(m0)
+		self.set_background1(model)
+		#Setting G(m0)
+		self.set_background2(model)
 		return

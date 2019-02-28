@@ -482,8 +482,16 @@ class ProblemL1LinearRegISTC(Problem):
 class ProblemL2NonLinear(Problem):
 	"""Non-linear inverse problem of the form 1/2*|f(m)-d|_2"""
 
-	def __init__(self,model,data,op,minBound=None,maxBound=None):
-		"""Constructor of linear problem"""
+	def __init__(self,model,data,op,grad_mask=None,minBound=None,maxBound=None):
+		"""
+		   Constructor of non-linear problem:
+		   model    	= [no default] - vector class; Initial model vector
+		   data     	= [no default] - vector class; Data vector
+		   op       	= [no default] - non-linear operator class; f(m) operator
+		   grad_mask	= [None] - vector class; Mask to be applied on the gradient during the inversion
+		   minBound		= [None] - vector class; Minimum value bounds
+		   maxBound		= [None] - vector class; Maximum value bounds
+		"""
 		#Setting the bounds (if any)
 		super(ProblemL2NonLinear,self).__init__(minBound,maxBound)
 		#Setting internal vector
@@ -504,6 +512,12 @@ class ProblemL2NonLinear(Problem):
 			self.op=op
 		else:
 			raise TypeError("ERROR! Not provided a non-linear operator!")
+		#Checking if a gradient mask was provided
+		self.grad_mask=grad_mask
+		if(self.grad_mask != None):
+			if(not grad_mask.checkSame(model)):
+				raise ValueError("ERROR! Mask size not consistent with model vector!")
+			self.grad_mask=grad_mask.clone()
 		#Setting default variables
 		self.setDefaults()
 		self.linear=False
@@ -526,6 +540,9 @@ class ProblemL2NonLinear(Problem):
 		self.op.set_background(model)
 		#Computing F'r = g
 		self.op.lin_op.adjoint(False,self.grad,res)
+		#Applying the gradient mask if present
+		if(self.grad_mask != None):
+			self.grad.multiply(self.grad_mask)
 		return self.grad
 
 	def dresf(self,model,dmodel):
@@ -549,8 +566,19 @@ class ProblemL2NonLinearReg(Problem):
 			1/2*|f(m)-d|_2 + epsilon^2/2*|g(m) - m_prior|_2
 	"""
 
-	def __init__(self,model,data,op,epsilon,reg_op=None,prior_model=None,minBound=None,maxBound=None):
-		"""Constructor of linear problem"""
+	def __init__(self,model,data,op,epsilon,grad_mask=None,reg_op=None,prior_model=None,minBound=None,maxBound=None):
+		"""
+		   Constructor of non-linear regularized problem:
+   		   model    	= [no default] - vector class; Initial model vector
+   		   data     	= [no default] - vector class; Data vector
+   		   op       	= [no default] - non-linear operator class; f(m) operator
+		   epsilon      = [no default] - non-linear operator class; f(m) operator
+   		   grad_mask	= [None] - vector class; Mask to be applied on the gradient during the inversion
+		   reg_op       = [Identity] - non-linear/linear operator class; g(m) regularization operator
+		   prior_model  = [None] - vector class; Prior model for regularization term
+   		   minBound		= [None] - vector class; Minimum value bounds
+   		   maxBound		= [None] - vector class; Maximum value bounds
+		"""
 		#Setting the bounds (if any)
 		super(ProblemL2NonLinearReg,self).__init__(minBound,maxBound)
 		#Setting internal vector
@@ -565,7 +593,9 @@ class ProblemL2NonLinearReg(Problem):
 		self.prior_model=prior_model
 		#Setting linear operators
 		#Assuming identity operator if regularization operator was not provided
-		if(reg_op == None): reg_op = pyOp.IdentityOp(self.model)
+		if(reg_op == None):
+			Id_op  = pyOp.IdentityOp(self.model)
+			reg_op = pyOp.NonLinearOperator(Id_op,Id_op)
 		#Checking if space of the prior model is constistent with range of regularization operator
 		if(self.prior_model != None):
 			if(not self.prior_model.checkSame(reg_op.range)):
@@ -574,18 +604,19 @@ class ProblemL2NonLinearReg(Problem):
 		if(not isinstance(op,pyOp.NonLinearOperator)):
 			raise TypeError("ERROR! Not provided a non-linear operator!")
 		#Setting non-linear stack of operators
-		if(isinstance(reg_op,pyOp.NonLinearOperator)):
-			self.op = pyOp.NonLinearOperator(pyOp.stackOperator(op.nl_op,reg_op.nl_op),pyOp.stackOperator(op.lin_op,reg_op.lin_op),op.set_background)
-			self.op_reg_set_background = reg_op.set_background
-		else:
-			self.op = pyOp.NonLinearOperator(pyOp.stackOperator(op.nl_op,reg_op),pyOp.stackOperator(op.lin_op,reg_op),op.set_background)
-			self.op_reg_set_background = None
+		self.op = pyOp.stackNonOperator(op,reg_op)
 		self.epsilon=epsilon #Regularization weight
 		#Residual vector (data and model residual vectors)
-		self.res=self.op.range.clone()
+		self.res=self.op.nl_op.range.clone()
 		self.res.zero()
 		#Dresidual vector
 		self.dres=self.res.clone()
+		#Checking if a gradient mask was provided
+		self.grad_mask=grad_mask
+		if(self.grad_mask != None):
+			if(not grad_mask.checkSame(model)):
+				raise ValueError("ERROR! Mask size not consistent with model vector!")
+			self.grad_mask=grad_mask.clone()
 		#Setting default variables
 		self.setDefaults()
 		self.linear=False
@@ -670,23 +701,20 @@ class ProblemL2NonLinearReg(Problem):
 		"""Method to return gradient vector g = F'r_d + (epsilon*A'r_m or epsilon*G'r_m)"""
 		#Setting model point on which the F is evaluated
 		self.op.set_background(model)
-		#Setting background model for regularization if it was non linear
-		if(self.op_reg_set_background != None):
-			self.op_reg_set_background(model)
 		#g = epsilon*A'r_m
 		self.op.lin_op.op2.adjoint(False,self.grad,res.vec2)
 		self.grad.scale(self.epsilon)
 		#g = F'r_d + A'(epsilon*r_m)
 		self.op.lin_op.op1.adjoint(True,self.grad,res.vec1)
+		#Applying the gradient mask if present
+		if(self.grad_mask != None):
+			self.grad.multiply(self.grad_mask)
 		return self.grad
 
 	def dresf(self,model,dmodel):
 		"""Method to return residual vector dres = [F + epsilon * (A or G)]dm"""
 		#Setting model point on which the F is evaluated
 		self.op.set_background(model)
-		#Setting background model for regularization if it was non linear
-		if(self.op_reg_set_background != None):
-			self.op_reg_set_background(model)
 		#Computing Ldm = dres_d
 		self.op.lin_op.forward(False,dmodel,self.dres)
 		#Scaling by epsilon
