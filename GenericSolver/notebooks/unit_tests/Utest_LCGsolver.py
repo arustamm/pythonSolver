@@ -146,10 +146,10 @@ if __name__ == '__main__':
 
 
 	#Testing LCG with regularized problem
-	L2Prob_reg = Prblm.ProblemL2LinearReg(model_vec_sym,data_vec_sym,MatMultSym,0.)
-	L2Prob_reg.estimate_epsilon()
+	L2Prob_reg = Prblm.ProblemL2LinearReg(model_vec_sym,data_vec_sym,MatMultSym,0.0001)
+	# L2Prob_reg.estimate_epsilon(True)
 	#Running the solver
-	LCGsolver.setDefaults(iter_sampling=100)
+	LCGsolver.setDefaults(iter_sampling=100,save_obj=True,prefix="lin_test")
 	# LCGsolver.run(L2Prob_reg,verbose=True)
 
 	#Testing LCG for symmetric systems
@@ -173,7 +173,7 @@ if __name__ == '__main__':
 	L2NLRegProb.estimate_epsilon()
 	NLCGsolver = NLCG.NLCGsolver(Stop)
 	NLCGsolver.setDefaults(iter_sampling=5,save_obj=True,save_res=True,save_grad=True,save_model=True,prefix="test")
-	NLCGsolver.run(L2NLRegProb,verbose=True)
+	# NLCGsolver.run(L2NLRegProb,verbose=True)
 
 
 	#Testing non-linear bounded problem with NLCG
