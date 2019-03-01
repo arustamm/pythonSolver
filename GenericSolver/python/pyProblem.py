@@ -171,7 +171,14 @@ class ProblemL2Linear(Problem):
 	"""Linear inverse problem of the form 1/2*|Lm-d|_2"""
 
 	def __init__(self,model,data,op,minBound=None,maxBound=None):
-		"""Constructor of linear problem"""
+		"""
+		   Constructor of linear problem:
+		   model    	= [no default] - vector class; Initial model vector
+		   data     	= [no default] - vector class; Data vector
+		   op       	= [no default] - linear operator class; L operator
+		   minBound		= [None] - vector class; Minimum value bounds
+		   maxBound		= [None] - vector class; Maximum value bounds
+		"""
 		#Setting the bounds (if any)
 		super(ProblemL2Linear,self).__init__(minBound,maxBound)
 		#Setting internal vector
@@ -231,7 +238,14 @@ class ProblemLinearSymmetric(Problem):
 	"""Linear inverse problem of the form 1/2m'Am - m'b"""
 
 	def __init__(self,model,data,op,minBound=None,maxBound=None):
-		"""Constructor of linear problem"""
+		"""
+		   Constructor of linear symmetric problem:
+		   model    	= [no default] - vector class; Initial model vector
+		   data     	= [no default] - vector class; Data vector
+		   op       	= [no default] - linear operator class; A symmetric operator (i.e., A = A')
+		   minBound		= [None] - vector class; Minimum value bounds
+		   maxBound		= [None] - vector class; Maximum value bounds
+		"""
 		#Setting the bounds (if any)
 		super(ProblemLinearSymmetric,self).__init__(minBound,maxBound)
 		#Checking range and domain are the same
@@ -293,7 +307,17 @@ class ProblemL2LinearReg(Problem):
 	"""Linear inverse problem regularized of the form 1/2*|Lm-d|_2 + epsilon^2/2*|Am-m_prior|_2"""
 
 	def __init__(self,model,data,op,epsilon,reg_op=None,prior_model=None,minBound=None,maxBound=None):
-		"""Constructor of linear problem"""
+		"""
+		   Constructor of linear regularized problem:
+		   model    	= [no default] - vector class; Initial model vector
+		   data     	= [no default] - vector class; Data vector
+		   op       	= [no default] - linear operator class; L operator
+		   epsilon      = [no default] - float; regularization weight
+		   reg_op       = [Identity] - linear operator class; A regularization operator
+		   prior_model  = [None] - vector class; Prior model for regularization term
+		   minBound		= [None] - vector class; Minimum value bounds
+		   maxBound		= [None] - vector class; Maximum value bounds
+		"""
 		#Setting the bounds (if any)
 		super(ProblemL2LinearReg,self).__init__(minBound,maxBound)
 		#Setting internal vector
@@ -412,10 +436,16 @@ class ProblemL1LinearRegISTC(Problem):
 	"""Linear problem 1/2*| y - Am |_2 + lambda*| m |_1 to be used in connection with ISTC solver"""
 	def set_prob(self,model,data,op,op_norm=None,minBound=None,maxBound=None):
 		"""
-		   Linear L1-norm inversion problem for ISTC solver
+		   Constructor linear L1-norm inversion problem for ISTC solver:
+		   model    	= [no default] - vector class; Initial model vector
+		   data     	= [no default] - vector class; Data vector
+		   op       	= [no default] - linear operator class; L operator
+		   operator_norm= [None] - float; A operator norm that will be evaluated with the power method if not provided
+		   minBound		= [None] - vector class; Minimum value bounds
+		   maxBound		= [None] - vector class; Maximum value bounds
 		"""
 		#Setting the bounds (if any)
-		super(ProblemL2LinearReg,self).__init__(minBound,maxBound)
+		super(ProblemL1LinearRegISTC,self).__init__(minBound,maxBound)
 		#Setting internal vector
 		self.model=model.clone()
 		self.dmodel=model.clone()
@@ -573,7 +603,7 @@ class ProblemL2NonLinear(Problem):
 class ProblemL2NonLinearReg(Problem):
 	"""
 	   Linear inverse problem regularized of the form
-	   		1/2*|f(m)-d|_2 + epsilon^2/2*|Am - m_prior|_2
+			1/2*|f(m)-d|_2 + epsilon^2/2*|Am - m_prior|_2
 				or with a non-linear regularization
 			1/2*|f(m)-d|_2 + epsilon^2/2*|g(m) - m_prior|_2
 	"""
@@ -581,15 +611,15 @@ class ProblemL2NonLinearReg(Problem):
 	def __init__(self,model,data,op,epsilon,grad_mask=None,reg_op=None,prior_model=None,minBound=None,maxBound=None):
 		"""
 		   Constructor of non-linear regularized problem:
-   		   model    	= [no default] - vector class; Initial model vector
-   		   data     	= [no default] - vector class; Data vector
-   		   op       	= [no default] - non-linear operator class; f(m) operator
-		   epsilon      = [no default] - non-linear operator class; f(m) operator
-   		   grad_mask	= [None] - vector class; Mask to be applied on the gradient during the inversion
+		   model    	= [no default] - vector class; Initial model vector
+		   data     	= [no default] - vector class; Data vector
+		   op       	= [no default] - non-linear operator class; f(m) operator
+		   epsilon      = [no default] - float; regularization weight
+		   grad_mask	= [None] - vector class; Mask to be applied on the gradient during the inversion
 		   reg_op       = [Identity] - non-linear/linear operator class; g(m) regularization operator
 		   prior_model  = [None] - vector class; Prior model for regularization term
-   		   minBound		= [None] - vector class; Minimum value bounds
-   		   maxBound		= [None] - vector class; Maximum value bounds
+		   minBound		= [None] - vector class; Minimum value bounds
+		   maxBound		= [None] - vector class; Maximum value bounds
 		"""
 		#Setting the bounds (if any)
 		super(ProblemL2NonLinearReg,self).__init__(minBound,maxBound)

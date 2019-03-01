@@ -85,7 +85,7 @@ class LCGsolver(pySolver.Solver):
 				#Writing on log file
 				if(self.logger): self.logger.addToLog(msg)
 				#Check if either objective function value or gradient norm is NaN
-				if(isnan(obj0) or isnan(prblm_grad.norm())): raise ValueError("Error! Either gradient norm or objective function value NaN!")
+				if(isnan(obj0) or isnan(prblm_grad.norm())): raise ValueError("ERROR! Either gradient norm or objective function value NaN!")
 				#Set internal delta residual vector
 				cg_dres = prblm_res.clone()
 				cg_dres.zero()
@@ -199,7 +199,7 @@ class LCGsolver(pySolver.Solver):
 			#Writing on log file
 			if(self.logger): self.logger.addToLog("\n"+msg)
 			#Check if either objective function value or gradient norm is NaN
-			if(isnan(obj1) or isnan(prblm_grad.norm())): raise ValueError("Error! Either gradient norm or objective function value NaN!")
+			if(isnan(obj1) or isnan(prblm_grad.norm())): raise ValueError("ERROR! Either gradient norm or objective function value NaN!")
 			if (self.stoppr.run(prblm,iter,initial_obj_value,verbose)): break
 
 		#Writing last inverted model
