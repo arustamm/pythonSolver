@@ -323,6 +323,8 @@ class ProblemL2LinearReg(Problem):
 		#Setting default variables
 		self.setDefaults()
 		self.linear=True
+		#Objective function terms (useful to analyze each term)
+		self.obj_terms=[None,None]
 		return
 
 	def __del__(self):
@@ -398,7 +400,11 @@ class ProblemL2LinearReg(Problem):
 
 	def objf(self,res):
 		"""Method to return objective function value 1/2|Lm-d|_2 + epsilon^2/2*|Am-m_prior|_2"""
-		obj=0.5*res.dot(res)
+		#data term
+		self.obj_terms[0]=0.5*res.vec1.dot(res.vec1)
+		#model term
+		self.obj_terms[1]=0.5*res.vec2.dot(res.vec2)
+		obj=self.obj_terms[0]+self.obj_terms[1]
 		return obj
 
 
@@ -436,6 +442,8 @@ class ProblemL1LinearRegISTC(Problem):
 			self.op_norm = self.op.powerMethod()
 		self.scale_precond = 0.99 * math.sqrt(2) / math.sqrt(self.op_norm); #scaling factor applied to operator A for preconditioning
 		self.lambda_value=None
+		#Objective function terms (useful to analyze each term)
+		self.obj_terms=[None,None]
 		return
 
 	def set_lambda(self,lambda_in):
@@ -445,7 +453,11 @@ class ProblemL1LinearRegISTC(Problem):
 
 	def objf(self,res):
 		"""Method to return objective function value 1/2*| y - Am |_2 + lambda*| m |_1"""
-		obj=0.5*res.vec1.dot(res.vec1)+self.lambda_value*res.vec2.norm(1)
+		#data term
+		self.obj_terms[0]=0.5*res.vec1.dot(res.vec1)
+		#model term
+		self.obj_terms[1]=self.lambda_value*res.vec2.norm(1)
+		obj=self.obj_terms[0]+self.obj_terms[1]
 		return obj
 
 	# define function that computes residuals
@@ -620,6 +632,8 @@ class ProblemL2NonLinearReg(Problem):
 		#Setting default variables
 		self.setDefaults()
 		self.linear=False
+		#Objective function terms (useful to analyze each term)
+		self.obj_terms=[None,None]
 		return
 
 	def __del__(self):
@@ -723,5 +737,9 @@ class ProblemL2NonLinearReg(Problem):
 
 	def objf(self,res):
 		"""Method to return objective function value 1/2|f(m)-d|_2 + (epsilon^2/2*|Am-m_prior|_2 or epsilon^2/2*|g(m)-m_prior|_2)"""
-		obj=0.5*res.dot(res)
+		#data term
+		self.obj_terms[0]=0.5*res.vec1.dot(res.vec1)
+		#model term
+		self.obj_terms[1]=0.5*res.vec2.dot(res.vec2)
+		obj=self.obj_terms[0]+self.obj_terms[1]
 		return obj

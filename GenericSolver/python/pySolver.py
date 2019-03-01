@@ -10,6 +10,7 @@ from sep_util import write_file
 from sep_util import rm_file
 from sys_util import mkdir
 from shutil import rmtree
+from copy import deepcopy
 import datetime
 import sep_util
 
@@ -62,6 +63,7 @@ class Solver:
 
 		#Lists of the results (list and vector Sets)
 		self.obj=list()								#List for objective function value
+		self.obj_terms=list()						#List for objective function value for each terms
 		self.model=list()							#List for model vectors (to save results in-core)
 		self.res=list()								#List for residual vectors (to save results in-core)
 		self.grad=list()							#List for gradient vectors (to save results in-core)
@@ -93,6 +95,9 @@ class Solver:
 		#The objective function is saved every iteration if requested
 		if(self.save_obj):
 			self.obj.append(objf_value)
+			#Checking if the objective function has multiple terms
+			if("obj_terms" in dir(prblm)):
+				self.obj_terms.append(deepcopy(prblm.obj_terms))
 		if(iter%self.iter_sampling == 0 or force_save):
 			if(self.save_model):
 				self.modelSet.append(prblm_mod)
@@ -129,6 +134,11 @@ class Solver:
 			if(self.save_obj and self.prefix != None):
 				obj_file = self.prefix+"_obj.H"						#File name in which the objective function is saved
 				write_file(obj_file,np.array(self.obj))
+				#Writing each term of the objective function
+				if(self.obj_terms):
+					for iterm in range(len(self.obj_terms[0])):
+						obj_file = self.prefix+"_obj_comp%s.H"%(iterm)	#File name in which the objective function is saved
+						write_file(obj_file,np.array([objs[iterm] for objs in self.obj_terms]))
 			#Writing current inverted model and model vectors on disk if requested
 			if(self.save_model and self.prefix != None):
 				inv_mod_file = self.prefix+"_inv_mod.H"				#File name in which the current inverted model is saved
