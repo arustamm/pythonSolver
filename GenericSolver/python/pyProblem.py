@@ -53,6 +53,14 @@ class Problem:
 	def __init__(self,minBound=None,maxBound=None):
 		"""Default class constructor for Problem"""
 		self.bounds=Bounds(minBound,maxBound) #Setting the bounds of the problem (if necessary)
+		#Setting common variables
+		self.linear=False #By default all problem are non-linear
+		self.obj_updated=False
+		self.res_updated=False
+		self.grad_updated=False
+		self.dres_updated=False
+		self.fevals=0
+		self.counter=0
 		return
 
 	def __del__(self):
