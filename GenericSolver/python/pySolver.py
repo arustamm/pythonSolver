@@ -81,16 +81,22 @@ class Solver:
 		return
 
 
-	def save_results(self,iter,prblm,force_save=False,force_write=False):
+	def save_results(self,iter,prblm,model=None,force_save=False,force_write=False):
 		"""
 		   Method to save results
+		   model		= [None];  Model vector to be saved
 		   force_saving = [False]; Flag to ignore iteration sampling
 		   force_write  = [False]; Force writing on disk if necessary (used to handle last iteration)
 		"""
-		if(not isinstance(prblm,pyProblem.Problem)): raise TypeError("Input variable is not a Problem object")
+		if(not isinstance(prblm,pyProblem.Problem)):
+			raise TypeError("Input variable is not a Problem object")
+		#Getting a model from arguments if provided (necessary to remove preconditioning)
+		if(model != None):
+			mod_save = model
+		else:
+			mod_save = prblm.get_model()
 		#Obtaining objective function value
-		prblm_mod = prblm.get_model()
-		objf_value=prblm.get_obj(prblm_mod)
+		objf_value=prblm.get_obj(prblm.get_model())
 		#Save if it is forced to or if the solver hits a sampled iteration number
 		#The objective function is saved every iteration if requested
 		if(self.save_obj):
@@ -100,12 +106,12 @@ class Solver:
 				self.obj_terms.append(deepcopy(prblm.obj_terms))
 		if(iter%self.iter_sampling == 0 or force_save):
 			if(self.save_model):
-				self.modelSet.append(prblm_mod)
+				self.modelSet.append(mod_save)
 				#Storing model vector into a temporary vector
 				del self.inv_model #Deallocating previous saved model
-				self.inv_model=prblm_mod.clone()
+				self.inv_model=mod_save.clone()
 			if(self.save_res):
-				res_vec = prblm.get_res(prblm_mod)
+				res_vec = prblm.get_res(prblm.get_model())
 				self.resSet.append(res_vec)
 			if(self.save_grad):
 				grad = prblm.get_grad(prblm.get_model())

@@ -42,8 +42,8 @@ class ISTCsolver(pySolver.Solver):
 			if(self.logger): self.logger.addToLog(msg)
 
 			#Setting internal vectors (model, search direction, and previous gradient vectors)
-			prblm_mdl=prblm.get_model()
-			istc_mdl = prblm_mdl.clone()
+			prblm_mdl = prblm.get_model()
+			istc_mdl  = prblm_mdl.clone()
 
 			#Inversion always starts from m = 0 (I need to understand if it is possible to start from m different than 0)
 			istc_mdl.zero()	# modl = 0
@@ -71,82 +71,96 @@ class ISTCsolver(pySolver.Solver):
 			if(verbose): print(msg)
 			if(self.logger): self.logger.addToLog(msg)
 			self.restart.read_restart()
-			#Retrieving lambda values
+			#Retrieving lambda values and other parameters
 			lambda_values = self.restart.retrieve_parameter("lambda_values")
 			iter = self.restart.retrieve_parameter("iter")
 			initial_obj_value=self.restart.retrieve_parameter("obj_initial") #Retrieving initial objective function value
+			istc_mdl = self.restart.retrieve_vector("istc_mdl")
 
 		#Common variables unrelated to restart
 		success = True
+		istc_mdl0 = istc_mdl.clone() #Previous model in case stepping procedure fails
+		istc_mdl_save = istc_mdl0 	 #used also to save results
+
 		#Outer iteration loop
 		while True:
 			#Setting lambda value for a given outer loop iteration
-			prblm.set_lambda(lambda_values[iter-1])
+			prblm.set_lambda(lambda_values[iter])
 			msg = "Outer_iter = %s lambda_value = %s"%(iter,lambda_values[iter])
 			if(verbose): print(msg)
 			if(self.logger): self.logger.addToLog(msg)
-			inner_iter = 0
+			if(not restart):
+				inner_iter = 0
+			else:
+				inner_iter = self.restart.retrieve_parameter("inner_iter",inner_iter)
+				restart = False
+			obj=prblm.get_obj(istc_mdl) 		#Compute objective function value
+			if(iter == 0):
+				#Saving initial objective function value
+				initial_obj_value = obj
+				self.restart.save_parameter("obj_initial",initial_obj_value)
 			while(inner_iter < self.inner_it):
-				obj=prblm.get_obj(modl) 			#Compute objective function value
-				prblm_res=prblm.get_res(modl) 		#Compute residuals res = y - Ax
-				prblm_grad=prblm.get_grad(modl) 	#Compute the gradient g = - A' [y - Ax]
+				obj=prblm.get_obj(istc_mdl) 		#Compute objective function value
+				prblm_grad=prblm.get_grad(istc_mdl) #Compute the gradient g = - A' [y - Ax]
 				if(inner_iter == 0):
-					msg = "	Inner_iter = %s obj = %s residual norm = %s gradient norm= %s feval = %s"%(inner_iter-1,obj0,prblm.get_rnorm(),prblm.get_gnorm(),prblm.get_fevals())
-					if(verbose): print info
+					msg = "	Inner_iter = %s obj = %s residual norm = %s gradient norm= %s feval = %s"%(inner_iter,obj0,prblm.get_rnorm(),prblm.get_gnorm(),prblm.get_fevals())
 					#Writing on log file
 					if(verbose): print(msg)
 					if(self.logger): self.logger.addToLog(msg)
 					#Check if either objective function value or gradient norm is NaN
 					if(isnan(obj0) or isnan(prblm_grad.norm())): raise ValueError("ERROR! Either gradient norm or objective function value NaN!")
 				if(prblm.get_gnorm() == 0.):
-					print "Gradient vanishes identically"
+					print("Gradient vanishes identically")
 					break
-				#Outputing files if problem was not restarted
-				if(not prblm.restart.restarting):
-					prblm.output(modl)
-					#Removing preconditioning scaling factor from saved inverted model
-					sep.Scale(prblm.inverted_model,prblm.scale_precond)
-				prblm.restart.restarting=False
+
+				#Removing preconditioning scaling factor from inverted model
+				istc_mdl_save.copy(istc_mdl)
+				istc_mdl_save.scale(prblm.scale_precond)
+				#Saving results
+				self.save_results(iter,prblm,istc_mdl_save,force_save=False)
 
 				#Stepping for internal iteration model update
-				sep.Cp(modl,modl0) #Saving model before updating it
-				sep.Sum(modl,grad,1.0,-1.0) #Update model x = x + A' [y - Ax]
+				istc_mdl0.copy(istc_mdl) #Saving model before updating it
+				istc_mdl.scaleAdd(prblm_grad,1.0,-1.0) #Update model x = x + A' [y - Ax]
 				#########################################
 				#SOFT-THRESHOLDING STEP
-				modl_arr,modl_axes = sep.sep_read_file(modl)
+				modl_arr = istc_mdl.getNdArray()
 				modl_arr = np.sign(modl_arr)*np.clip(np.abs(modl_arr)-prblm.lambda_value,0.,None)
-				if(sep_write_file(modl,modl_axes,modl_arr)): raise IOError("ERROR! Problem writing soft-thresholded model vector to file")
 				#########################################
-				#Apply hard bounds if defined
-				clipped=self.stpr.clipping(modl,log_file)
+				#Projecting model onto the bounds (if any)
+				if("bounds" in dir(prblm)): prblm.bounds.apply(istc_mdl)
 
-				obj=prblm.get_obj(modl)
-				obj1=sep.Get_value(obj)
+				obj1=prblm.get_obj(istc_mdl)
 				if(obj1 >= obj0):
-					info = "Objective function didn't reduce, will terminate solver: obj_new=%s obj_current=%s"%(obj1,obj0)
-					if(verbose): print info
+					msg = "Objective function didn't reduce, will terminate solver: obj_new=%s obj_current=%s"%(obj1,obj0)
+					if(verbose): print(msg)
 					#Writing on log file
-					solv.write_log_file(log_file,info=info)
-					#Stepping back to the previous solution
-					sep.Cp(modl0,modl)
+					if(self.logger): self.logger.addToLog(msg)
+					#Copying back to the previous solution
+					istc_mdl.set_model(istc_mdl0)
 					break
 
-				#Saving current model in case of restart
-				prblm.restart.write_file(modl,"model_restart_ISTC.H")
+				#Saving current model in case of restart and other parameters
+				self.restart.save_parameter("iter",iter)
+				self.restart.save_parameter("inner_iter",inner_iter)
+				self.restart.save_vector("istc_mdl",istc_mdl)
+
 				#iteration info
-				info = "Inner_iter = %s obj = %s residual norm = %s gradient norm= %s feval = %s"%(inner_iter-1,obj0,prblm.get_rnorm(),prblm.get_gnorm(),prblm.get_fevals())
-				if(verbose): print info
+				msg = "Inner_iter = %s obj = %s residual norm = %s gradient norm= %s feval = %s"%(inner_iter,obj1,prblm_res.norm(),prblm_grad.norm(),prblm.get_fevals())
+				if(verbose): print(msg)
 				#Writing on log file
-				solv.write_log_file(log_file,info="\n"+info)
-				solv.write_log_file(prblm.restart.log_file,info="\n"+info)
+				if(self.logger): self.logger.addToLog("\n"+msg)
 				#Check if either objective function value or gradient norm is NaN
-				if(math.isnan(obj1) or math.isnan(prblm.get_gnorm())): raise ValueError("Error! Either gradient norm or objective function value NaN!")
+				if(isnan(obj1) or isnan(prblm_grad.norm())): raise ValueError("ERROR! Either gradient norm or objective function value NaN!")
 				inner_iter += 1
 			iter = iter + 1
 			if (self.stoppr.run(prblm,iter,initial_obj_value,verbose)): break
 
+		#Removing preconditioning scaling factor from inverted model
+		istc_mdl_save.copy(istc_mdl)
+		istc_mdl_save.scale(prblm.scale_precond)
 		#Writing last inverted model
-		self.save_results(iter,prblm,force_save=True,force_write=True)
+		self.save_results(iter,prblm,istc_mdl_save,force_save=True,force_write=True)
 		if(self.logger): self.logger.addToLog("ITERATIVE SOFT-THRESHOLDING WITH COOLING SOLVER log file end")
 		#Clear restart object
 		self.restart.clear_restart()

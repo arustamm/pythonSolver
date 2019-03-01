@@ -78,7 +78,7 @@ class LCGsolver(pySolver.Solver):
 			prblm_grad=prblm.get_grad(cg_mdl) 	#Compute the gradient
 			if(iter==0):
 				initial_obj_value=obj0 			#For relative objective function value
-				#Saving objective function value
+				#Saving initial objective function value
 				self.restart.save_parameter("obj_initial",initial_obj_value)
 				msg = "iter = %s obj = %s residual norm = %s gradient norm= %s feval = %s"%(iter,obj0,prblm_res.norm(),prblm_grad.norm(),prblm.get_fevals())
 				if(verbose): print(msg)
