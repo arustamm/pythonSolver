@@ -1,7 +1,17 @@
 #Module containing containing Iterative Soft-Thresholding with Cooling solver for linear L1-regularized problems
 from math import isnan
+import numpy as np
 import pySolver
 
+def soft_thresh(x, l):
+	"""
+	   Soft-thresholding function:
+	   x    = [no default] - numpy array; input values
+	   l    = [no default] - float; soft threshold
+	   return:
+	   y    = - numpy array; output clipped values
+	"""
+	return np.sign(x) * np.maximum(np.abs(x) - l, 0.)
 
 class ISTCsolver(pySolver.Solver):
 	"""ISTC solver to solve: linear problem 1/2*| y - Am |_2 + lambda*| m |_1"""
@@ -81,6 +91,7 @@ class ISTCsolver(pySolver.Solver):
 		success = True
 		istc_mdl0 = istc_mdl.clone() #Previous model in case stepping procedure fails
 		istc_mdl_save = istc_mdl0 	 #used also to save results
+		scale_precond = 0.99 * np.sqrt(2) / np.sqrt(prblm.op_norm); #scaling factor applied to operator A for preconditioning
 
 		#Outer iteration loop
 		while True:
@@ -94,8 +105,10 @@ class ISTCsolver(pySolver.Solver):
 			else:
 				inner_iter = self.restart.retrieve_parameter("inner_iter",inner_iter)
 				restart = False
-			obj=prblm.get_obj(istc_mdl) 		#Compute objective function value
 			if(iter == 0):
+				#Applying preconditioning
+				istc_mdl.scale(scale_precond)
+				obj=prblm.get_obj(istc_mdl) 		#Compute objective function value
 				#Saving initial objective function value
 				initial_obj_value = obj
 				self.restart.save_parameter("obj_initial",initial_obj_value)
@@ -115,21 +128,22 @@ class ISTCsolver(pySolver.Solver):
 
 				#Removing preconditioning scaling factor from inverted model
 				istc_mdl_save.copy(istc_mdl)
-				istc_mdl_save.scale(prblm.scale_precond)
+				istc_mdl_save.scale(scale_precond)
 				#Saving results
 				self.save_results(iter,prblm,istc_mdl_save,force_save=False)
 
 				#Stepping for internal iteration model update
 				istc_mdl0.copy(istc_mdl) #Saving model before updating it
-				istc_mdl.scaleAdd(prblm_grad,1.0,-1.0) #Update model x = x + A' [y - Ax]
+				istc_mdl.scaleAdd(prblm_grad,1.0,-scale_precond) #Update model x = x + scale_precond * A' [y - Ax]
 				#########################################
 				#SOFT-THRESHOLDING STEP
 				modl_arr = istc_mdl.getNdArray()
-				modl_arr = np.sign(modl_arr)*np.clip(np.abs(modl_arr)-prblm.lambda_value,0.,None)
+				modl_arr[:] = soft_thresh(modl_arr,prblm.lambda_value)
 				#########################################
 				#Projecting model onto the bounds (if any)
 				if("bounds" in dir(prblm)): prblm.bounds.apply(istc_mdl)
 
+				istc_mdl.scale(scale_precond)
 				obj1=prblm.get_obj(istc_mdl)
 				if(obj1 >= obj0):
 					msg = "Objective function didn't reduce, will terminate solver: obj_new=%s obj_current=%s"%(obj1,obj0)
@@ -158,7 +172,7 @@ class ISTCsolver(pySolver.Solver):
 
 		#Removing preconditioning scaling factor from inverted model
 		istc_mdl_save.copy(istc_mdl)
-		istc_mdl_save.scale(prblm.scale_precond)
+		istc_mdl_save.scale(scale_precond)
 		#Writing last inverted model
 		self.save_results(iter,prblm,istc_mdl_save,force_save=True,force_write=True)
 		if(self.logger): self.logger.addToLog("ITERATIVE SOFT-THRESHOLDING WITH COOLING SOLVER log file end")

@@ -440,14 +440,15 @@ class ProblemL2LinearReg(Problem):
 		return obj
 
 
-class ProblemL1LinearRegISTC(Problem):
-	"""Linear problem 1/2*| y - Am |_2 + lambda*| m |_1 to be used in connection with ISTC solver"""
-	def set_prob(self,model,data,op,op_norm=None,minBound=None,maxBound=None):
+class ProblemL1LinearRegLasso(Problem):
+	"""Convex problem 1/2*| y - Am |_2 + lambda*| m |_1"""
+	def set_prob(self,model,data,op,lambda=None,op_norm=None,minBound=None,maxBound=None):
 		"""
-		   Constructor linear L1-norm inversion problem for ISTC solver:
+		   Constructor of convex L1-norm LASSO inversion problem:
 		   model    	= [no default] - vector class; Initial model vector
 		   data     	= [no default] - vector class; Data vector
 		   op       	= [no default] - linear operator class; L operator
+		   lambda      	= [None] - Regularization weight. Not necessary for ISTC solver but required for ISTA and FISTA
 		   operator_norm= [None] - float; A operator norm that will be evaluated with the power method if not provided
 		   minBound		= [None] - vector class; Minimum value bounds
 		   maxBound		= [None] - vector class; Maximum value bounds
@@ -478,7 +479,6 @@ class ProblemL1LinearRegISTC(Problem):
 		else:
 			#Evaluating operator norm using power method
 			self.op_norm = self.op.powerMethod()
-		self.scale_precond = 0.99 * math.sqrt(2) / math.sqrt(self.op_norm); #scaling factor applied to operator A for preconditioning
 		self.lambda_value=None
 		#Objective function terms (useful to analyze each term)
 		self.obj_terms=[None,None]
@@ -500,10 +500,9 @@ class ProblemL1LinearRegISTC(Problem):
 
 	# define function that computes residuals
 	def resf(self,model):
-		""" y - alpha * A m = rd (self.res[0]) and m = rm (self.res[1]); alpha = preconditioning factor based on operator norm"""
+		""" y - alpha * A m = rd (self.res[0]) and m = rm (self.res[1]);"""
 		if(model.norm()!=0.0):
 			self.op.forward(False,model,self.res.vec1)
-			self.res.vec1.scale(self.scale_precond)
 		else:
 			self.res.zero()
 		#Computing r_d = Lm - d
@@ -523,8 +522,8 @@ class ProblemL1LinearRegISTC(Problem):
 		"""- A'r_data (residual[0]) = g"""
 		#Apply an adjoint modeling
 		self.op.adjoint(False,res.vec1,self.grad)
-		#Applying preconditioning scaling factor
-		self.grad.scale(-self.scale_precond)
+		#Applying negative scaling
+		self.grad.scale(-1.0)
 		return self.grad
 
 

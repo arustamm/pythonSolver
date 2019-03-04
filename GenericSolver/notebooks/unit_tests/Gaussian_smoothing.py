@@ -61,7 +61,7 @@ class Gauss_smooth(pyOperator.Operator):
 			for iz in range(nz):
 				data_arr[ix,iz]=np.dot(self.tmp_array[ix+self.halfx,iz:iz+self.filterz.size],self.filterz)
 		#Applying filter along x
-		self.tmp_array[self.halfx:self.halfx+nx,self.halfz:self.halfz+nz]=data.arr[:]
+		self.tmp_array[self.halfx:self.halfx+nx,self.halfz:self.halfz+nz]=data_arr[:]
 		for ix in range(nx):
 			for iz in range(nz):
 				data_arr[ix,iz]=np.dot(self.tmp_array[ix:ix+self.filterx.size,iz+self.halfz],self.filterx)
@@ -84,19 +84,16 @@ class Gauss_smooth_scipy(pyOperator.Operator):
 		self.setDomainRange(model,model)
 		self.sigmax=sigmax
 		self.sigmaz=sigmaz
-		self.data_tmp = model.clone()
 		return
 
 	def forward(self,add,model,data):
 		"""Forward operator"""
 		self.checkDomainRange(model,data)
-		if(add): self.data_tmp.copy(data)
-		data.zero()
+		if(add): data.zero()
 		#Getting Ndarrays
 		model_arr = model.getNdArray()
 		data_arr  = data.getNdArray()
-		data_arr[:] = gaussian_filter(model_arr, sigma=[self.sigmax,self.sigmaz])
-		if(add): data.scaleAdd(self.data_tmp)
+		data_arr[:] += gaussian_filter(model_arr, sigma=[self.sigmax,self.sigmaz])
 		return
 
 	def adjoint(self,add,model,data):
