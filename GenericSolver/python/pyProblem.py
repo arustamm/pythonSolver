@@ -440,21 +440,21 @@ class ProblemL2LinearReg(Problem):
 		return obj
 
 
-class ProblemL1LinearRegLasso(Problem):
+class ProblemL1Lasso(Problem):
 	"""Convex problem 1/2*| y - Am |_2 + lambda*| m |_1"""
-	def set_prob(self,model,data,op,lambda=None,op_norm=None,minBound=None,maxBound=None):
+	def __init__(self,model,data,op,op_norm=None,lambda_val=None,minBound=None,maxBound=None):
 		"""
 		   Constructor of convex L1-norm LASSO inversion problem:
 		   model    	= [no default] - vector class; Initial model vector
 		   data     	= [no default] - vector class; Data vector
 		   op       	= [no default] - linear operator class; L operator
-		   lambda      	= [None] - Regularization weight. Not necessary for ISTC solver but required for ISTA and FISTA
-		   operator_norm= [None] - float; A operator norm that will be evaluated with the power method if not provided
+		   lambda_val  	= [None] - Regularization weight. Not necessary for ISTC solver but required for ISTA and FISTA
+		   op_norm		= [None] - float; A operator norm that will be evaluated with the power method if not provided
 		   minBound		= [None] - vector class; Minimum value bounds
 		   maxBound		= [None] - vector class; Maximum value bounds
 		"""
 		#Setting the bounds (if any)
-		super(ProblemL1LinearRegISTC,self).__init__(minBound,maxBound)
+		super(ProblemL1Lasso,self).__init__(minBound,maxBound)
 		#Setting internal vector
 		self.model=model.clone()
 		self.dmodel=model.clone()
@@ -479,7 +479,7 @@ class ProblemL1LinearRegLasso(Problem):
 		else:
 			#Evaluating operator norm using power method
 			self.op_norm = self.op.powerMethod()
-		self.lambda_value=None
+		self.lambda_value=lambda_val
 		#Objective function terms (useful to analyze each term)
 		self.obj_terms=[None,None]
 		return
@@ -521,7 +521,7 @@ class ProblemL1LinearRegLasso(Problem):
 	def gradf(self,model,res):
 		"""- A'r_data (residual[0]) = g"""
 		#Apply an adjoint modeling
-		self.op.adjoint(False,res.vec1,self.grad)
+		self.op.adjoint(False,self.grad,res.vec1)
 		#Applying negative scaling
 		self.grad.scale(-1.0)
 		return self.grad

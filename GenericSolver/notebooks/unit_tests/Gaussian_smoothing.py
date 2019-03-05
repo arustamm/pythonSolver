@@ -84,16 +84,17 @@ class Gauss_smooth_scipy(pyOperator.Operator):
 		self.setDomainRange(model,model)
 		self.sigmax=sigmax
 		self.sigmaz=sigmaz
+		self.scaling=2.0*np.pi*sigmax*sigmaz
 		return
 
 	def forward(self,add,model,data):
 		"""Forward operator"""
 		self.checkDomainRange(model,data)
-		if(add): data.zero()
+		if(not add): data.zero()
 		#Getting Ndarrays
 		model_arr = model.getNdArray()
 		data_arr  = data.getNdArray()
-		data_arr[:] += gaussian_filter(model_arr, sigma=[self.sigmax,self.sigmaz])
+		data_arr[:] = self.scaling*gaussian_filter(model_arr, sigma=[self.sigmax,self.sigmaz])
 		return
 
 	def adjoint(self,add,model,data):

@@ -2,6 +2,8 @@
 from math import isnan
 import numpy as np
 import pySolver
+from pyProblem import ProblemL1Lasso
+from copy import deepcopy
 
 def soft_thresh(x, l):
 	"""
@@ -14,9 +16,9 @@ def soft_thresh(x, l):
 	return np.sign(x) * np.maximum(np.abs(x) - l, 0.)
 
 class ISTCsolver(pySolver.Solver):
-	"""ISTC solver to solve: linear problem 1/2*| y - Am |_2 + lambda*| m |_1"""
+	"""ISTC solver to solve: convex problem 1/2*| y - Am |_2 + lambda*| m |_1"""
 
-	def __init__(self,stoppr,inner_it,cooling_start,cooling_end,steepest=False,logger=None):
+	def __init__(self,stoppr,inner_it,cooling_start,cooling_end,logger=None):
 		"""
 		   Constructor for ISTC Solver
 		"""
@@ -30,6 +32,8 @@ class ISTCsolver(pySolver.Solver):
 		self.setDefaults()
 
 		#ISTC parameters
+		if(self.stoppr.niter<=0):
+			raise ValueError("ERROR! niter for stopper object must be positive and greater than 0!")
 		self.inner_it=inner_it #number of inner iterations, the outer iterations are taken care by the stopper
 		# cooling_start and cooling_end are numbers between 0 and 1 such that cooling_start <= cooling_end
 		if(not (0<=cooling_start<=1) or not (0<=cooling_end<=1) or (cooling_end<cooling_start)): raise ValueError("ERROR! cooling_start and cooling_end must be within [0,1] interval and cooling_start <= cooling_end")
@@ -44,6 +48,11 @@ class ISTCsolver(pySolver.Solver):
 
 	def run(self,prblm,verbose=False,restart=False):
 		"""Running ISTC solver"""
+		#Checking if the provided problem is L1-LASSO
+		if(not isinstance(prblm,ProblemL1Lasso)):
+			raise TypeError("ERROR! Provided inverse problem not ProblemL1Lasso!")
+		#Computing preconditioning
+		scale_precond = 0.99 * np.sqrt(2) / prblm.op_norm; #scaling factor applied to operator A for preconditioning
 		if(not restart):
 			msg="ITERATIVE SOFT-THRESHOLDING WITH COOLING SOLVER log file\n"
 			#Printing restart folder
@@ -59,20 +68,23 @@ class ISTCsolver(pySolver.Solver):
 			istc_mdl.zero()	# modl = 0
 			#Other internal variables
 			iter = 0
-			#Computing cooling parameters
+			#Computing cooling schedule for lambda values
+			#istc_mdl.scale(scale_precond) #Currently unnecessary since starting model is zero
 			prblm_grad=prblm.get_grad(istc_mdl)
-			grad_arr = prblm_grad.getNdArray()
+			grad_arr = np.copy(prblm_grad.getNdArray())
 			grad_arr = np.abs(grad_arr.flatten())					# |A'y| and removing zero elements
-			grad_arr = modl_arr[np.nonzero(grad_arr)]
+			grad_arr = grad_arr[np.nonzero(grad_arr)]
 			if(grad_arr.size == 0):
 				raise ValueError("ERROR! -- A'y is returning a null vector (i.e., y in the Null space of A')")
 			#Sorting the elements in descending order
 			grad_arr.sort()
 			grad_arr = np.flip(grad_arr,0)
 			#Setting fraction of points sampled by the outer loop (linear sampling)
-			samples=np.round(np.linspace(cooling_start,cooling_end,outer_it)*modl_arr.size)
+			samples=np.array(np.round(np.linspace(self.cooling_start,self.cooling_end,self.stoppr.niter)*grad_arr.size),dtype=np.uint64,copy=False)
 			#Lambda values to be used during inversion for each outer loop iteration
 			lambda_values=grad_arr[samples]
+			#Scaling by the preconditioning
+			lambda_values*=scale_precond
 			#Saving the lambda values to avoid recomputation if restart is used
 			self.restart.save_parameter("lambda_values",lambda_values)
 		else:
@@ -91,7 +103,6 @@ class ISTCsolver(pySolver.Solver):
 		success = True
 		istc_mdl0 = istc_mdl.clone() #Previous model in case stepping procedure fails
 		istc_mdl_save = istc_mdl0 	 #used also to save results
-		scale_precond = 0.99 * np.sqrt(2) / np.sqrt(prblm.op_norm); #scaling factor applied to operator A for preconditioning
 
 		#Outer iteration loop
 		while True:
@@ -113,7 +124,7 @@ class ISTCsolver(pySolver.Solver):
 				initial_obj_value = obj
 				self.restart.save_parameter("obj_initial",initial_obj_value)
 			while(inner_iter < self.inner_it):
-				obj=prblm.get_obj(istc_mdl) 		#Compute objective function value
+				obj0=prblm.get_obj(istc_mdl) 		#Compute objective function value
 				prblm_grad=prblm.get_grad(istc_mdl) #Compute the gradient g = - A' [y - Ax]
 				if(inner_iter == 0):
 					msg = "	Inner_iter = %s obj = %s residual norm = %s gradient norm= %s feval = %s"%(inner_iter,obj0,prblm.get_rnorm(),prblm.get_gnorm(),prblm.get_fevals())
@@ -143,7 +154,6 @@ class ISTCsolver(pySolver.Solver):
 				#Projecting model onto the bounds (if any)
 				if("bounds" in dir(prblm)): prblm.bounds.apply(istc_mdl)
 
-				istc_mdl.scale(scale_precond)
 				obj1=prblm.get_obj(istc_mdl)
 				if(obj1 >= obj0):
 					msg = "Objective function didn't reduce, will terminate solver: obj_new=%s obj_current=%s"%(obj1,obj0)
@@ -151,7 +161,7 @@ class ISTCsolver(pySolver.Solver):
 					#Writing on log file
 					if(self.logger): self.logger.addToLog(msg)
 					#Copying back to the previous solution
-					istc_mdl.set_model(istc_mdl0)
+					istc_mdl.copy(istc_mdl0)
 					break
 
 				#Saving current model in case of restart and other parameters
@@ -160,13 +170,13 @@ class ISTCsolver(pySolver.Solver):
 				self.restart.save_vector("istc_mdl",istc_mdl)
 
 				#iteration info
-				msg = "Inner_iter = %s obj = %s residual norm = %s gradient norm= %s feval = %s"%(inner_iter,obj1,prblm_res.norm(),prblm_grad.norm(),prblm.get_fevals())
+				inner_iter += 1
+				msg = "	Inner_iter = %s obj = %s residual norm = %s gradient norm= %s feval = %s"%(inner_iter,obj1,prblm.get_rnorm(),prblm_grad.norm(),prblm.get_fevals())
 				if(verbose): print(msg)
 				#Writing on log file
-				if(self.logger): self.logger.addToLog("\n"+msg)
+				if(self.logger): self.logger.addToLog(msg)
 				#Check if either objective function value or gradient norm is NaN
 				if(isnan(obj1) or isnan(prblm_grad.norm())): raise ValueError("ERROR! Either gradient norm or objective function value NaN!")
-				inner_iter += 1
 			iter = iter + 1
 			if (self.stoppr.run(prblm,iter,initial_obj_value,verbose)): break
 

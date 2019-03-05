@@ -38,7 +38,7 @@ class Operator:
 			raise ValueError("Provided data vector does not match operator range")
 		return
 
-	def powerMethod(self,verbose=False,tol=1e-6,n_iter=None,square=False,return_vec=False):
+	def powerMethod(self,verbose=False,tol=1e-8,n_iter=None,square=False,return_vec=False):
 		"""
 		   Function to estimate maximum eigenvalue of the operator
 		   verbose    = [False] - boolean; Flag to print information to screen as the method is being run
