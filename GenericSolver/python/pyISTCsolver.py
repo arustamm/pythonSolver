@@ -20,7 +20,12 @@ class ISTCsolver(pySolver.Solver):
 
 	def __init__(self,stoppr,inner_it,cooling_start,cooling_end,logger=None):
 		"""
-		   Constructor for ISTC Solver
+		   Constructor for ISTC Solver:
+		   stoppr   	 = [no default] - stopper class; Stopper object to terminate inversion
+		   inner_it 	 = [no default] - integer; Number of inner iterations. The outer iterations are taken care by the stopper
+		   cooling_start = [no default] - float; Start of cooling continuation as fraction of size of sorted array |A'y|
+		   cooling_end 	 = [no default] - float; End of cooling continuation as fraction of size of sorted array |A'y|
+		   logger   	 = [None] - logger class; Logger object to write inversion log file
 		"""
 		#Defining stopper object
 		self.stoppr=stoppr

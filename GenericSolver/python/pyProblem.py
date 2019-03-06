@@ -442,13 +442,13 @@ class ProblemL2LinearReg(Problem):
 
 class ProblemL1Lasso(Problem):
 	"""Convex problem 1/2*| y - Am |_2 + lambda*| m |_1"""
-	def __init__(self,model,data,op,op_norm=None,lambda_val=None,minBound=None,maxBound=None):
+	def __init__(self,model,data,op,op_norm=None,lambda_value=None,minBound=None,maxBound=None):
 		"""
 		   Constructor of convex L1-norm LASSO inversion problem:
 		   model    	= [no default] - vector class; Initial model vector
 		   data     	= [no default] - vector class; Data vector
 		   op       	= [no default] - linear operator class; L operator
-		   lambda_val  	= [None] - Regularization weight. Not necessary for ISTC solver but required for ISTA and FISTA
+		   lambda_value	= [None] - Regularization weight. Not necessary for ISTC solver but required for ISTA and FISTA
 		   op_norm		= [None] - float; A operator norm that will be evaluated with the power method if not provided
 		   minBound		= [None] - vector class; Minimum value bounds
 		   maxBound		= [None] - vector class; Maximum value bounds
@@ -479,7 +479,7 @@ class ProblemL1Lasso(Problem):
 		else:
 			#Evaluating operator norm using power method
 			self.op_norm = self.op.powerMethod()
-		self.lambda_value=lambda_val
+		self.lambda_value=lambda_value
 		#Objective function terms (useful to analyze each term)
 		self.obj_terms=[None,None]
 		return

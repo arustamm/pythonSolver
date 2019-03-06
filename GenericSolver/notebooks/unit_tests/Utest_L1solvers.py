@@ -70,11 +70,20 @@ if __name__ == '__main__':
 	L1LassoISTC = Prblm.ProblemL1Lasso(initial_model,data,Gauss_op,op_norm=op_norm)
 	Stop1  = Stopper.BasicStopper(niter=150)
 	ISTCsolver = ISTC.ISTCsolver(Stop1,300,cooling_start=0.01,cooling_end=0.99,logger=logger("ISTClog.txt"))
-	ISTCsolver.run(L1LassoISTC,True)
+	# ISTCsolver.run(L1LassoISTC,True)
 	# genericIO.defaultIO.writeVector("inverted_model_L1_ISTC.H",L1LassoISTC.model)
 
 	#Solving using the ISTA
-	L1LassoISTA = Prblm.ProblemL1Lasso(initial_model,data,Gauss_op,op_norm=op_norm)
+	L1LassoISTA = Prblm.ProblemL1Lasso(initial_model,data,Gauss_op,op_norm=op_norm,lambda_value=0.1)
+	ISTAsolver = ISTA.ISTAsolver(Stop,logger=logger("ISTAlog.txt"))
+	# ISTAsolver.run(L1LassoISTA,verbose=True)
+	# genericIO.defaultIO.writeVector("inverted_model_L1_ISTA.H",L1LassoISTA.model)
+
+	#Solving using the FISTA
+	L1LassoFISTA = Prblm.ProblemL1Lasso(initial_model,data,Gauss_op,op_norm=op_norm,lambda_value=1.0)
+	FISTAsolver = ISTA.ISTAsolver(Stop,fast=True,logger=logger("FISTAlog.txt"))
+	FISTAsolver.run(L1LassoFISTA,verbose=True)
+	genericIO.defaultIO.writeVector("inverted_model_L1_FISTA.H",L1LassoFISTA.model)
 
 
 
