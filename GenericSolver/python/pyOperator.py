@@ -218,6 +218,26 @@ class scalingOp(Operator):
 		model.scaleAdd(data,sc,self.scalar)
 		return
 
+class ZeroOp(Operator):
+	"""Zero matrix operator; useful for Jacobian matrices that are zeros"""
+
+	def __init__(self,domain,range):
+		self.setDomainRange(domain,range)
+		return
+
+	def forward(self,add,model,data):
+		self.checkDomainRange(model,data)
+		if (not add):
+			data.zero()
+		return
+
+	def adjoint(self,add,model,data):
+		self.checkDomainRange(model,data)
+		if (not add):
+			model.zero()
+		return
+
+
 class IdentityOp(Operator):
 	"""Identity operator"""
 
@@ -320,7 +340,12 @@ class NonLinearOperator(Operator):
 	"""
 
 	def __init__(self,nl_op,lin_op,set_background_func=dummy_set_background):
-		"""Constructor for non-linear operator class"""
+		"""
+		   Constructor for non-linear operator class:
+		   nl_op				= [no default] - operator class; Non-linear operator class where only the forward is overwritten
+		   lin_op				= [no default] - operator class; Linear Jacobian operator class where only the forward is overwritten (if not necessary, use pyOperator.ZeroOp)
+		   set_background_func	= [dummy_set_background] - function pointer; Function to set the model vector on which the Jacobian operator is evaluated
+		"""
 		#Setting non-linear and linearized operators
 		self.nl_op = nl_op
 		self.lin_op = lin_op

@@ -17,7 +17,7 @@ class VpOperator(pyOp.Operator):
 			h_nl    	= [no default] - non-linear operator class; Non-linear operator class
 			h_lin   	= [no default] - operator class; Linear operator class
 			set_nl  	= [no default] - class function pointer; Class function to set non-linear part within h_lin
-			set_lin_jac = [no default] - class function pointer; Class function to set linear part within the Jacobian h_nl
+			set_lin_jac = [no default] - class function pointer; Class function to set linear part within the Jacobian h_nl (if not necessary, use pyOperator.dummy_set_background)
 			#Optional arguments:
 			set_lin 	= [None] - class function pointer; Class function to set linear part within h_nl (not used during an inversion if ProblemL2VpReg is used)
 		"""
