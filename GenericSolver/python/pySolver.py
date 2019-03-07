@@ -151,12 +151,8 @@ class Solver:
 				model_file   = self.prefix+"_model.H"				#File name in which the model vector is saved
 				self.modelSet.writeSet(model_file)
 				#Using the modelSet to write inverted model vector
-				try:
-					rm_file(inv_mod_file)								#Removing inverted model file before writing it
-				except OSError:
-					pass
 				self.modelSet.append(self.inv_model)				#Adding inverted model vector to set
-				self.modelSet.writeSet(inv_mod_file)				#Writing inverted model file
+				self.modelSet.writeSet(inv_mod_file,mode="w")		#Writing inverted model file
 			#Writing gradient vectors on disk if requested
 			if(self.save_grad and self.prefix != None):
 				grad_file = self.prefix+"_gradient.H"					#File name in which the gradient vector is saved

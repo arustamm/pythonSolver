@@ -149,8 +149,8 @@ if __name__ == '__main__':
 	L2Prob_reg = Prblm.ProblemL2LinearReg(model_vec_sym,data_vec_sym,MatMultSym,0.0001)
 	# L2Prob_reg.estimate_epsilon(True)
 	#Running the solver
-	LCGsolver.setDefaults(iter_sampling=100,save_obj=True,prefix="lin_test")
-	# LCGsolver.run(L2Prob_reg,verbose=True)
+	LCGsolver.setDefaults(iter_sampling=100,iter_buffer_size=3,save_obj=True,save_model=True,prefix="lin_test")
+	LCGsolver.run(L2Prob_reg,verbose=True)
 
 	#Testing LCG for symmetric systems
 	low_bound = model_vec_sym.clone()

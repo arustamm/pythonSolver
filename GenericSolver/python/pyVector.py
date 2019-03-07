@@ -152,18 +152,20 @@ class vectorSet:
 			self.vecSet.append(vec_in)
 		return
 
-	def writeSet(self,filename):
+	def writeSet(self,filename,mode="a"):
 		"""Method to write to SEPlib file (by default it appends vectors to file)"""
+		if(not (mode in "aw")):
+			raise ValueError("ERROR! mode must be either a (append) or w (write)")
 		for ivec in self.vecSet:
-			self.writeVec(filename,ivec)
+			self.writeVec(filename,ivec,mode)
 		self.vecSet = [] #List of vectors of the set
 		return
 
-	def writeVec(self,filename,vec):
+	def writeVec(self,filename,vec,mode):
 		"""Method to write to vector to file within a Vector set"""
 		#Checking what kind of vector to write
 		if(isinstance(vec,vectorIC) or isinstance(vec,vectorOC)):
-			vec.writeVec(filename,mode="a")
+			vec.writeVec(filename,mode)
 		elif(isinstance(vec,superVector)):
 			#Writing two files for the two components
 			filename_comp1 = "".join(filename.split('.')[:-1])+"_comp1.H"
@@ -173,8 +175,11 @@ class vectorSet:
 			self.writeVec(filename_comp2,vec.vec2)
 		elif(genIO_found):
 			if(isinstance(vec,SepVector.vector)):
-				genericIO.defaultIO.appendVector(filename,vec,flush=1)
-				genericIO.defaultIO.closeAppendFile(filename)
+				if(mode == "a"):
+					genericIO.defaultIO.appendVector(filename,vec,flush=1)
+					genericIO.defaultIO.closeAppendFile(filename)
+				if(mode == "w"):
+					genericIO.defaultIO.writeVector(filename,vec)
 		return
 
 class superVector(vector):
