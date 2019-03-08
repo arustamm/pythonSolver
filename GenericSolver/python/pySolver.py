@@ -188,7 +188,7 @@ class Solver:
 				#Writing each term of the objective function
 				if(self.obj_terms):
 					for iterm in range(len(self.obj_terms[0])):
-						obj_file = self.prefix+"_obj_comp%s.H"%(iterm)	#File name in which the objective function is saved
+						obj_file = self.prefix+"_obj_comp%s.H"%(iterm+1)	#File name in which the objective function is saved
 						write_file(obj_file,np.array([objs[iterm] for objs in self.obj_terms]))
 			#Writing current inverted model and model vectors on disk if requested
 			if(self.save_model and self.prefix != None):
