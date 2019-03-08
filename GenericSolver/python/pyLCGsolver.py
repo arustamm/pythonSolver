@@ -11,6 +11,8 @@ class LCGsolver(pySolver.Solver):
 		"""
 		   Constructor for LCG Solver
 		"""
+		#Calling parent construction
+		super(LCGsolver,self).__init__()
 		#Defining stopper object
 		self.stoppr=stoppr
 		#Whether to run steepest descent or not
@@ -19,8 +21,6 @@ class LCGsolver(pySolver.Solver):
 		self.logger=logger
 		#Overwriting logger of the Stopper object
 		self.stoppr.logger=self.logger
-		#Setting defaults for saving results
-		self.setDefaults()
 		return
 
 	def __del__(self):

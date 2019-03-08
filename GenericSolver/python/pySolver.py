@@ -3,6 +3,7 @@ import pyProblem
 import pyVector as Vec
 import numpy as np
 import os
+import re
 #Functions and modules necessary for writing on disk
 import pickle
 import atexit
@@ -20,6 +21,33 @@ class Solver:
 	#Default class methods/functions
 	def __init__(self):
 		"""Default class constructor for Solver"""
+		#Parameter for saving results
+		self.save_obj = False
+		self.save_res = False
+		self.save_grad= False
+		self.save_model = False
+		self.flush_memory = False
+
+		self.prefix = None
+
+		#Iteration axis-sampling parameters
+		self.iter_buffer_size=None
+		self.iter_sampling=1
+
+		#Lists of the results (list and vector Sets)
+		self.obj=list()
+		self.obj_terms=list()
+		self.model=list()
+		self.res=list()
+		self.grad=list()
+		self.modelSet=Vec.vectorSet()
+		self.resSet=Vec.vectorSet()
+		self.gradSet=Vec.vectorSet()
+		self.inv_model=None
+		self.iter_written=0
+
+		#Set Restart object
+		self.restart=Restart()
 		return
 
 	def __del__(self):
@@ -33,7 +61,7 @@ class Solver:
 		self.prefix = prefix
 		return
 
-	def setDefaults(self,save_obj=False,save_res=False,save_grad=False,save_model=False,prefix=None,iter_buffer_size=None,iter_sampling=1,restart_folder=None,flush_memory=False):
+	def setDefaults(self,save_obj=False,save_res=False,save_grad=False,save_model=False,prefix=None,iter_buffer_size=None,iter_sampling=1,flush_memory=False):
 		"""
 		   Function to set parameters for result saving.
 		   save_obj    = [False] - boolean; Flag to save objective function values into the list self.obj
@@ -44,7 +72,6 @@ class Solver:
 		   iter_buffer_size = [None] - int; Number of steps to save before flushing results to disk (by default the solver waits until all iterations are done)
 		   iter_sampling = [1] - int; Sampling of the iteration axis
 		   flush_memory = [False] - boolean; Whether to keep results into the object lists or clean those once inversion is completed or results have been written on disk
-		   restart_folder = [None] - string; Restart folder name if disk restart is necessary. If a restart is needed within a Python session, then this argument is unneccessary
 		"""
 
 		#Parameter for saving results
@@ -73,11 +100,29 @@ class Solver:
 		self.inv_model=None							#Temporary saved inverted model
 		self.iter_written=0							#Counter to keep track
 
-		#Set Restart object
-		self.restart=Restart()
+		return
+
+	def get_restart(self,log_file):
+		"""
+		   Function to retrieve restart folder from log file
+		   It enables the user to use restart flag on self.run()
+		   log_file = [None] - string;
+		"""
+		restart_folder = None
+		#Obtaining restart folder path
+		reg_prog = re.compile("Restart folder: ([^\s]+)")
+		if(not os.path.isfile(log_file)):
+			raise OSError("ERROR! No %s file found!"%(log_file))
+		for line in reversed(open(log_file).readlines()):
+			if (restart_folder == None):
+				find = reg_prog.search(line)
+				if find:
+					restart_folder = find.group(1)
 		#Setting restart folder if user needs to do so
 		if(restart_folder != None):
 			self.restart.restart_folder = restart_folder
+		else:
+			print("WARNING! No restart folder's path was found in %s"%(log_file))
 		return
 
 

@@ -9,7 +9,7 @@ import sys_util
 HOME=os.environ["HOME"]
 datapath=None
 #Checking environment definition first
-if("DATAPATH" in os.environ): 
+if("DATAPATH" in os.environ):
 	datapath = os.environ["DATAPATH"]
 #Checking local directory
 elif os.path.isfile('.datapath'):
@@ -42,7 +42,8 @@ def get_par(filename,par):
 		reg_prog = re.compile("%s=(\'(.*?)\'|\"(.*?)\")"%(par))
 	else:
 		reg_prog = re.compile("%s=([^\s]+)"%(par))
-	if(not os.path.isfile(filename)): raise OSError("ERROR! No %s file found!"%(filename))
+	if(not os.path.isfile(filename)):
+		raise OSError("ERROR! No %s file found!"%(filename))
 	for line in reversed(open(filename).readlines()):
 		if (info == None):
 			find = reg_prog.search(line)
@@ -56,11 +57,11 @@ def get_par(filename,par):
 		info=info.replace('"','')
 		info=info.replace('\'','')
 	return info
-	
+
 def get_binary(filename):
 	""" Function to obtain binary file associated with a given header file"""
 	return get_par(filename,"in")
-	
+
 def get_axes(filename):
 	"""Function returning all axis information related to a header file"""
 	axes=[]
@@ -70,7 +71,7 @@ def get_axes(filename):
 		try:
 			axis_n=int(get_par(filename,par="n%s"%(iaxis+1)))
 		except IOError as exc:
-			if(iaxis == 0): 
+			if(iaxis == 0):
 				print(exc.args)
 				print("ERROR! First axis parameters must be found! Returning None")
 				return None
@@ -81,7 +82,7 @@ def get_axes(filename):
 		try:
 			axis_o=float(get_par(filename,par="o%s"%(iaxis+1)))
 		except IOError as exc:
-			if(iaxis == 0): 
+			if(iaxis == 0):
 				print(exc.args)
 				print("ERROR! First axis parameters must be found! Returning None")
 				return None
@@ -92,7 +93,7 @@ def get_axes(filename):
 		try:
 			axis_d=float(get_par(filename,par="d%s"%(iaxis+1)))
 		except IOError as exc:
-			if(iaxis == 0): 
+			if(iaxis == 0):
 				print(exc.args)
 				print("ERROR! First axis parameters must be found! Returning None")
 				return None
@@ -105,9 +106,9 @@ def get_axes(filename):
 		except IOError as exc:
 			#Default value for an unset axis
 			axis_lab = "Undefined"
-		axes.append([axis_n,axis_o,axis_d,axis_lab])	
+		axes.append([axis_n,axis_o,axis_d,axis_lab])
 	return axes
-	
+
 def get_num_axes(filename):
 	"""Function to obtain number of axes in a header file"""
 	#Obtaining elements in each dimensions
@@ -139,8 +140,8 @@ def read_file(filename,formatting='>f',mem_order="C"):
 	else:
 		data = np.asfortranarray(np.reshape(data,shape,order=mem_order))
 	fid.close()
-	return [data, axis_info]	
-	
+	return [data, axis_info]
+
 def write_file(filename,data,axis_info=None,formatting='>f'):
 	"""Function for writing header files"""
 	global datapath
@@ -166,7 +167,4 @@ def write_file(filename,data,axis_info=None,formatting='>f'):
 			fid.write("n%s=%s o%s=%s d%s=%s label%s='%s'\n"%(ax_id,ax_info[0],ax_id,ax_info[1],ax_id,ax_info[2],ax_id,ax_info[3]))
 		fid.write("in='%s'\n"%(binfile))
 	fid.close()
-	return 
-	
-	
-
+	return

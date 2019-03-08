@@ -27,14 +27,14 @@ class ISTCsolver(pySolver.Solver):
 		   cooling_end 	 = [no default] - float; End of cooling continuation as fraction of size of sorted array |A'y|
 		   logger   	 = [None] - logger class; Logger object to write inversion log file
 		"""
+		#Calling parent construction
+		super(ISTCsolver,self).__init__()
 		#Defining stopper object
 		self.stoppr=stoppr
 		#Logger object to write on log file
 		self.logger=logger
 		#Overwriting logger of the Stopper object
 		self.stoppr.logger=self.logger
-		#Setting defaults for saving results
-		self.setDefaults()
 
 		#ISTC parameters
 		if(self.stoppr.niter<=0):

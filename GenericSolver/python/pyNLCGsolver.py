@@ -143,6 +143,8 @@ class NLCGsolver(pySolver.Solver):
 		   Constructor for NLCG Solver
 
 		"""
+		#Calling parent construction
+		super(NLCGsolver,self).__init__()
 		#Defining stopper object
 		self.stoppr=stoppr
 		#Defining stepper object
@@ -156,8 +158,6 @@ class NLCGsolver(pySolver.Solver):
 		self.logger=logger
 		#Overwriting logger of the Stopper object
 		self.stoppr.logger=self.logger
-		#Setting defaults for saving results
-		self.setDefaults()
 		return
 
 	def __del__(self):

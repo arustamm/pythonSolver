@@ -32,6 +32,8 @@ class LBFGSsolver(pySolver.Solver):
 		   prefix = [None]; Prefix of the the files in which the vectors of the estimate Hessian inverse will be saved
 		   logger = [None]; Logger object to save inversion information at runtime
 		"""
+		#Calling parent construction
+		super(LBFGSsolver,self).__init__()
 		#Defining stopper object
 		self.stoppr=stoppr
 		#Defining stepper object
@@ -48,8 +50,6 @@ class LBFGSsolver(pySolver.Solver):
 		self.m_steps = m_steps
 		self.prefix = prefix
 		self.tmp_vector = None #A copy of the model vector will be create when the function run is invoked
-		#Setting defaults for saving results
-		self.setDefaults()
 		return
 
 	def save_hessian_estimate(self,index,iter):

@@ -24,6 +24,8 @@ class ISTAsolver(pySolver.Solver):
 		   fast    	= [False] - boolean; Flag if the apply the fast-ISTA (FISTA)
 		   logger   = [None] - logger class; Logger object to write inversion log file
 		"""
+		#Calling parent construction
+		super(ISTAsolver,self).__init__()
 		#Defining stopper object
 		self.stoppr=stoppr
 		#Logger object to write on log file
@@ -32,9 +34,6 @@ class ISTAsolver(pySolver.Solver):
 		self.stoppr.logger=self.logger
 		#Setting the fast flag
 		self.fast = fast
-		#Setting defaults for saving results
-		self.setDefaults()
-
 		return
 
 	def __del__(self):
