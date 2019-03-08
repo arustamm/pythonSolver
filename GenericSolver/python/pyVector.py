@@ -227,8 +227,8 @@ class superVector(vector):
 
 	def rand(self,snr=1.0):
 		"""Function to randomize a vector"""
-		self.vec1.rand(snr)
-		self.vec2.rand(snr)
+		self.vec1.rand()
+		self.vec2.rand()
 		return
 
 	def clone(self):
