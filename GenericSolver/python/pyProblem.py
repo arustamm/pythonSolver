@@ -378,6 +378,7 @@ class ProblemL2LinearReg(Problem):
 		prblm_grad = self.get_grad(self.model)  #Compute first gradient
 		prblm_res = self.get_res(prblm_grad)	#Compute residual arising from the gradient
 		#Balancing the first gradient in the 'extended-data' space
+		prblm_res.vec1.scaleAdd(self.data)	#Remove data vector (Lg0 - d + d)
 		res_data_norm=prblm_res.vec1.norm()
 		res_model_norm=prblm_res.vec2.norm()
 		if (isnan(res_model_norm) or isnan(res_data_norm)):
