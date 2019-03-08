@@ -171,8 +171,8 @@ class vectorSet:
 			filename_comp1 = "".join(filename.split('.')[:-1])+"_comp1.H"
 			filename_comp2 = "".join(filename.split('.')[:-1])+"_comp2.H"
 			#Writing files (recursively)
-			self.writeVec(filename_comp1,vec.vec1)
-			self.writeVec(filename_comp2,vec.vec2)
+			self.writeVec(filename_comp1,vec.vec1,mode)
+			self.writeVec(filename_comp2,vec.vec2,mode)
 		elif(genIO_found):
 			if(isinstance(vec,SepVector.vector)):
 				if(mode == "a"):
