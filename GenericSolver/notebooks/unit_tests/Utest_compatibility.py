@@ -56,15 +56,15 @@ class MatMult_SepVector(Op.Operator):
 
 if __name__ == '__main__':
 	#Create stopper
-	niter = 10000
+	niter = 60
 	Stop  = Stopper.BasicStopper(niter=niter)
 	#Create solver
 	LCGsolver = LCG.LCGsolver(Stop)
 	#Create a sepVector
 	nsamp=200
-	model=SepVector.getSepVector(ns=[1,nsamp],storage="dataDouble")
-	data=SepVector.getSepVector(ns=[1,nsamp],storage="dataDouble")
-	A = np.matrix(np.zeros((nsamp,nsamp),dtype=np.float64))
+	model=SepVector.getSepVector(ns=[1,nsamp])#,storage="dataDouble")
+	data=SepVector.getSepVector(ns=[1,nsamp])#,storage="dataDouble")
+	A = np.matrix(np.zeros((nsamp,nsamp)))
 	np.fill_diagonal(A, -2)
 	np.fill_diagonal(A[1:], 1)
 	np.fill_diagonal(A[:,1:], 1)
@@ -72,16 +72,13 @@ if __name__ == '__main__':
 	MatMultSym = MatMult_SepVector(A,model,data)
 	#Testing operator
 	model.rand()
-	print(model.norm())
 	MatMultSym.forward(False,model,data)
 	MatMultSym.adjoint(False,model,data)
-	print(data.norm())
-	print(model.norm())
 	#Testing solver
 	data_np = data.getNdArray()
 	data_np.fill(1.)
 	model.zero()
 	#Create L2-norm linear problem
-	L2Prob_sym = Prblm.ProblemL2Linear(model,data,MatMultSym)
-	LCGsolver.setDefaults(iter_sampling=100,save_obj=True,iter_buffer_size=100,save_model=True,prefix="compatibility_inversion")
-	LCGsolver.run(L2Prob_sym)
+	L2Prob_sym = Prblm.ProblemL2LinearReg(model,data,MatMultSym,0.01)
+	LCGsolver.setDefaults(iter_sampling=35,save_obj=True,iter_buffer_size=1,save_model=True,save_grad=True,save_res=True,prefix="compatibility_inversion")
+	LCGsolver.run(L2Prob_sym,True)

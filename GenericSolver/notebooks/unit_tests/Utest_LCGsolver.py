@@ -104,7 +104,7 @@ if __name__ == '__main__':
 	#Create L2-norm linear problem
 	L2Prob = Prblm.ProblemL2Linear(model_vec,data_vec,MatMult)
 	#Create stopper
-	niter = 2000
+	niter = 10
 	Stop  = Stopper.BasicStopper(niter=niter)
 	#Create solver
 	LCGsolver = LCG.LCGsolver(Stop)
@@ -149,9 +149,9 @@ if __name__ == '__main__':
 	L2Prob_reg = Prblm.ProblemL2LinearReg(model_vec_sym,data_vec_sym,MatMultSym,0.0001)
 	# L2Prob_reg.estimate_epsilon(True)
 	#Running the solver
-	LCGsolver.setDefaults(iter_sampling=100,iter_buffer_size=3,save_obj=True,save_model=True,prefix="lin_test")
+	LCGsolver.setDefaults(iter_sampling=100,iter_buffer_size=1,save_obj=True,save_model=True,save_grad=True,save_res=True,prefix="lin_test")
 	LCGsolver.run(L2Prob_reg,verbose=True)
-
+	
 	#Testing LCG for symmetric systems
 	low_bound = model_vec_sym.clone()
 	low_bound.set(-2000.)
