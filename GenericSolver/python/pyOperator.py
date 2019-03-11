@@ -263,8 +263,8 @@ class IdentityOp(Operator):
 
 class ChainOperator(Operator):
 	"""
-	   		Chain of two operator class
-	   			d = B A m
+			Chain of two operator class
+				d = B A m
 	"""
 	def __init__(self,op1,op2):
 		"""Constructor of a Chain of operators"""
@@ -293,10 +293,10 @@ class ChainOperator(Operator):
 
 class stackOperator(Operator):
 	"""
-		      Stack of operators class
-	        		| d1 |   | A |
-   			   Cm = |    | = |   | m
-		            | d2 |   | B |
+			  Stack of operators class
+					| d1 |   | A |
+			   Cm = |    | = |   | m
+					| d2 |   | B |
 	"""
 
 	def __init__(self,op1,op2):
@@ -401,10 +401,10 @@ class CombNonlinearOp(NonLinearOperator):
 
 class stackNonOperator(NonLinearOperator):
 	"""
-		    Stack of operators class
-	        		| d1 |   | f(m) |
-   			 h(m) = |    | = |      |
-		            | d2 |   | g(m) |
+			Stack of operators class
+					| d1 |   | f(m) |
+			 h(m) = |    | = |      |
+					| d2 |   | g(m) |
 	"""
 
 	def __init__(self,nl_op1,nl_op2):

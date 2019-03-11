@@ -65,7 +65,7 @@ if __name__ == '__main__':
 	# genericIO.defaultIO.writeVector("inverted_model_L2_Reg.H",L2ProbReg.model)
 
 	#L1 problem
-	# op_norm = Gauss_op.powerMethod(True)
+	op_norm = Gauss_op.powerMethod(True)
 	op_norm = 15780.002254113555 #Estimated from the previous line using the power method
 	L1LassoISTC = Prblm.ProblemL1Lasso(initial_model,data,Gauss_op,op_norm=op_norm)
 	Stop1  = Stopper.BasicStopper(niter=150)
