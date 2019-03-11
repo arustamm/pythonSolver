@@ -148,7 +148,7 @@ class Solver:
 			self.obj.append(objf_value)
 			#Checking if the objective function has multiple terms
 			if("obj_terms" in dir(prblm)):
-				self.obj_terms.append(deepcopy(prblm.obj_terms+1))
+				self.obj_terms.append(deepcopy(prblm.obj_terms))
 		if(iter%self.iter_sampling == 0 or force_save):
 			if(self.save_model):
 				self.modelSet.append(mod_save)
