@@ -179,7 +179,13 @@ class vectorSet:
 					genericIO.defaultIO.appendVector(filename,vec,flush=1)
 					genericIO.defaultIO.closeAppendFile(filename)
 				if(mode == "w"):
-					genericIO.defaultIO.writeVector(filename,vec)
+					#genericIO.defaultIO.writeVector(filename,vec)
+					#Using sep_util because of problem with os.remove
+					hyper = vec.getHyper()
+					ax_info = []
+					for iaxis in range(hyper.getNdim()):
+						ax_info.append([hyper.getAxis(iaxis).n,hyper.getAxis(iaxis).o,hyper.getAxis(iaxis).d,hyper.getAxis(iaxis).label])
+					sep_util.write_file(filename,vec.getNdArray(),ax_info)
 		return
 
 class superVector(vector):

@@ -30,8 +30,10 @@ if(datapath == None): raise IOError("SEP datapath not found")
 def rm_file(filename):
 	"""File to remove header and binary files"""
 	binfile=get_binary(filename)
-	if os.path.isfile(filename): os.remove(filename)
-	if os.path.isfile(binfile): os.remove(binfile)
+	if os.path.isfile(filename):
+		os.remove(filename)
+	if os.path.isfile(binfile):
+		os.remove(binfile)
 	return
 
 def get_par(filename,par):

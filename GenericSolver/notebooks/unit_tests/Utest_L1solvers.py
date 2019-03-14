@@ -49,8 +49,8 @@ if __name__ == '__main__':
 	initial_model = true_model.clone()
 	initial_model.zero()
 	L2Prob = Prblm.ProblemL2Linear(initial_model,data,Gauss_op)
-	# LCGsolver.run(L2Prob,verbose=True)
-	# genericIO.defaultIO.writeVector("inverted_model_L2.H",L2Prob.model)
+	LCGsolver.run(L2Prob,verbose=True)
+	genericIO.defaultIO.writeVector("inverted_model_L2.H",L2Prob.model)
 
 	#Running using symmetric problem (unstable)
 	SymProb = Prblm.ProblemLinearSymmetric(initial_model,data,Gauss_op)
@@ -70,8 +70,8 @@ if __name__ == '__main__':
 	L1LassoISTC = Prblm.ProblemL1Lasso(initial_model,data,Gauss_op,op_norm=op_norm)
 	Stop1  = Stopper.BasicStopper(niter=150)
 	ISTCsolver = ISTC.ISTCsolver(Stop1,300,cooling_start=0.01,cooling_end=0.99,logger=logger("ISTClog.txt"))
-	# ISTCsolver.run(L1LassoISTC,True)
-	# genericIO.defaultIO.writeVector("inverted_model_L1_ISTC.H",L1LassoISTC.model)
+	ISTCsolver.run(L1LassoISTC,True)
+	genericIO.defaultIO.writeVector("inverted_model_L1_ISTC.H",L1LassoISTC.model)
 
 	#Solving using the ISTA
 	L1LassoISTA = Prblm.ProblemL1Lasso(initial_model,data,Gauss_op,op_norm=op_norm,lambda_value=0.1)
