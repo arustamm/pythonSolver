@@ -184,7 +184,7 @@ class vectorSet:
 					hyper = vec.getHyper()
 					ax_info = []
 					for iaxis in range(hyper.getNdim()):
-						ax_info.append([hyper.getAxis(iaxis).n,hyper.getAxis(iaxis).o,hyper.getAxis(iaxis).d,hyper.getAxis(iaxis).label])
+						ax_info.append([hyper.getAxis(iaxis+1).n,hyper.getAxis(iaxis+1).o,hyper.getAxis(iaxis+1).d,hyper.getAxis(iaxis+1).label])
 					sep_util.write_file(filename,vec.getNdArray(),ax_info)
 		return
 
