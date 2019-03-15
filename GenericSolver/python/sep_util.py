@@ -168,5 +168,7 @@ def write_file(filename,data,axis_info=None,formatting='>f'):
 			ax_id = ii + 1
 			fid.write("n%s=%s o%s=%s d%s=%s label%s='%s'\n"%(ax_id,ax_info[0],ax_id,ax_info[1],ax_id,ax_info[2],ax_id,ax_info[3]))
 		fid.write("in='%s'\n"%(binfile))
+		fid.write("data_format='xdr_float'\n")
+		fid.write("esize=4\n")
 	fid.close()
 	return
