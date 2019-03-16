@@ -3,6 +3,7 @@
 import pyStepper
 import numpy as np
 from math import isnan
+from copy import deepcopy
 
 class ParabolicStep(pyStepper.Stepper):
 	"""Parabolic Stepper class"""
@@ -33,7 +34,7 @@ class ParabolicStep(pyStepper.Stepper):
 		#Getting pointer to problem's model vector
 		prblm_mdl = prblm.get_model()
 		#Initial step length value
-		alpha=self.alpha
+		alpha=deepcopy(self.alpha)
 		itry=1
 		total_trials = self.ntry
 		if(alpha != 0.):
@@ -85,7 +86,7 @@ class ParabolicStep(pyStepper.Stepper):
 					if(logger): logger.addToLog("		!!!Check problem definition or change solver!!!")
 					#Setting model to current one and resetting initial step length value
 					alpha = 0.0
-					self.alpha = alpha
+					self.alpha = 0.0
 					prblm.set_model(modl)
 					break
 				else:
@@ -118,7 +119,7 @@ class ParabolicStep(pyStepper.Stepper):
 					if(logger): logger.addToLog("		!!!Check problem definition or change solver!!!")
 					#Setting model to current one and resetting initial step length value
 					alpha = 0.0
-					self.alpha = alpha
+					self.alpha = 0.0
 					prblm.set_model(modl)
 					break
 				else:
@@ -192,7 +193,7 @@ class ParabolicStep(pyStepper.Stepper):
 
 		if(success):
 			#Line search has finished, update model
-			self.alpha=alpha
+			self.alpha=deepcopy(alpha)
 			model_step.copy(modl) # model_step = m_current
 			model_step.scaleAdd(dmodl,sc2=self.alpha)
 			#Projecting model onto the bounds (if any)
@@ -203,6 +204,12 @@ class ParabolicStep(pyStepper.Stepper):
 				dmodl.scaleAdd(modl,1.0,-1.0)
 				#Scaled by the inverse of the step length
 				dmodl.scale(1.0/self.alpha)
+			#Setting model and residual vectors to c1 or c2 point if parabola minimum is not picked
+			prblm.set_model(model_step)
+			if (obj1<obj0 and obj1<obj2 and obj1<obj3):
+				prblm.set_residual(res1)
+			elif (obj2<obj0 and obj2<obj1 and obj2<obj3):
+				prblm.set_residual(res2)
 			modl.copy(model_step)
 		#Delete temporary vectors
 		del model_step, res1, res2
