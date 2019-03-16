@@ -113,6 +113,8 @@ class ProblemL2VpReg(pyProb.Problem):
 			if(res_reg == None):
 				raise ValueError("ERROR! If epsilon is provided, then a regularization term must be provided")
 			self.res = pyVec.superVector(data.clone(),res_reg)
+			#Objective function terms (useful to analyze each term)
+			self.obj_terms=[None,None]
 		else:
 			self.res=data.clone()
 		#Instantiating linear inversion problem
@@ -282,5 +284,15 @@ class ProblemL2VpReg(pyProb.Problem):
 
 	def objf(self,res):
 		"""Method to return objective function value 1/2*|g(m_nl) + h(m_nl)m_lin - d|_2 + epsilon^2/2*|g'(m_nl) + h'(m_nl)m_lin - d'|_2"""
-		obj=0.5*res.dot(res)
+		if("obj_terms" in dir(self)):
+			#data term
+			val = res.vec1.norm()
+			self.obj_terms[0]=0.5*val*val
+			#model term
+			val = res.vec2.norm()
+			self.obj_terms[1]=0.5*val*val
+			obj=self.obj_terms[0]+self.obj_terms[1]
+		else:
+			val = res.norm()
+			obj=0.5*val*val
 		return obj

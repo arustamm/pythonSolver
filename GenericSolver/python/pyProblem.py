@@ -238,7 +238,8 @@ class ProblemL2Linear(Problem):
 
 	def objf(self,res):
 		"""Method to return objective function value 1/2|Lm-d|_2"""
-		obj=0.5*res.dot(res)
+		val = res.norm()
+		obj=0.5*val*val
 		return obj
 
 
@@ -434,9 +435,11 @@ class ProblemL2LinearReg(Problem):
 	def objf(self,res):
 		"""Method to return objective function value 1/2|Lm-d|_2 + epsilon^2/2*|Am-m_prior|_2"""
 		#data term
-		self.obj_terms[0]=0.5*res.vec1.dot(res.vec1)
+		val = res.vec1.norm()
+		self.obj_terms[0]=0.5*val*val
 		#model term
-		self.obj_terms[1]=0.5*res.vec2.dot(res.vec2)
+		val = res.vec2.norm()
+		self.obj_terms[1]=0.5*val*val
 		obj=self.obj_terms[0]+self.obj_terms[1]
 		return obj
 
@@ -493,7 +496,8 @@ class ProblemL1Lasso(Problem):
 	def objf(self,res):
 		"""Method to return objective function value 1/2*| y - Am |_2 + lambda*| m |_1"""
 		#data term
-		self.obj_terms[0]=0.5*res.vec1.dot(res.vec1)
+		val = res.vec1.norm()
+		self.obj_terms[0]=0.5*val*val
 		#model term
 		self.obj_terms[1]=self.lambda_value*res.vec2.norm(1)
 		obj=self.obj_terms[0]+self.obj_terms[1]
@@ -605,7 +609,8 @@ class ProblemL2NonLinear(Problem):
 
 	def objf(self,res):
 		"""Method to return objective function value 1/2|f(m)-d|_2"""
-		obj=0.5*res.dot(res)
+		val = res.norm()
+		obj=0.5*val*val
 		return obj
 
 class ProblemL2NonLinearReg(Problem):
@@ -776,8 +781,10 @@ class ProblemL2NonLinearReg(Problem):
 	def objf(self,res):
 		"""Method to return objective function value 1/2|f(m)-d|_2 + (epsilon^2/2*|Am-m_prior|_2 or epsilon^2/2*|g(m)-m_prior|_2)"""
 		#data term
-		self.obj_terms[0]=0.5*res.vec1.dot(res.vec1)
+		val = res.vec1.norm()
+		self.obj_terms[0]=0.5*val*val
 		#model term
-		self.obj_terms[1]=0.5*res.vec2.dot(res.vec2)
+		val = res.vec2.norm()
+		self.obj_terms[1]=0.5*val*val
 		obj=self.obj_terms[0]+self.obj_terms[1]
 		return obj
