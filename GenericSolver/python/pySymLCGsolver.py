@@ -10,6 +10,8 @@ class SymLCGsolver(pySolver.Solver):
 	#Default class methods/functions
 	def __init__(self,stoppr,steepest=False,logger=None):
 		"""Constructor for LCG Solver for symmetric systems"""
+		#Calling parent construction
+		super(SymLCGsolver,self).__init__()
 		#Defining stopper object
 		self.stoppr=stoppr
 		#Whether to run steepest descent or not
@@ -26,7 +28,7 @@ class SymLCGsolver(pySolver.Solver):
 		"""Default destructor"""
 		return
 
-	def run(self,prblm,verbose=True,restart=False):
+	def run(self,prblm,verbose=False,restart=False):
 		"""Running LCG solver for symmetric systems"""
 		#Checking if we are solving a linear square problem
 		if(not isinstance(prblm,ProblemLinearSymmetric)):
