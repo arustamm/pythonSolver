@@ -274,7 +274,7 @@ class ProblemL2VpReg(pyProb.Problem):
 		if(self.g_op != None): self.g_op.lin_op.adjoint(True,self.grad,res)
 		# H(m_nl,m_lin_opt)' r_d
 		self.h_op.h_nl.lin_op.adjoint(True,self.grad,res)
-		if(self.lin_solver.logger != None): self.lin_solver.logger.addToLog("NON_LINEAR INVERSION INFO:\n	Gradient has been evaluated, current objective function value: %s;\n 	Stepping!"%(self.objf(res)))
+		if(self.lin_solver.logger != None): self.lin_solver.logger.addToLog("NON_LINEAR INVERSION INFO:\n	Gradient has been evaluated, current objective function value: %s;\n 	Stepping!"%(self.get_obj(model)))
 		return self.grad
 
 	def dresf(self,model,dmodel):
