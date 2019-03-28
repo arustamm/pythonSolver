@@ -98,8 +98,23 @@ class Solver:
 		self.resSet=Vec.vectorSet()				 	#Set for residual vectors
 		self.gradSet=Vec.vectorSet()				#Set for gradient vectors
 		self.inv_model=None							#Temporary saved inverted model
-		self.iter_written=0							#Counter to keep track
 
+		return
+
+	def flush_results(self):
+		"""
+		   Flushing internal memory of the saved results
+		"""
+		#Lists of the results (list and vector Sets)
+		self.obj=list()								#List for objective function value
+		self.obj_terms=list()						#List for objective function value for each terms
+		self.model=list()							#List for model vectors (to save results in-core)
+		self.res=list()								#List for residual vectors (to save results in-core)
+		self.grad=list()							#List for gradient vectors (to save results in-core)
+		self.modelSet=Vec.vectorSet()				#Set for model vectors
+		self.resSet=Vec.vectorSet()				 	#Set for residual vectors
+		self.gradSet=Vec.vectorSet()				#Set for gradient vectors
+		self.inv_model=None							#Temporary saved inverted model
 		return
 
 	def get_restart(self,log_file):

@@ -234,6 +234,8 @@ class ProblemL2VpReg(pyProb.Problem):
 		if(self.lin_solver.logger != None): self.lin_solver.logger.addToLog("#########################################################################################\n")
 		#Copying inverted linear optimal model
 		self.lin_model.copy(self.vp_linear_prob.get_model())
+		#Flushing internal saved results of the linear inversion
+		self.lin_solver.flush_results()
 
 		##################################
 		#Obtaining the residuals
