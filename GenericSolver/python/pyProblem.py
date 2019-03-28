@@ -50,9 +50,14 @@ class Problem:
 	"""Problem parent object"""
 
 	#Default class methods/functions
-	def __init__(self,minBound=None,maxBound=None):
+	def __init__(self,minBound=None,maxBound=None,boundProj=None):
 		"""Default class constructor for Problem"""
-		self.bounds=Bounds(minBound,maxBound) #Setting the bounds of the problem (if necessary)
+		if(minBound != None or maxBound != None):
+			#Simple box bounds
+			self.bounds=Bounds(minBound,maxBound) #Setting the bounds of the problem (if necessary)
+		elif(boundProj != None):
+			#Projection operator onto the bounds
+			self.bounds=boundProj
 		#Setting common variables
 		self.linear=False #By default all problem are non-linear
 		self.obj_updated=False
@@ -178,7 +183,7 @@ class Problem:
 class ProblemL2Linear(Problem):
 	"""Linear inverse problem of the form 1/2*|Lm-d|_2"""
 
-	def __init__(self,model,data,op,minBound=None,maxBound=None):
+	def __init__(self,model,data,op,minBound=None,maxBound=None,boundProj=None):
 		"""
 		   Constructor of linear problem:
 		   model    	= [no default] - vector class; Initial model vector
@@ -186,9 +191,10 @@ class ProblemL2Linear(Problem):
 		   op       	= [no default] - linear operator class; L operator
 		   minBound		= [None] - vector class; Minimum value bounds
 		   maxBound		= [None] - vector class; Maximum value bounds
+		   boundProj	= [None] - Bounds class; Class with a function "apply(input_vec)" to project input_vec onto some convex set
 		"""
 		#Setting the bounds (if any)
-		super(ProblemL2Linear,self).__init__(minBound,maxBound)
+		super(ProblemL2Linear,self).__init__(minBound,maxBound,boundProj)
 		#Setting internal vector
 		self.model=model.clone()
 		self.dmodel=model.clone()
@@ -246,7 +252,7 @@ class ProblemL2Linear(Problem):
 class ProblemLinearSymmetric(Problem):
 	"""Linear inverse problem of the form 1/2m'Am - m'b"""
 
-	def __init__(self,model,data,op,minBound=None,maxBound=None):
+	def __init__(self,model,data,op,minBound=None,maxBound=None,boundProj=None):
 		"""
 		   Constructor of linear symmetric problem:
 		   model    	= [no default] - vector class; Initial model vector
@@ -254,9 +260,10 @@ class ProblemLinearSymmetric(Problem):
 		   op       	= [no default] - linear operator class; A symmetric operator (i.e., A = A')
 		   minBound		= [None] - vector class; Minimum value bounds
 		   maxBound		= [None] - vector class; Maximum value bounds
+		   boundProj	= [None] - Bounds class; Class with a function "apply(input_vec)" to project input_vec onto some convex set
 		"""
 		#Setting the bounds (if any)
-		super(ProblemLinearSymmetric,self).__init__(minBound,maxBound)
+		super(ProblemLinearSymmetric,self).__init__(minBound,maxBound,boundProj)
 		#Checking range and domain are the same
 		if(not model.checkSame(data)):
 			raise ValueError("ERROR! Data and model vector live in different spaces!")
@@ -315,7 +322,7 @@ class ProblemLinearSymmetric(Problem):
 class ProblemL2LinearReg(Problem):
 	"""Linear inverse problem regularized of the form 1/2*|Lm-d|_2 + epsilon^2/2*|Am-m_prior|_2"""
 
-	def __init__(self,model,data,op,epsilon,reg_op=None,prior_model=None,minBound=None,maxBound=None):
+	def __init__(self,model,data,op,epsilon,reg_op=None,prior_model=None,minBound=None,maxBound=None,boundProj=None):
 		"""
 		   Constructor of linear regularized problem:
 		   model    	= [no default] - vector class; Initial model vector
@@ -326,9 +333,10 @@ class ProblemL2LinearReg(Problem):
 		   prior_model  = [None] - vector class; Prior model for regularization term
 		   minBound		= [None] - vector class; Minimum value bounds
 		   maxBound		= [None] - vector class; Maximum value bounds
+		   boundProj	= [None] - Bounds class; Class with a function "apply(input_vec)" to project input_vec onto some convex set
 		"""
 		#Setting the bounds (if any)
-		super(ProblemL2LinearReg,self).__init__(minBound,maxBound)
+		super(ProblemL2LinearReg,self).__init__(minBound,maxBound,boundProj)
 		#Setting internal vector
 		self.model=model.clone()
 		self.dmodel=model.clone()
@@ -380,6 +388,8 @@ class ProblemL2LinearReg(Problem):
 		prblm_res = self.get_res(prblm_grad)	#Compute residual arising from the gradient
 		#Balancing the first gradient in the 'extended-data' space
 		prblm_res.vec1.scaleAdd(self.data)	#Remove data vector (Lg0 - d + d)
+		if(self.prior_model != None):
+			prblm_res.vec2.scaleAdd(self.prior_model)	#Remove prior model vector (Ag0 - m_prior + m_prior)
 		res_data_norm=prblm_res.vec1.norm()
 		res_model_norm=prblm_res.vec2.norm()
 		if (isnan(res_model_norm) or isnan(res_data_norm)):
@@ -446,7 +456,7 @@ class ProblemL2LinearReg(Problem):
 
 class ProblemL1Lasso(Problem):
 	"""Convex problem 1/2*| y - Am |_2 + lambda*| m |_1"""
-	def __init__(self,model,data,op,op_norm=None,lambda_value=None,minBound=None,maxBound=None):
+	def __init__(self,model,data,op,op_norm=None,lambda_value=None,minBound=None,maxBound=None,boundProj=None):
 		"""
 		   Constructor of convex L1-norm LASSO inversion problem:
 		   model    	= [no default] - vector class; Initial model vector
@@ -456,9 +466,10 @@ class ProblemL1Lasso(Problem):
 		   op_norm		= [None] - float; A operator norm that will be evaluated with the power method if not provided
 		   minBound		= [None] - vector class; Minimum value bounds
 		   maxBound		= [None] - vector class; Maximum value bounds
+		   boundProj	= [None] - Bounds class; Class with a function "apply(input_vec)" to project input_vec onto some convex set
 		"""
 		#Setting the bounds (if any)
-		super(ProblemL1Lasso,self).__init__(minBound,maxBound)
+		super(ProblemL1Lasso,self).__init__(minBound,maxBound,boundProj)
 		#Setting internal vector
 		self.model=model.clone()
 		self.dmodel=model.clone()
@@ -536,7 +547,7 @@ class ProblemL1Lasso(Problem):
 class ProblemL2NonLinear(Problem):
 	"""Non-linear inverse problem of the form 1/2*|f(m)-d|_2"""
 
-	def __init__(self,model,data,op,grad_mask=None,minBound=None,maxBound=None):
+	def __init__(self,model,data,op,grad_mask=None,minBound=None,maxBound=None,boundProj=None):
 		"""
 		   Constructor of non-linear problem:
 		   model    	= [no default] - vector class; Initial model vector
@@ -545,9 +556,10 @@ class ProblemL2NonLinear(Problem):
 		   grad_mask	= [None] - vector class; Mask to be applied on the gradient during the inversion
 		   minBound		= [None] - vector class; Minimum value bounds
 		   maxBound		= [None] - vector class; Maximum value bounds
+		   boundProj	= [None] - Bounds class; Class with a function "apply(input_vec)" to project input_vec onto some convex set
 		"""
 		#Setting the bounds (if any)
-		super(ProblemL2NonLinear,self).__init__(minBound,maxBound)
+		super(ProblemL2NonLinear,self).__init__(minBound,maxBound,boundProj)
 		#Setting internal vector
 		self.model=model.clone()
 		self.dmodel=model.clone()
@@ -621,7 +633,7 @@ class ProblemL2NonLinearReg(Problem):
 			1/2*|f(m)-d|_2 + epsilon^2/2*|g(m) - m_prior|_2
 	"""
 
-	def __init__(self,model,data,op,epsilon,grad_mask=None,reg_op=None,prior_model=None,minBound=None,maxBound=None):
+	def __init__(self,model,data,op,epsilon,grad_mask=None,reg_op=None,prior_model=None,minBound=None,maxBound=None,boundProj=None):
 		"""
 		   Constructor of non-linear regularized problem:
 		   model    	= [no default] - vector class; Initial model vector
@@ -633,9 +645,10 @@ class ProblemL2NonLinearReg(Problem):
 		   prior_model  = [None] - vector class; Prior model for regularization term
 		   minBound		= [None] - vector class; Minimum value bounds
 		   maxBound		= [None] - vector class; Maximum value bounds
+		   boundProj	= [None] - Bounds class; Class with a function "apply(input_vec)" to project input_vec onto some convex set
 		"""
 		#Setting the bounds (if any)
-		super(ProblemL2NonLinearReg,self).__init__(minBound,maxBound)
+		super(ProblemL2NonLinearReg,self).__init__(minBound,maxBound,boundProj)
 		#Setting internal vector
 		self.model=model.clone()
 		self.dmodel=model.clone()
@@ -690,7 +703,6 @@ class ProblemL2NonLinearReg(Problem):
 		if(logger): logger.addToLog("REGULARIZED PROBLEM log file\n"+msg)
 		#Keeping the initial model vector
 		prblm_mdl = self.get_model()
-		mdl_tmp = prblm_mdl.clone()
 		#Keeping user-predefined epsilon if any
 		epsilon = self.epsilon
 		#Setting epsilon to one to evaluate the scale
@@ -731,12 +743,10 @@ class ProblemL2NonLinearReg(Problem):
 				raise ValueError(msg)
 		#Resetting user-predefined epsilon if any
 		self.epsilon = epsilon
-		#Resetting problem initial model vector
-		self.set_model(mdl_tmp)
-		del mdl_tmp
 		epsilon_balance = res_data_norm/res_model_norm
-		#Resetting feval
-		self.fevals = 0
+		#Setting default variables
+		self.setDefaults()
+		self.linear=False
 		msg = "	Epsilon balancing the the two objective function terms is: %s"%(epsilon_balance)
 		if(verbose): print(msg)
 		if(logger): logger.addToLog(msg+"\nREGULARIZED PROBLEM end log file")

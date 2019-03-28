@@ -49,7 +49,7 @@ class ProblemL2VpReg(pyProb.Problem):
 	   Problem form: phi(m) = 1/2*|g(m_nl) + h(m_nl)m_lin - d|_2 + epsilon^2/2*|g'(m_nl) + h'(m_nl)m_lin - d'|_2
 	"""
 
-	def __init__(self,model_nl,lin_model,h_op,data,lin_solver,g_op=None,g_op_reg=None,h_op_reg=None,data_reg=None,epsilon=None,minBound=None,maxBound=None):
+	def __init__(self,model_nl,lin_model,h_op,data,lin_solver,g_op=None,g_op_reg=None,h_op_reg=None,data_reg=None,epsilon=None,minBound=None,maxBound=None,boundProj=None):
 		"""
 			Constructor for solving a inverse problem using the variable-projection method
 			Required arguments:
@@ -64,6 +64,9 @@ class ProblemL2VpReg(pyProb.Problem):
 			h_op_reg	= [None] - Vp operator class; Variable projection operator for regularization term
 			data_reg   	= [None] - vector class; Data vector for regularization term
 			epsilon 	= [None] - float; Regularization term weight (must be provided if a regularization is needed)
+			minBound	= [None] - vector class; Minimum value bounds
+ 		    maxBound	= [None] - vector class; Maximum value bounds
+ 		    boundProj	= [None] - Bounds class; Class with a function "apply(input_vec)" to project input_vec onto some convex set
 			####################################################################################################################################
 			Note that to save the results of the linear inversion the user has to specify the saving parameters within the setDefaults of the
 			linear solver. The results can only be saved on files. To the prefix specified within the lin_solver f_eval_# will be added.
@@ -71,7 +74,7 @@ class ProblemL2VpReg(pyProb.Problem):
 		if(not isinstance(h_op,VpOperator)):
 			raise TypeError("ERROR! Not provided an operator class for the variable projection problem")
 		#Setting the bounds (if any)
-		super(ProblemL2VpReg,self).__init__(minBound,maxBound)
+		super(ProblemL2VpReg,self).__init__(minBound,maxBound,boundProj)
 		#Setting internal vector
 		self.model=model_nl.clone()
 		self.dmodel=model_nl.clone()
@@ -145,37 +148,41 @@ class ProblemL2VpReg(pyProb.Problem):
 		"""Method returning epsilon that balances the two terms of the objective function"""
 		if(self.epsilon == None):
 			raise ValueError("ERROR! Problem is not regularized, cannot evaluate epsilon value!")
-		msg="Epsilon Scale evaluation"
-		if(verbose): print(msg)
-		if(logger): logger.addToLog("REGULARIZED PROBLEM log file\n"+msg)
-		#Keeping the initial model vector
-		prblm_mdl = self.get_model()
-		mdl_tmp = prblm_mdl.clone()
-		#Keeping user-predefined epsilon if any
-		epsilon = self.epsilon
-		#Setting epsilon to one to evaluate the scale
-		self.epsilon=1.0
-		prblm_res = self.get_res(prblm_mdl)	#Compute residual arising from the gradient
-		#Balancing the two terms of the objective function
-		res_data_norm=prblm_res.vec1.norm()
-		res_model_norm=prblm_res.vec2.norm()
-		if (isnan(res_model_norm) or isnan(res_data_norm)):
-			raise ValueError("ERROR! Obtained NaN: Residual-data-side-norm = %s, Residual-model-side-norm = %s"%(res_data_norm,res_model_norm))
-		if(res_model_norm == 0.0):
-			msg = "Model residual component norm is zero, cannot find epsilon scale! Provide a different initial model"
-			if(logger): logger.addToLog(msg)
-			raise ValueError(msg)
-		#Resetting user-predefined epsilon if any
-		self.epsilon = epsilon
-		#Resetting problem initial model vector
-		self.set_model(mdl_tmp)
-		del mdl_tmp
-		epsilon_balance = res_data_norm/res_model_norm
-		#Resetting feval
-		self.fevals = 0
-		msg = "	Epsilon balancing the the two objective function terms is: %s"%(epsilon_balance)
-		if(verbose): print(msg)
-		if(logger): logger.addToLog(msg+"\nREGULARIZED PROBLEM end log file")
+		if(self.g_op_reg != None and self.h_op_reg == None):
+			#Problem is non-linearly regularized
+			msg="Epsilon Scale evaluation"
+			if(verbose): print(msg)
+			if(logger): logger.addToLog("REGULARIZED PROBLEM log file\n"+msg)
+			#Keeping the initial model vector
+			prblm_mdl = self.get_model()
+			#Keeping user-predefined epsilon if any
+			epsilon = self.epsilon
+			#Setting epsilon to one to evaluate the scale
+			self.epsilon=1.0
+			prblm_res = self.get_res(prblm_mdl)	#Compute residual arising from the gradient
+			#Balancing the two terms of the objective function
+			res_data_norm=prblm_res.vec1.norm()
+			res_model_norm=prblm_res.vec2.norm()
+			if (isnan(res_model_norm) or isnan(res_data_norm)):
+				raise ValueError("ERROR! Obtained NaN: Residual-data-side-norm = %s, Residual-model-side-norm = %s"%(res_data_norm,res_model_norm))
+			if(res_model_norm == 0.0):
+				msg = "Model residual component norm is zero, cannot find epsilon scale! Provide a different initial model"
+				if(logger): logger.addToLog(msg)
+				raise ValueError(msg)
+			#Resetting user-predefined epsilon if any
+			self.epsilon = epsilon
+			epsilon_balance = res_data_norm/res_model_norm
+			#Resetting problem
+			self.setDefaults()
+			msg = "	Epsilon balancing the the two objective function terms is: %s"%(epsilon_balance)
+			if(verbose): print(msg)
+			if(logger): logger.addToLog(msg+"\nREGULARIZED PROBLEM end log file")
+		elif(self.h_op_reg != None):
+			#Setting non-linear component of the model
+			self.h_op.set_nl(self.model)
+			self.h_op_reg.set_nl(self.model)
+			#Problem is linearly regularized (fixing non-linear part and evaluating the epsilon on the linear component)
+			epsilon_balance = self.vp_linear_prob.estimate_epsilon(verbose,logger)
 		return epsilon_balance
 
 	def resf(self,model):
