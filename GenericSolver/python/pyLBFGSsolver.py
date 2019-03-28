@@ -162,7 +162,7 @@ class LBFGSsolver(pySolver.Solver):
 				msg = "Limited-memory Broyden-Fletcher-Goldfarb-Shanno (L-BFGS) algorithm log file\n"
 				msg += "Maximum number of steps to be used for Hessian inverse estimation: %s \n"%(self.m_steps)
 			else:
-				msg = "Broyden-Fletcher-Goldfarb-Shanno (BFGS) algorithm log file"
+				msg = "Broyden-Fletcher-Goldfarb-Shanno (BFGS) algorithm log file\n"
 			#Printing restart folder
 			msg+="Restart folder: %s\n"%(self.restart.restart_folder)
 			if(verbose): print(msg.replace("log file",""))
