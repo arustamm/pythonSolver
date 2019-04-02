@@ -8,8 +8,18 @@ from copy import deepcopy
 class ParabolicStep(pyStepper.Stepper):
 	"""Parabolic Stepper class"""
 
-	def __init__(self, c1=1.0, c2=2.0, ntry=10, alpha=0., alpha_scale_min=1.0e-10, alpha_scale_max=1000.00, shrink=0.25,maxval=None,minval=None):
-		"""Constructor for parabolic stepper"""
+	def __init__(self, c1=1.0, c2=2.0, ntry=10, alpha=0., alpha_scale_min=1.0e-10, alpha_scale_max=1000.00, shrink=0.25, eval_parab=True):
+		"""
+		   Constructor for parabolic stepper:
+		   c1  		   	   = [1.0] - float; Scaling factor of first search point (i.e., m1 = c1*alpha*dm + m_current)
+		   c2  		   	   = [2.0] - float; Scaling factor of first search point (i.e., m2 = c2*alpha*dm + m_current)
+		   ntry  	   	   = [10] - integer; Number of trials for finding the step length
+		   alpha 		   = [0.] - float; Initial step-length guess
+		   alpha_scale_min = [1.0e-10] - float; Minimum scaling factor (c_optimal) for step-length allowed
+		   alpha_scale_max = [1000.00] - float; Maximum scaling factor (c_optimal) for step-length allowed
+		   shrink 		   = [0.25] - float; Shrinking factor if step length is not found at a given trial
+		   eval_parab 	   = [True] - boolean; Force parabola minimum to be computed. If False, the best point will be chosen from c1 or c2 and the parabola minimum is computed if necessary
+		"""
 		self.c1=c1 								#Scaling for first tested point
 		self.c2=c2 								#Scaling for second tested point
 		self.ntry=ntry 							#Number of total trials before re-estimating initial alpha value
@@ -18,6 +28,7 @@ class ParabolicStep(pyStepper.Stepper):
 		self.alpha_scale_max=alpha_scale_max	#Minimum scaling value for the step length
 		self.shrink=shrink						#Shrinking scaling factor if trial is unsuccessful
 		self.zero = 10**(np.floor(np.log10(np.abs(float(np.finfo(np.float64).tiny))))+2) #Check for avoid Overflow or Underflow
+		self.eval_parab = eval_parab
 		return
 
 
@@ -126,6 +137,22 @@ class ParabolicStep(pyStepper.Stepper):
 					if(logger): logger.addToLog("		!!!Guessing linear step length to try to solve problem!!!")
 					itry=self.ntry #To not repeat computation of linear guess
 					continue
+			#Checking if parabolic point is necessary or not
+			if(not self.eval_parab):
+				#Setting third point to infinity
+				obj3=np.inf
+				#Check which one is the best step length
+				msg="\n	As requested, parabola minimum was not evaluated!"
+				if (obj1<obj0 and obj1<obj2 and obj1<obj3):
+					success = True
+					alpha *= self.c1
+					if(logger): logger.addToLog("	c1 best step-length value of: %s"%(alpha)+msg)
+					break
+				elif (obj2<obj0 and obj2<obj1 and obj2<obj3):
+					success = True
+					alpha *= self.c2
+					if(logger): logger.addToLog("	c2 best step-length value of: %s"%(alpha)+msg)
+					break
 			#If points lay on a horizontal line pick minimum alpha set by user
 			if(obj0 == obj1 == obj2 or (self.c2*(obj1-obj0) + self.c1*(obj0-obj2)) == 0.):
 				step_scale = self.alpha_scale_min
@@ -173,13 +200,11 @@ class ParabolicStep(pyStepper.Stepper):
 				success = True
 				alpha *= self.c1
 				if(logger): logger.addToLog("	c1 best step-length value of: %s"%(alpha))
-				prblm.set_residual(res1)
 				break
 			elif (obj2<obj0 and obj2<obj1 and obj2<obj3):
 				success = True
 				alpha *= self.c2
 				if(logger): logger.addToLog("	c2 best step-length value of: %s"%(alpha))
-				prblm.set_residual(res2)
 				break
 			elif (obj3<obj0 and obj3<=obj1 and obj3<=obj2):
 				success = True
