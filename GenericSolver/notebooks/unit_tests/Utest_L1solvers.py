@@ -49,8 +49,8 @@ if __name__ == '__main__':
 	initial_model = true_model.clone()
 	initial_model.zero()
 	L2Prob = Prblm.ProblemL2Linear(initial_model,data,Gauss_op)
-	LCGsolver.run(L2Prob,verbose=True)
-	genericIO.defaultIO.writeVector("inverted_model_L2.H",L2Prob.model)
+	# LCGsolver.run(L2Prob,verbose=True)
+	# genericIO.defaultIO.writeVector("inverted_model_L2.H",L2Prob.model)
 
 	#Running using symmetric problem (unstable)
 	SymProb = Prblm.ProblemLinearSymmetric(initial_model,data,Gauss_op)
@@ -65,13 +65,13 @@ if __name__ == '__main__':
 	# genericIO.defaultIO.writeVector("inverted_model_L2_Reg.H",L2ProbReg.model)
 
 	#L1 problem
-	op_norm = Gauss_op.powerMethod(True)
-	op_norm = 15780.002254113555 #Estimated from the previous line using the power method
+	# op_norm = Gauss_op.powerMethod(True)
+	op_norm = 15790. #Estimated from the previous line using the power method
 	L1LassoISTC = Prblm.ProblemL1Lasso(initial_model,data,Gauss_op,op_norm=op_norm)
-	Stop1  = Stopper.BasicStopper(niter=150)
-	ISTCsolver = ISTC.ISTCsolver(Stop1,300,cooling_start=0.01,cooling_end=0.99,logger=logger("ISTClog.txt"))
-	ISTCsolver.run(L1LassoISTC,True)
-	genericIO.defaultIO.writeVector("inverted_model_L1_ISTC.H",L1LassoISTC.model)
+	Stop1  = Stopper.BasicStopper(niter=50)
+	ISTCsolver = ISTC.ISTCsolver(Stop1,500,cooling_start=0.01,cooling_end=0.99,logger=logger("ISTClog.txt"))
+	# ISTCsolver.run(L1LassoISTC,True)
+	# genericIO.defaultIO.writeVector("inverted_model_L1_ISTC.H",L1LassoISTC.model)
 
 	#Solving using the ISTA
 	L1LassoISTA = Prblm.ProblemL1Lasso(initial_model,data,Gauss_op,op_norm=op_norm,lambda_value=0.1)
@@ -83,7 +83,12 @@ if __name__ == '__main__':
 	L1LassoFISTA = Prblm.ProblemL1Lasso(initial_model,data,Gauss_op,op_norm=op_norm,lambda_value=1.0)
 	FISTAsolver = ISTA.ISTAsolver(Stop,fast=True,logger=logger("FISTAlog.txt"))
 	FISTAsolver.run(L1LassoFISTA,verbose=True)
-	genericIO.defaultIO.writeVector("inverted_model_L1_FISTA.H",L1LassoFISTA.model)
+	genericIO.defaultIO.writeVector("inverted_model_L1_FISTA1.H",L1LassoFISTA.model)
+	FISTAsolver.stoppr.niter=3000
+	for ii in range(5):
+			L1LassoFISTA.lambda_value*=0.1
+			FISTAsolver.run(L1LassoFISTA,verbose=True)
+			genericIO.defaultIO.writeVector("inverted_model_L1_FISTA%s.H"%(ii+2),L1LassoFISTA.model)
 
 
 

@@ -29,6 +29,8 @@ class LCGsolver(pySolver.Solver):
 
 	def run(self,prblm,verbose=False,restart=False):
 		"""Running LCG and steppest-descent solver"""
+		#Resetting stopper before running the inversion
+		self.stoppr.reset()
 		if(not restart):
 			if(self.steepest):
 				msg="LINEAR STEEPEST-DESCENT SOLVER"

@@ -43,6 +43,8 @@ class ISTAsolver(pySolver.Solver):
 
 	def run(self,prblm,verbose=False,restart=False):
 		"""Running ISTA solver"""
+		#Resetting stopper before running the inversion
+		self.stoppr.reset()
 		#Checking if the provided problem is L1-LASSO
 		if(not isinstance(prblm,ProblemL1Lasso)):
 			raise TypeError("ERROR! Provided inverse problem not ProblemL1Lasso!")

@@ -191,6 +191,8 @@ class NLCGsolver(pySolver.Solver):
 
 	def run(self,prblm,verbose=False,restart=False):
 		"""Running NLCG or steppest-descent solver"""
+		#Resetting stopper before running the inversion
+		self.stoppr.reset()
 		if(not restart):
 			if(self.beta_type == "SD"):
 				msg="NON-LINEAR STEEPEST-DESCENT SOLVER log file\n"

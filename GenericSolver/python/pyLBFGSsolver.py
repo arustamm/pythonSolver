@@ -146,7 +146,8 @@ class LBFGSsolver(pySolver.Solver):
 
 	def run(self,prblm,verbose=False,restart=False):
 		"""Running LBFGS solver"""
-
+		#Resetting stopper before running the inversion
+		self.stoppr.reset()
 		#Preliminary variables for Hessian inverse estimation
 		if(self.m_steps != None):
 			self.step_vectors = [None]*self.m_steps #s_i vectors

@@ -70,16 +70,18 @@ class Rosenbrock_prblm(Prblm.Problem):
 
 
 if __name__ == '__main__':
+
 	x_init = -1.0
 	y_init = -1.0
 	#Testing solver on Rosenbrock function
 	Ros_prob = Rosenbrock_prblm(x_init,y_init)
 	#Create stopper
-	niter = 200
-	Stop  = Stopper.BasicStopper(niter=niter,tolr=1e-32,tolg=1e-32)
+	niter = 500
+	Stop  = Stopper.BasicStopper(niter=niter,tolr=1e-32,tolg=1e-32,tolobjchng=1e-6)
 	#Create solver
 	NLCGsolver = NLCG.NLCGsolver(Stop,logger=logger("Rosenbrock_NLCG_log.txt"))
-	NLCGsolver.setDefaults(save_obj=True,save_model=True)
+	# NLCGsolver.setDefaults(save_obj=True,save_model=True,prefix="NLCG_ros",iter_sampling=1)
+	NLCGsolver.stepper.eval_parab=True
 	NLCGsolver.run(Ros_prob,verbose=True)
 	print("optimal NLCG x: ", Ros_prob.model.arr[0])
 	print("optimal NLCG y: ", Ros_prob.model.arr[1])
@@ -89,7 +91,8 @@ if __name__ == '__main__':
 	#Testing Steepest-descent method
 	Ros_prob = Rosenbrock_prblm(x_init,y_init)
 	NLSDsolver = NLCG.NLCGsolver(Stop,beta_type="SD",logger=logger("Rosenbrock_NLSD_log.txt"))
-	NLSDsolver.run(Ros_prob)
+	NLSDsolver.setDefaults(save_obj=True,save_model=True,prefix="NLSD_ros",iter_sampling=1)
+	# NLSDsolver.run(Ros_prob,verbose=True)
 	print("optimal NLSD x: ", Ros_prob.model.arr[0])
 	print("optimal NLSD y: ", Ros_prob.model.arr[1])
 
@@ -97,6 +100,8 @@ if __name__ == '__main__':
 	#Testing BFGS algorithm
 	Ros_prob = Rosenbrock_prblm(x_init,y_init)
 	BFGSsolver = LBFGS.LBFGSsolver(Stop,logger=logger("Rosenbrock_BFGS_log.txt"))
+	# BFGSsolver.setDefaults(save_obj=True,save_model=True,prefix="BFGSsolver_ros")
+	BFGSsolver.stepper.eval_parab=False
 	BFGSsolver.run(Ros_prob,verbose=True)
 	print("optimal BFGS x: ", Ros_prob.model.arr[0])
 	print("optimal BFGS y: ", Ros_prob.model.arr[1])
@@ -104,11 +109,25 @@ if __name__ == '__main__':
 	#Testing LBFGS algorithm
 	Ros_prob = Rosenbrock_prblm(x_init,y_init)
 	LBFGSsolver = LBFGS.LBFGSsolver(Stop,m_steps=1,logger=logger("Rosenbrock_LBFGS_log.txt"))
-	LBFGSsolver.run(Ros_prob,verbose=True)
+	LBFGSsolver.setDefaults(save_obj=True,save_model=True,prefix="LBFGSsolver_ros")
+	# LBFGSsolver.run(Ros_prob,verbose=True)
 	print("optimal LBFGS x: ", Ros_prob.model.arr[0])
 	print("optimal LBFGS y: ", Ros_prob.model.arr[1])
 
-
+	#Computing the objective function for plotting
+	# x_samples = np.linspace(-2.0,2.0,1000)
+	# y_samples = np.linspace(-2.0,2.0,1000)
+	# obj_ros = Vec.vectorIC(np.zeros((len(x_samples),len(y_samples))))
+	# obj_ros.ax_info = [[len(y_samples),-2.0,y_samples[1]-y_samples[0],"y"],[len(x_samples),-2.0,x_samples[1]-x_samples[0],"x"]]
+	# obj_ros_np = obj_ros.getNdArray()
+	# model_test = Vec.vectorIC(np.array((0.0,0.0)))
+	# model_test_np = model_test.getNdArray()
+	# for ix,x_value in enumerate(x_samples):
+	# 	for iy,y_value in enumerate(y_samples):
+	# 		model_test_np[0] = x_value
+	# 		model_test_np[1] = y_value
+	# 		obj_ros_np[ix,iy]=Ros_prob.get_obj(model_test)
+	# obj_ros.writeVec("Ros_func.H")
 
 
 
