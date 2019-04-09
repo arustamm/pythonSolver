@@ -7,6 +7,7 @@ import pyVector as Vec
 import pyOperator as Op
 import pyProblem as Prblm
 import pyStopperBase as Stopper
+import pyStepperParabolic as Stepper
 import numpy as np
 from sys_util import logger
 #Plotting library
@@ -77,7 +78,8 @@ if __name__ == '__main__':
 	Ros_prob = Rosenbrock_prblm(x_init,y_init)
 	#Create stopper
 	niter = 500
-	Stop  = Stopper.BasicStopper(niter=niter,tolr=1e-32,tolg=1e-32,tolobjchng=1e-6)
+	# Stop  = Stopper.BasicStopper(niter=niter,tolr=1e-32,tolg=1e-32,tolobjchng=1e-6)
+	Stop  = Stopper.BasicStopper(niter=niter,tolr=1e-32,tolg=1e-32)
 	#Create solver
 	NLCGsolver = NLCG.NLCGsolver(Stop,logger=logger("Rosenbrock_NLCG_log.txt"))
 	# NLCGsolver.setDefaults(save_obj=True,save_model=True,prefix="NLCG_ros",iter_sampling=1)
@@ -101,7 +103,7 @@ if __name__ == '__main__':
 	Ros_prob = Rosenbrock_prblm(x_init,y_init)
 	BFGSsolver = LBFGS.LBFGSsolver(Stop,logger=logger("Rosenbrock_BFGS_log.txt"))
 	# BFGSsolver.setDefaults(save_obj=True,save_model=True,prefix="BFGSsolver_ros")
-	BFGSsolver.stepper.eval_parab=False
+	BFGSsolver.stepper.eval_parab=True
 	BFGSsolver.run(Ros_prob,verbose=True)
 	print("optimal BFGS x: ", Ros_prob.model.arr[0])
 	print("optimal BFGS y: ", Ros_prob.model.arr[1])
@@ -109,10 +111,19 @@ if __name__ == '__main__':
 	#Testing LBFGS algorithm
 	Ros_prob = Rosenbrock_prblm(x_init,y_init)
 	LBFGSsolver = LBFGS.LBFGSsolver(Stop,m_steps=1,logger=logger("Rosenbrock_LBFGS_log.txt"))
-	LBFGSsolver.setDefaults(save_obj=True,save_model=True,prefix="LBFGSsolver_ros")
-	# LBFGSsolver.run(Ros_prob,verbose=True)
+	# LBFGSsolver.setDefaults(save_obj=True,save_model=True,prefix="LBFGSsolver_ros")
+	LBFGSsolver.run(Ros_prob,verbose=True)
 	print("optimal LBFGS x: ", Ros_prob.model.arr[0])
 	print("optimal LBFGS y: ", Ros_prob.model.arr[1])
+
+	#Testing BFGS algorithm using different parabolic stepper
+	Ros_prob = Rosenbrock_prblm(x_init,y_init)
+	ParStep = Stepper.ParabolicStepConst()
+	BFGSsolver2 = LBFGS.LBFGSsolver(Stop,stepper=ParStep,logger=logger("Rosenbrock_BFGS_parab_log.txt"))
+	# BFGSsolver.setDefaults(save_obj=True,save_model=True,prefix="BFGSsolver_ros")
+	BFGSsolver2.run(Ros_prob,verbose=True)
+	print("optimal BFGS x: ", Ros_prob.model.arr[0])
+	print("optimal BFGS y: ", Ros_prob.model.arr[1])
 
 	#Computing the objective function for plotting
 	# x_samples = np.linspace(-2.0,2.0,1000)
