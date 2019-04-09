@@ -1,5 +1,6 @@
 #Module containing L-BFGS (Limited-memory Broyden-Fletcher-Goldfarb-Shanno) solver class
 import pySolver
+from pyOperator import scalingOp
 import pyStepperParabolic
 
 import numpy as np
@@ -280,7 +281,7 @@ class LBFGSsolver(pySolver.Solver):
 				self.grad_diff_vectors[step_index].scaleAdd(prblm_grad,-1.0,1.0)
 				# sn+1=xn+1-xn = alpha * dmodl
 				self.step_vectors[step_index]=bfgs_dmodl.clone()
-				bfgs_dmodl.scale(alpha)
+				self.step_vectors[step_index].scale(alpha)
 			else:
 				#BFGS
 				step_index = iter
@@ -289,11 +290,18 @@ class LBFGSsolver(pySolver.Solver):
 				self.grad_diff_vectors[step_index].scaleAdd(prblm_grad,-1.0,1.0)
 				# sn+1=xn+1-xn = alpha * dmodl
 				self.step_vectors.append(bfgs_dmodl.clone())
-				bfgs_dmodl.scale(alpha)
+				self.step_vectors[step_index].scale(alpha)
 			#	rhon+1=1/yn+1'sn+1
 			denom_dot=self.grad_diff_vectors[step_index].dot(self.step_vectors[step_index])
 			#Checking rho
 			self.check_rho(denom_dot,step_index,iter)
+
+			#Making first step-length value Hessian guess if not provided by user
+			if(iter == 0 and self.H0 == None):
+				self.restart.save_parameter("fist_alpha",alpha)
+				self.H0 = scalingOp(bfgs_dmodl,alpha)
+				if(self.logger): self.logger.addToLog("	First step-length value used as first Hessian inverse estimate!")
+				self.stepper.alpha = 1.0
 
 			#Increasing iteration counter
 			iter = iter + 1
