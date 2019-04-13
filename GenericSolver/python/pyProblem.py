@@ -265,7 +265,7 @@ class ProblemLinearSymmetric(Problem):
 		#Setting the bounds (if any)
 		super(ProblemLinearSymmetric,self).__init__(minBound,maxBound,boundProj)
 		#Checking range and domain are the same
-		if(not model.checkSame(data)):
+		if((not model.checkSame(data)) and (not op.domain.checkSame(op.range))):
 			raise ValueError("ERROR! Data and model vector live in different spaces!")
 		#Setting internal vector
 		self.model=model.clone()

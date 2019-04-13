@@ -2,6 +2,7 @@
 #It takes vector objects from the pyVector class
 import pyVector as Vec
 import time
+from copy import deepcopy
 
 
 class Operator:
@@ -38,14 +39,15 @@ class Operator:
 			raise ValueError("Provided data vector does not match operator range")
 		return
 
-	def powerMethod(self,verbose=False,tol=1e-8,n_iter=None,square=False,return_vec=False):
+	def powerMethod(self,verbose=False,tol=1e-8,n_iter=None,square=False,eval_min=False,return_vec=False):
 		"""
 		   Function to estimate maximum eigenvalue of the operator
 		   verbose    = [False] - boolean; Flag to print information to screen as the method is being run
 		   tol    	  = [1e-6] - float; Tolerance on the change of the estimated eigenvalues
 		   n_iter  	  = [None] - int; Maximum number of operator applications (if not provided, the function will continue until the tolerance is reached)
 		   square  	  = [False] - boolean; If True, only the forward will be applied (i.e., operator is a square matrix).
-		   return_vec = [False] - boolean; If True, the function will return the estimated eigenvector as well
+		   eval_min   = [False] - boolean; If True, the function will compute the minimum eigenvalue as well
+		   return_vec = [False] - boolean; If True, the function will return the estimated eigenvectors as well
 		"""
 		#Cloning input and output vectors
 		if(verbose): print("Running power method to estimate maximum eigenvalue (operator L2 norm)")
@@ -61,8 +63,9 @@ class Operator:
 		iter = 0
 		eigen  = 0.0 #Current estimated eigenvalue
 		eigen_old = 0.0 #Previous estimated eigenvalue
+		#Estimating maximum eigenvalue
+		if(verbose): print("Starting iterative process for maximum eigenvalue")
 		#Starting the power iteration loop
-		if(verbose): print("Starting iterative process")
 		while True:
 			#Applying adjoint if forward not square
 			if(not square):
@@ -90,6 +93,51 @@ class Operator:
 				break
 			#eigen_(i-1) = eigen_i
 			eigen_old = eigen
+		if(eval_min):
+			x_max = x.clone() #Cloning "maximum" eigenvector
+			eigen_max = deepcopy(eigen)
+			#Re-initialize variables
+			x.rand()
+			x.scale(1.0/x.norm()) #Normalizing the initial vector
+			y.zero()
+			iter = 0
+			eigen  = 0.0 #Current estimated eigenvalue
+			eigen_old = 0.0 #Previous estimated eigenvalue
+			#Estimating the minimum eigenvalue
+			#Shifting all eigenvalues by maximum one (i.e., A_min = A-muI)
+			if(verbose): print("Starting iterative process for minimum eigenvalue")
+			while True:
+				#Applying adjoint if forward not square
+				if(not square):
+					self.forward(False,x,d_temp) #d = A x
+					self.adjoint(False,y,d_temp) #y = A' d = A' A x
+				else:
+					self.forward(False,x,y)		 #y = A x
+				#y = Ax - mu*Ix
+				y.scaleAdd(x,1.0,-eigen_max)
+				#Estimating eigenvalue (Rayleigh quotient)
+				eigen = x.dot(y)				 #eigen_i = x' A_min x / (x'x = 1.0)
+				#x = y
+				x.copy(y)
+				#Normalization of the operator
+				x.scale(1.0/x.norm())
+				#Stopping criteria (first number of iterations and then tolerance)
+				iter += 1
+				if(verbose): print("	Estimated minimum eigenvalue at iter %s: %s"%(iter,eigen+eigen_max))
+				if(n_iter != None):
+					if(iter >= n_iter):
+						if(verbose): print("Maximum number of iteration reached! Stopping iterative process!")
+						break
+				#Checking change on the eigenvalue estimated value
+				if(abs(eigen-eigen_old) <  abs(tol * eigen_old)):
+					if(verbose): print("Tolerance value reached! Stopping iterative process!")
+					break
+				#eigen_(i-1) = eigen_i
+				eigen_old = eigen
+			x_min = x.clone() #Cloning "minimum" eigenvector
+			eigen_min = deepcopy(eigen+eigen_max)
+			eigen = [eigen_max,eigen_min]
+			x = [x_max,x_min]
 		if(return_vec): return eigen,x
 		return eigen
 

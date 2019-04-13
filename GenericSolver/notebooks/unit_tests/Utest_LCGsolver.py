@@ -113,14 +113,14 @@ if __name__ == '__main__':
 	# LCGsolver.run(L2Prob,verbose=True)
 
 	#Out-of-core run
-	#Creating model vector
-	model_vecOC = Vec.vectorOC(model_vec)
+	# Creating model vector
+	# model_vecOC = Vec.vectorOC(model_vec)
 	#Creating data vector
-	data_vecOC  = Vec.vectorOC(data_vec)
+	# data_vecOC  = Vec.vectorOC(data_vec)
 	#Create operator
-	MatMultOC = MatMult_outcore(A,model_vecOC,data_vecOC)
+	# MatMultOC = MatMult_outcore(A,model_vecOC,data_vecOC)
 	#Create L2-norm linear problem
-	L2Prob_outcore = Prblm.ProblemL2Linear(model_vecOC,data_vecOC,MatMultOC)
+	# L2Prob_outcore = Prblm.ProblemL2Linear(model_vecOC,data_vecOC,MatMultOC)
 
 	#Running the solver
 	LCGsolver.setDefaults()
@@ -138,6 +138,17 @@ if __name__ == '__main__':
 	data_vec_sym.arr.fill(1.)
 	#Create operator
 	MatMultSym = MatMult_incore(A,model_vec_sym,data_vec_sym)
+	#Computing max and min eigenvalues using power method
+	# eg,vec=MatMultSym.powerMethod(verbose=False,square=True,eval_min=True,return_vec=True,tol=1e-18)
+	# print("power",eg)
+	# eigenValues, eigenVectors = np.linalg.eig(A)
+	# idx = eigenValues.argsort()[::-1]
+	# eigenValues = eigenValues[idx]
+	# eigenVectors = eigenVectors[:,idx]
+	# print(eigenValues[-1],eigenValues[0])
+	# print("max eigen vec",np.append(vec[0].getNdArray(),eigenVectors[:,-1],axis=1))
+	# print("min eigen vec",np.append(vec[1].getNdArray(),eigenVectors[:,0],axis=1))
+	# quit()
 	#Create L2-norm linear problem
 	L2Prob_sym = Prblm.ProblemL2Linear(model_vec_sym,data_vec_sym,MatMultSym)
 	#Running the solver
