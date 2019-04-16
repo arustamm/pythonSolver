@@ -47,7 +47,7 @@ class ParabolicStep(pyStepper.Stepper):
 		#Initial step length value
 		alpha=deepcopy(self.alpha)
 		itry=1
-		total_trials = self.ntry
+		total_trials = deepcopy(self.ntry)
 		if(alpha != 0.):
 			#If initial step length is different than zero, we test twice in case we need to re-estimate initial alpha
 			total_trials *=2
@@ -278,7 +278,7 @@ class ParabolicStepConst(pyStepper.Stepper):
 		#Initial step length value
 		alpha=deepcopy(self.alpha)
 		itry=1
-		total_trials = self.ntry
+		total_trials = deepcopy(self.ntry)
 		if(alpha != 0.):
 			#If initial step length is different than zero, we test twice in case we need to re-estimate initial alpha
 			total_trials *=2
@@ -340,12 +340,13 @@ class ParabolicStepConst(pyStepper.Stepper):
 					continue
 			#Computing local constant curvature
 			phi_der = prblm_grad.dot(dmodl) #First derivative of the objective function with respect to alpha
-			c = 2.0 * ((obj1-obj0)/self.c1*alpha - phi_der)
+			c = 2.0 * ((obj1-obj0)/(self.c1*alpha*self.c1*alpha) - phi_der/(self.c1*alpha))
 			#Checking the curvature value
 			if(c <= 0.):
 				#Shrink line search
 				alpha *= self.shrink
 				if(logger): logger.addToLog("	Estimated a negative curvature of %s. Shrinking search direction"%(c))
+				itry+=1
 				continue
 			#Computing objective function at local parabola minimum
 			alpha_parab = - phi_der/c
