@@ -219,9 +219,11 @@ class ParabolicStep(pyStepper.Stepper):
 			self.alpha=deepcopy(alpha)
 			model_step.copy(modl) # model_step = m_current
 			model_step.scaleAdd(dmodl,sc2=self.alpha)
+			#Checking if model parameters hit the bounds
+			modl.copy(model_step)
 			#Projecting model onto the bounds (if any)
 			if("bounds" in dir(prblm)): prblm.bounds.apply(model_step)
-			if(prblm_mdl.isDifferent(model_step)):
+			if(modl.isDifferent(model_step)):
 				#Computing true scaled search direction dm = m_new_clipped - m_current
 				dmodl.copy(model_step)
 				dmodl.scaleAdd(modl,1.0,-1.0)
@@ -314,11 +316,12 @@ class ParabolicStepConst(pyStepper.Stepper):
 			if(prblm_mdl.isDifferent(model_step)):
 				#Model hit bounds
 				msg="	Model hit provided bounds. Projecting it onto them."
+				if(logger): logger.addToLog(msg)
 				#Computing true scaled search direction dm = m_new_clipped - m_current
 				dmodl.copy(model_step)
 				dmodl.scaleAdd(modl,1.0,-1.0)
 				#Scaled by the inverse of the step length
-				dmodl.scale(1.0/self.c1*alpha)
+				dmodl.scale(1.0/(self.c1*alpha))
 			obj1=prblm.get_obj(model_step)
 			#Copying residuals for point c1
 			res_prblm=prblm.get_res(model_step)
@@ -407,9 +410,11 @@ class ParabolicStepConst(pyStepper.Stepper):
 			self.alpha=deepcopy(alpha)
 			model_step.copy(modl) # model_step = m_current
 			model_step.scaleAdd(dmodl,sc2=self.alpha)
+			#Checking if model parameters hit the bounds
+			modl.copy(model_step)
 			#Projecting model onto the bounds (if any)
 			if("bounds" in dir(prblm)): prblm.bounds.apply(model_step)
-			if(prblm_mdl.isDifferent(model_step)):
+			if(modl.isDifferent(model_step)):
 				#Computing true scaled search direction dm = m_new_clipped - m_current
 				dmodl.copy(model_step)
 				dmodl.scaleAdd(modl,1.0,-1.0)
