@@ -63,8 +63,8 @@ class BasicStopper(pyStopper.Stopper):
 		secs = (secs % 60)
 		#Printing time stamp to log file if provided
 		msg="Elapsed time: %d hours, %d minutes, %d seconds\n"%(hours,mins,secs)+"Current date & time: %s"%(time.strftime("%c"))
-		res_norm  = prblm.get_rnorm()
-		grad_norm = prblm.get_gnorm()
+		res_norm  = prblm.get_rnorm(prblm.model)
+		grad_norm = prblm.get_gnorm(prblm.model)
 		obj = prblm.get_obj(prblm.model)
 		if(self.logger): self.logger.addToLog(msg)
 		#Stop by number of iterations

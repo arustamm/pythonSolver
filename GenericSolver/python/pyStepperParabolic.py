@@ -144,12 +144,12 @@ class ParabolicStep(pyStepper.Stepper):
 				if (obj1<obj0 and obj1<obj2 and obj1<obj3):
 					success = True
 					alpha *= self.c1
-					if(logger): logger.addToLog("	c1 best step-length value of: %s"%(alpha)+msg)
+					if(logger): logger.addToLog("	c1 best step-length value of: %s (fevals = %s)"%(alpha,prblm.get_fevals()-1)+msg)
 					break
 				elif (obj2<obj0 and obj2<obj1 and obj2<obj3):
 					success = True
 					alpha *= self.c2
-					if(logger): logger.addToLog("	c2 best step-length value of: %s"%(alpha)+msg)
+					if(logger): logger.addToLog("	c2 best step-length value of: %s (fevals = %s)"%(alpha,prblm.get_fevals())+msg)
 					break
 			#If points lay on a horizontal line pick minimum alpha set by user
 			if(obj0 == obj1 == obj2 or (self.c2*(obj1-obj0) + self.c1*(obj0-obj2)) == 0.):
@@ -197,17 +197,17 @@ class ParabolicStep(pyStepper.Stepper):
 			if (obj1<obj0 and obj1<obj2 and obj1<obj3):
 				success = True
 				alpha *= self.c1
-				if(logger): logger.addToLog("	c1 best step-length value of: %s"%(alpha))
+				if(logger): logger.addToLog("	c1 best step-length value of: %s (fevals = %s)"%(alpha,prblm.get_fevals()-2))
 				break
 			elif (obj2<obj0 and obj2<obj1 and obj2<obj3):
 				success = True
 				alpha *= self.c2
-				if(logger): logger.addToLog("	c2 best step-length value of: %s"%(alpha))
+				if(logger): logger.addToLog("	c2 best step-length value of: %s (fevals = %s)"%(alpha,prblm.get_fevals()-1))
 				break
 			elif (obj3<obj0 and obj3<=obj1 and obj3<=obj2):
 				success = True
 				alpha *= step_scale
-				if(logger): logger.addToLog("	parabola minimum best step-length value of: %s"%(alpha))
+				if(logger): logger.addToLog("	parabola minimum best step-length value of: %s (fevals = %s)"%(alpha,prblm.get_fevals()))
 				break
 			else:
 				#Shrink line search
@@ -393,12 +393,12 @@ class ParabolicStepConst(pyStepper.Stepper):
 			if (obj1<obj0 and obj1<obj2):
 				success = True
 				alpha *= self.c1
-				if(logger): logger.addToLog("	c1 best step-length value of: %s"%(alpha))
+				if(logger): logger.addToLog("	c1 best step-length value of: %s (fevals = %s)"%(alpha,prblm.get_fevals()-1))
 				break
 			elif (obj2<obj0 and obj2<=obj1):
 				success = True
 				alpha *= step_scale
-				if(logger): logger.addToLog("	parabola minimum best step-length value of: %s"%(alpha))
+				if(logger): logger.addToLog("	parabola minimum best step-length value of: %s (fevals = %s)"%(alpha,prblm.get_fevals()))
 				break
 			else:
 				#Shrink line search

@@ -81,9 +81,9 @@ class SymLCGsolver(pySolver.Solver):
 			prblm_res=prblm.get_res(cg_mdl) 	#Compute residuals
 			obj0 = prblm.get_obj(cg_mdl)    	#Compute objective function value
 			if(iter==0):
-				msg = "iter = %s obj = %s residual norm = %s feval = %s"%(iter,obj0,prblm_res.norm(),prblm.get_fevals())
+				msg = "iter = %s obj = %s residual norm = %s feval = %s"%(iter,obj0,prblm.get_rnorm(cg_mdl),prblm.get_fevals())
 				if(verbose): print(msg)
-				msg += "\nrelative data matching (i.e., 1-|Am-b|/|b|): %s"%((1.0-prblm.get_rnorm()/data_norm)*100.0)+"%"
+				msg += "\nrelative data matching (i.e., 1-|Am-b|/|b|): %s"%((1.0-prblm.get_rnorm(cg_mdl)/data_norm)*100.0)+"%"
 				#Writing on log file
 				if(self.logger): self.logger.addToLog(msg)
 				#Check if either objective function value or gradient norm is NaN
@@ -187,9 +187,9 @@ class SymLCGsolver(pySolver.Solver):
 			self.restart.save_vector("prblm_res",prblm_res)
 
 			#iteration info
-			msg = "iter = %s obj = %s residual norm = %s feval = %s"%(iter,obj1,prblm_res.norm(),prblm.get_fevals())
+			msg = "iter = %s obj = %s residual norm = %s feval = %s"%(iter,obj1,prblm.get_rnorm(cg_mdl),prblm.get_fevals())
 			if(verbose): print(msg)
-			msg += "\nrelative data matching (i.e., 1-|Am-b|/|b|): %s"%((1.0-prblm.get_rnorm()/data_norm)*100.0)+"%"
+			msg += "\nrelative data matching (i.e., 1-|Am-b|/|b|): %s"%((1.0-prblm.get_rnorm(cg_mdl)/data_norm)*100.0)+"%"
 			#Writing on log file
 			if(self.logger): self.logger.addToLog(msg)
 			#Check if either objective function value or gradient norm is NaN

@@ -108,13 +108,14 @@ class Problem:
 		"""Accessor for model vector"""
 		return self.dmodel
 
-	def get_rnorm(self):
+	def get_rnorm(self,model):
 		"""Accessor for residual vector norm"""
-		return self.res.norm()
+		self.get_res(model)
+		return self.get_res(model).norm()
 
-	def get_gnorm(self):
+	def get_gnorm(self,model):
 		"""Accessor for gradient vector norm"""
-		return self.grad.norm()
+		return self.get_grad(model).norm()
 
 	def get_obj(self,model):
 		"""Accessor for objective function"""

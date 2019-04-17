@@ -100,13 +100,13 @@ class ISTAsolver(pySolver.Solver):
 				#Saving initial objective function value
 				initial_obj_value = obj0
 				self.restart.save_parameter("obj_initial",initial_obj_value)
-				msg = "iter = %s obj = %s residual norm = %s gradient norm= %s feval = %s"%(iter,obj0,prblm.get_rnorm(),prblm.get_gnorm(),prblm.get_fevals())
+				msg = "iter = %s obj = %s residual norm = %s gradient norm= %s feval = %s"%(iter,obj0,prblm.get_rnorm(ista_mdl),prblm.get_gnorm(ista_mdl),prblm.get_fevals())
 				#Writing on log file
 				if(verbose): print(msg)
 				if(self.logger): self.logger.addToLog(msg)
 				#Check if either objective function value or gradient norm is NaN
 				if(isnan(obj0) or isnan(prblm_grad.norm())): raise ValueError("ERROR! Either gradient norm or objective function value NaN!")
-			if(prblm.get_gnorm() == 0.):
+			if(prblm.get_gnorm(ista_mdl) == 0.):
 				print("Gradient vanishes identically")
 				break
 
@@ -162,7 +162,7 @@ class ISTAsolver(pySolver.Solver):
 
 			#iteration info
 			iter = iter + 1
-			msg = "iter = %s obj = %s residual norm = %s gradient norm= %s feval = %s"%(iter,obj1,prblm.get_rnorm(),prblm_grad.norm(),prblm.get_fevals())
+			msg = "iter = %s obj = %s residual norm = %s gradient norm= %s feval = %s"%(iter,obj1,prblm.get_rnorm(ista_mdl),prblm.get_gnorm(ista_mdl),prblm.get_fevals())
 			if(verbose): print(msg)
 			#Writing on log file
 			if(self.logger): self.logger.addToLog("\n"+msg)

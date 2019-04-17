@@ -38,7 +38,7 @@ if __name__ == '__main__':
 	####################################################
 	#L2-norm inversions
 	#Create stopper
-	niter = 8000
+	niter = 100
 	Stop  = Stopper.BasicStopper(niter=niter)
 	#Create solver
 	LCGsolver = LCG.LCGsolver(Stop)

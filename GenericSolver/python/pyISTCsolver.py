@@ -134,13 +134,13 @@ class ISTCsolver(pySolver.Solver):
 				obj0=prblm.get_obj(istc_mdl) 		#Compute objective function value
 				prblm_grad=prblm.get_grad(istc_mdl) #Compute the gradient g = - A' [y - Ax]
 				if(inner_iter == 0):
-					msg = "	Inner_iter = %s obj = %s residual norm = %s gradient norm= %s feval = %s"%(inner_iter,obj0,prblm.get_rnorm(),prblm.get_gnorm(),prblm.get_fevals())
+					msg = "	Inner_iter = %s obj = %s residual norm = %s gradient norm= %s feval = %s"%(inner_iter,obj0,prblm.get_rnorm(istc_mdl),prblm.get_gnorm(istc_mdl),prblm.get_fevals())
 					#Writing on log file
 					if(verbose): print(msg)
 					if(self.logger): self.logger.addToLog(msg)
 					#Check if either objective function value or gradient norm is NaN
 					if(isnan(obj0) or isnan(prblm_grad.norm())): raise ValueError("ERROR! Either gradient norm or objective function value NaN!")
-				if(prblm.get_gnorm() == 0.):
+				if(prblm.get_gnorm(istc_mdl) == 0.):
 					print("Gradient vanishes identically")
 					break
 
@@ -178,7 +178,7 @@ class ISTCsolver(pySolver.Solver):
 
 				#iteration info
 				inner_iter += 1
-				msg = "	Inner_iter = %s obj = %s residual norm = %s gradient norm= %s feval = %s"%(inner_iter,obj1,prblm.get_rnorm(),prblm_grad.norm(),prblm.get_fevals())
+				msg = "	Inner_iter = %s obj = %s residual norm = %s gradient norm= %s feval = %s"%(inner_iter,obj1,prblm.get_rnorm(istc_mdl),prblm.get_gnorm(istc_mdl),prblm.get_fevals())
 				if(verbose): print(msg)
 				#Writing on log file
 				if(self.logger): self.logger.addToLog(msg)

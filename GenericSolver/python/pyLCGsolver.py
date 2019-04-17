@@ -82,7 +82,7 @@ class LCGsolver(pySolver.Solver):
 				initial_obj_value=obj0 			#For relative objective function value
 				#Saving initial objective function value
 				self.restart.save_parameter("obj_initial",initial_obj_value)
-				msg = "iter = %s obj = %s residual norm = %s gradient norm= %s feval = %s"%(iter,obj0,prblm_res.norm(),prblm_grad.norm(),prblm.get_fevals())
+				msg = "iter = %s obj = %s residual norm = %s gradient norm= %s feval = %s"%(iter,obj0,prblm.get_rnorm(cg_mdl),prblm.get_gnorm(cg_mdl),prblm.get_fevals())
 				if(verbose): print(msg)
 				#Writing on log file
 				if(self.logger): self.logger.addToLog(msg)
@@ -196,7 +196,7 @@ class LCGsolver(pySolver.Solver):
 			self.restart.save_vector("prblm_res",prblm_res)
 
 			#iteration info
-			msg = "iter = %s obj = %s residual norm = %s gradient norm= %s feval = %s"%(iter,obj1,prblm_res.norm(),prblm_grad.norm(),prblm.get_fevals())
+			msg = "iter = %s obj = %s residual norm = %s gradient norm= %s feval = %s"%(iter,obj1,prblm.get_rnorm(cg_mdl),prblm.get_gnorm(cg_mdl),prblm.get_fevals())
 			if(verbose): print(msg)
 			#Writing on log file
 			if(self.logger): self.logger.addToLog("\n"+msg)

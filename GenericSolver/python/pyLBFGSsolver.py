@@ -192,7 +192,7 @@ class LBFGSsolver(pySolver.Solver):
 			bfgs_dmodl = self.restart.retrieve_vector("bfgs_dmodl")
 			bfgs_grad0 = self.restart.retrieve_vector("bfgs_grad0")
 			#Setting the model and residuals to avoid residual twice computation
-			prblm.set_model(cg_mdl)
+			prblm.set_model(bfgs_mdl)
 			prblm_mdl=prblm.get_model()
 			#Setting residual vector to avoid its unnecessary computation
 			prblm.set_residual(self.restart.retrieve_vector("prblm_res"))
@@ -227,7 +227,7 @@ class LBFGSsolver(pySolver.Solver):
 				initial_obj_value=obj0 			#For relative objective function value
 				#Saving objective function value
 				self.restart.save_parameter("obj_initial",initial_obj_value)
-				msg = "iter = %s obj = %s residual norm = %s gradient norm= %s feval = %s"%(iter,obj0,prblm_res.norm(),prblm_grad.norm(),prblm.get_fevals())
+				msg = "iter = %s obj = %s residual norm = %s gradient norm= %s feval = %s"%(iter,obj0,prblm.get_rnorm(bfgs_mdl),prblm.get_gnorm(bfgs_mdl),prblm.get_fevals())
 				if(verbose): print(msg)
 				#Writing on log file
 				if(self.logger): self.logger.addToLog(msg)
@@ -320,7 +320,7 @@ class LBFGSsolver(pySolver.Solver):
 			self.restart.save_vector("prblm_res",prblm_res)
 
 			#iteration info
-			msg = "iter = %s obj = %s residual norm = %s gradient norm= %s feval = %s"%(iter,obj1,prblm_res.norm(),prblm_grad.norm(),prblm.get_fevals())
+			msg = "iter = %s obj = %s residual norm = %s gradient norm= %s feval = %s"%(iter,obj1,prblm.get_rnorm(bfgs_mdl),prblm.get_gnorm(bfgs_mdl),prblm.get_fevals())
 			if(verbose): print(msg)
 			#Writing on log file
 			if(self.logger): self.logger.addToLog("\n"+msg)
