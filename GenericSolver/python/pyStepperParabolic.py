@@ -8,7 +8,7 @@ from copy import deepcopy
 class ParabolicStep(pyStepper.Stepper):
 	"""Parabolic Stepper class with three-point interpolation"""
 
-	def __init__(self, c1=1.0, c2=2.0, ntry=10, alpha=0., alpha_scale_min=1.0e-10, alpha_scale_max=1000.00, shrink=0.25, eval_parab=True):
+	def __init__(self, c1=1.0, c2=2.0, ntry=10, alpha=0., alpha_scale_min=1.0e-10, alpha_scale_max=2000.00, shrink=0.25, eval_parab=True):
 		"""
 		   Constructor for parabolic stepper with three-point interpolation:
 		   c1  		   	   = [1.0] - float; Scaling factor of first search point (i.e., m1 = c1*alpha*dm + m_current)
@@ -144,12 +144,12 @@ class ParabolicStep(pyStepper.Stepper):
 				if (obj1<obj0 and obj1<obj2 and obj1<obj3):
 					success = True
 					alpha *= self.c1
-					if(logger): logger.addToLog("	c1 best step-length value of: %s (fevals = %s)"%(alpha,prblm.get_fevals()-1)+msg)
+					if(logger): logger.addToLog("	c1 best step-length value of: %s (feval = %s)"%(alpha,prblm.get_fevals()-1)+msg)
 					break
 				elif (obj2<obj0 and obj2<obj1 and obj2<obj3):
 					success = True
 					alpha *= self.c2
-					if(logger): logger.addToLog("	c2 best step-length value of: %s (fevals = %s)"%(alpha,prblm.get_fevals())+msg)
+					if(logger): logger.addToLog("	c2 best step-length value of: %s (feval = %s)"%(alpha,prblm.get_fevals())+msg)
 					break
 			#If points lay on a horizontal line pick minimum alpha set by user
 			if(obj0 == obj1 == obj2 or (self.c2*(obj1-obj0) + self.c1*(obj0-obj2)) == 0.):
@@ -197,17 +197,17 @@ class ParabolicStep(pyStepper.Stepper):
 			if (obj1<obj0 and obj1<obj2 and obj1<obj3):
 				success = True
 				alpha *= self.c1
-				if(logger): logger.addToLog("	c1 best step-length value of: %s (fevals = %s)"%(alpha,prblm.get_fevals()-2))
+				if(logger): logger.addToLog("	c1 best step-length value of: %s (feval = %s)"%(alpha,prblm.get_fevals()-2))
 				break
 			elif (obj2<obj0 and obj2<obj1 and obj2<obj3):
 				success = True
 				alpha *= self.c2
-				if(logger): logger.addToLog("	c2 best step-length value of: %s (fevals = %s)"%(alpha,prblm.get_fevals()-1))
+				if(logger): logger.addToLog("	c2 best step-length value of: %s (feval = %s)"%(alpha,prblm.get_fevals()-1))
 				break
 			elif (obj3<obj0 and obj3<=obj1 and obj3<=obj2):
 				success = True
 				alpha *= step_scale
-				if(logger): logger.addToLog("	parabola minimum best step-length value of: %s (fevals = %s)"%(alpha,prblm.get_fevals()))
+				if(logger): logger.addToLog("	parabola minimum best step-length value of: %s (feval = %s)"%(alpha,prblm.get_fevals()))
 				break
 			else:
 				#Shrink line search
@@ -244,7 +244,7 @@ class ParabolicStep(pyStepper.Stepper):
 class ParabolicStepConst(pyStepper.Stepper):
 	"""Parabolic Stepper class assuming constant local curvature"""
 
-	def __init__(self, c1=1.0, ntry=10, alpha=0., alpha_scale_min=1.0e-10, alpha_scale_max=1000.00, shrink=0.25):
+	def __init__(self, c1=1.0, ntry=10, alpha=0., alpha_scale_min=1.0e-10, alpha_scale_max=2000.00, shrink=0.25):
 		"""
 		   Constructor for parabolic stepper assuming constant local curvature:
 		   c1  		   	   = [1.0] - float; Scaling factor of the search point (i.e., m1 = c1*alpha*dm + m_current)
@@ -393,12 +393,12 @@ class ParabolicStepConst(pyStepper.Stepper):
 			if (obj1<obj0 and obj1<obj2):
 				success = True
 				alpha *= self.c1
-				if(logger): logger.addToLog("	c1 best step-length value of: %s (fevals = %s)"%(alpha,prblm.get_fevals()-1))
+				if(logger): logger.addToLog("	c1 best step-length value of: %s (feval = %s)"%(alpha,prblm.get_fevals()-1))
 				break
 			elif (obj2<obj0 and obj2<=obj1):
 				success = True
 				alpha *= step_scale
-				if(logger): logger.addToLog("	parabola minimum best step-length value of: %s (fevals = %s)"%(alpha,prblm.get_fevals()))
+				if(logger): logger.addToLog("	parabola minimum best step-length value of: %s (feval = %s)"%(alpha,prblm.get_fevals()))
 				break
 			else:
 				#Shrink line search

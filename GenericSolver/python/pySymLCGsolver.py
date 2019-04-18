@@ -154,6 +154,7 @@ class SymLCGsolver(pySolver.Solver):
 				#res  = res + alpha * dres =  res + alpha * A * dmodl
 				prblm_res.scaleAdd(prblm_ddmodl,sc2=alpha) #update residuals
 				prblm.set_residual(prblm_res)
+				if(iter == 1): prblm.fevals+=1 #To correct objective function evaluation number since residuals are set
 
 			#Computing new objective function value
 			obj1=prblm.get_obj(cg_mdl)

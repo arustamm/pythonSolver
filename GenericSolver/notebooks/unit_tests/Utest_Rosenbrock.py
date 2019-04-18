@@ -40,7 +40,7 @@ class Rosenbrock_prblm(Prblm.Problem):
 		self.dres=self.res.clone()
 		#Setting default variables
 		self.setDefaults()
-		self.linear=True
+		self.linear=False
 		return
 
 	def objf(self,model):

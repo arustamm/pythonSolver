@@ -59,13 +59,14 @@ class Problem:
 			#Projection operator onto the bounds
 			self.bounds=boundProj
 		#Setting common variables
-		self.linear=False #By default all problem are non-linear
 		self.obj_updated=False
 		self.res_updated=False
 		self.grad_updated=False
 		self.dres_updated=False
 		self.fevals=0
+		self.gevals=0
 		self.counter=0
+		self.linear=False #By default all problem are non-linear
 		return
 
 	def __del__(self):
@@ -74,12 +75,12 @@ class Problem:
 
 	def setDefaults(self):
 		"""Default common variables for any inverse problem"""
-		self.linear=False #By default all problem are non-linear
 		self.obj_updated=False
 		self.res_updated=False
 		self.grad_updated=False
 		self.dres_updated=False
 		self.fevals=0
+		self.gevals=0
 		self.counter=0
 		return
 
@@ -130,8 +131,8 @@ class Problem:
 		"""Accessor for residual vector"""
 		self.set_model(model)
 		if(not self.res_updated):
-			self.res = self.resf(self.model)
 			self.fevals += 1
+			self.res = self.resf(self.model)
 			self.res_updated=True
 		return self.res
 
@@ -141,8 +142,9 @@ class Problem:
 		if not self.grad_updated:
 			self.res  = self.get_res(self.model)
 			self.grad = self.gradf(self.model,self.res)
-			self.fevals += 1
-			if(not self.linear): self.fevals += 1 #Non-linear problem Jacobian assumed to be twice the computational cost of f(m)
+			self.gevals += 1
+			if(self.linear):
+				self.fevals += 1
 			self.grad_updated=True
 		return self.grad
 
@@ -152,14 +154,16 @@ class Problem:
 		if(not self.dres_updated  or dmodel.isDifferent(self.dmodel)):
 			self.dmodel.copy(dmodel)
 			self.dres = self.dresf(self.model,self.dmodel)
-			self.fevals += 1
-			if(not self.linear): self.fevals += 1 #Non-linear problem Jacobian assumed to be twice the computational cost of f(m)
 			self.dres_updated=True
 		return self.dres
 
 	def get_fevals(self):
 		"""Accessor for number of objective function evalutions"""
 		return self.fevals
+
+	def get_gevals(self):
+		"""Accessor for number of gradient evalutions"""
+		return self.gevals
 
 	def objf(self,res):
 		"""Dummy objf running method, must be overridden in the derived class"""
@@ -525,7 +529,7 @@ class ProblemL1Lasso(Problem):
 		#Computing r_d = Lm - d
 		self.res.vec1.scaleAdd(self.data,-1.,1.)
 		#Run regularization part
-		self.res.vec2.copy(self.model)
+		self.res.vec2.copy(model)
 		return self.res
 
 	# function that projects search direction into data space (Not necessary for ISTC)

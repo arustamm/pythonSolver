@@ -430,6 +430,8 @@ class vectorIC(vector):
 					ax_id = self.ndims+1
 					fid.write("n%s=%s o%s=0.0 d%s=1.0 \n"%(ax_id,1,ax_id,ax_id))
 				fid.write("in='%s'\n"%(binfile))
+				fid.write("esize=4\n")
+				fid.write("data_format=\"xdr_float\"\n")
 			fid.close()
 		else:
 			binfile = sep_util.get_binary(filename)

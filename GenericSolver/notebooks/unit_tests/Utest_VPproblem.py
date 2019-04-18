@@ -146,10 +146,10 @@ if __name__ == '__main__':
 	b_init = b_true.clone()
 	b_init.arr = np.array([0.4,1.2])
 	#Create stopper
-	niter = 300
+	niter = 10
 	#Create solver
-	LCGsolver = LCG.LCGsolver(Stopper.BasicStopper(niter=niter),logger=logger("Lintest.txt"))
-	LCGsolver.setDefaults(prefix="lin_inv/test",save_obj=False)
+	LCGsolver = LCG.LCGsolver(Stopper.BasicStopper(niter=niter),logger=logger("lin_inv/Lintest.txt"))
+	LCGsolver.setDefaults(prefix="lin_inv/test",save_obj=True,save_model=True)
 	VPproblem = VPprblm.ProblemL2VpReg(b_init,a_init,exp_vp_op,data_true,LCGsolver)
 	#Instantiating NLCG solver
 	NLCGsolver = NLCG.NLCGsolver(Stopper.BasicStopper(niter=niter),logger=logger("VPtest.txt"))

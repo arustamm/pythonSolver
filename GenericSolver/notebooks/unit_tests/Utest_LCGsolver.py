@@ -152,7 +152,7 @@ if __name__ == '__main__':
 	#Create L2-norm linear problem
 	L2Prob_sym = Prblm.ProblemL2Linear(model_vec_sym,data_vec_sym,MatMultSym)
 	#Running the solver
-	LCGsolver.setDefaults(iter_buffer_size=None,iter_sampling=1000,save_obj=True,save_model=True,prefix="sym_test")
+	# LCGsolver.setDefaults(iter_buffer_size=None,iter_sampling=1000,save_obj=True,save_model=True,prefix="sym_test")
 	# LCGsolver.run(L2Prob_sym)
 
 
@@ -160,7 +160,7 @@ if __name__ == '__main__':
 	L2Prob_reg = Prblm.ProblemL2LinearReg(model_vec_sym,data_vec_sym,MatMultSym,0.0001)
 	# L2Prob_reg.estimate_epsilon(True)
 	#Running the solver
-	LCGsolver.setDefaults(iter_sampling=100,iter_buffer_size=1,save_obj=True,save_model=True,save_grad=True,save_res=True,prefix="lin_test")
+	# LCGsolver.setDefaults(iter_sampling=100,iter_buffer_size=1,save_obj=True,save_model=True,save_grad=True,save_res=True,prefix="lin_test")
 	LCGsolver.run(L2Prob_reg,verbose=True)
 
 	#Testing LCG for symmetric systems
@@ -168,7 +168,7 @@ if __name__ == '__main__':
 	# low_bound.set(-2000.)
 	SymProb = Prblm.ProblemLinearSymmetric(model_vec_sym,data_vec_sym,MatMultSym)#,minBound=low_bound)
 	SLCG = SymLCGsolver.SymLCGsolver(Stop)
-	SLCG.setDefaults(iter_sampling=5,save_obj=True,save_res=True,save_grad=True,save_model=True,prefix="test")
+	# SLCG.setDefaults(iter_sampling=5,save_obj=True,save_res=True,save_grad=True,save_model=True,prefix="test")
 	SLCG.run(SymProb,verbose=True)
 	# print(SymProb.model.arr)
 
@@ -183,8 +183,8 @@ if __name__ == '__main__':
 	L2NLRegProb = Prblm.ProblemL2NonLinearReg(model_vec_sym,data_vec_sym,non_lin_op,0.)
 	L2NLRegProb.estimate_epsilon()
 	NLCGsolver = NLCG.NLCGsolver(Stop)
-	NLCGsolver.setDefaults(iter_sampling=5,save_obj=True,save_res=True,save_grad=True,save_model=True,prefix="test")
-	# NLCGsolver.run(L2NLRegProb,verbose=True)
+	# NLCGsolver.setDefaults(iter_sampling=5,save_obj=True,save_res=True,save_grad=True,save_model=True,prefix="test_nl")
+	NLCGsolver.run(L2NLRegProb,verbose=True)
 
 
 	#Testing non-linear bounded problem with NLCG

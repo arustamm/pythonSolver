@@ -115,6 +115,7 @@ class ISTCsolver(pySolver.Solver):
 		while True:
 			#Setting lambda value for a given outer loop iteration
 			prblm.set_lambda(lambda_values[iter])
+			prblm.obj_updated=False #Lambda has been changed so objective function will change as well
 			msg = "Outer_iter = %s lambda_value = %s"%(iter,lambda_values[iter])
 			if(verbose): print(msg)
 			if(self.logger): self.logger.addToLog(msg)
@@ -162,6 +163,8 @@ class ISTCsolver(pySolver.Solver):
 				if("bounds" in dir(prblm)): prblm.bounds.apply(istc_mdl)
 
 				obj1=prblm.get_obj(istc_mdl)
+				prblm.get_model().writeVec("problem_model.H")
+				istc_mdl.writeVec("solver_model.H")
 				if(obj1 >= obj0):
 					msg = "Objective function didn't reduce, will terminate solver: obj_new=%s obj_current=%s"%(obj1,obj0)
 					if(verbose): print(msg)
