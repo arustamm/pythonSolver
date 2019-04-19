@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-import sys,os
-sys.path.insert(0, "/net/server/homes/sep/ettore/research/packages/acoustic_isotropic_operators/local/lib/python")
-sys.path.insert(0, "/net/server/homes/sep/ettore/research/packages/pySolver/GenericSolver/python")
+# import sys,os
+# sys.path.insert(0, "/net/server/homes/sep/ettore/research/packages/acoustic_isotropic_operators/local/lib/python")
+# sys.path.insert(0, "/net/server/homes/sep/ettore/research/packages/pySolver/GenericSolver/python")
 import pyVector as Vec
 import pyLCGsolver as LCG
 import pySymLCGsolver as SymLCGsolver

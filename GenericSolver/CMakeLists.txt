@@ -1,31 +1,11 @@
 cmake_minimum_required(VERSION 3.5 FATAL_ERROR)
-project(python-solver LANGUAGES CXX)
-list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/cmake")
-
-set(CMAKE_CXX_STANDARD 11)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
-
-set(CMAKE_POSITION_INDEPENDENT_CODE True)
-set(CMAKE_INCLUDE_CURRENT_DIR TRUE)
-
+project(python-solver)
+# list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/cmake")
 
 set(PYTHON_SOLVER_MAJOR_VERSION 0)
 set(PYTHON_SOLVER_MINOR_VERSION 3)
 set(PYTHON_SOLVER_VERSION_STRING
     ${PYTHON_SOLVER_MAJOR_VERSION}.${genericIO_MINOR_VERSION})
-
-#Compiler flags
-SET(CMAKE_CXX_FLAGS  "${CMAKE_CXX_FLAGS} -O3")
-
-#Required packages
-find_package(Boost REQUIRED)
-find_package(OpenMP)
-
-
-#Finding multithread libraries
-find_package(Threads)
-# Adding TBB library
-find_package(TBB REQUIRED)
 
 add_subdirectory(python)
 
