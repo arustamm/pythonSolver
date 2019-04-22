@@ -57,20 +57,8 @@ class ParabolicStep(pyStepper.Stepper):
 			if(logger): logger.addToLog("	initial-steplength=%s"%(alpha))
 			#Find the first guess as if the problem was linear (Tangent method)
 			if((itry==self.ntry) or (alpha < self.zero)):
-				try:
-					dres=prblm.get_dres(modl,dmodl)
-				except NotImplementedError:
-					if(logger): logger.addToLog("WARNING! dresf not implemented; stepper could not find a new step-length initial guess (i.e., line search unsuccessful)")
-					break
-				res=prblm.get_res(modl)
-				dres_res=res.dot(dres)
-				dres_dres=dres.dot(dres)
-				if(dres_dres == 0.):
-					if(logger): logger.addToLog("	!!!Gradient in the null space of linear forward operator!!!")
-					alpha = 1.0
-				else:
-					alpha = -dres_res/dres_dres
-				if(logger): logger.addToLog("	Guessing linear step length of: %s"%(alpha))
+				alpha = self.estimate_initial_guess(prblm,modl,dmodl,logger)
+				if(logger): logger.addToLog("	Guessing step length of: %s"%(alpha))
 			#Test values of objective function for two scaled versions of the step length
 			#Testing c1 scale
 			if(logger): logger.addToLog("	Testing point (c1=%s): m_current+c1*alpha*dm"%(self.c1))
@@ -290,20 +278,8 @@ class ParabolicStepConst(pyStepper.Stepper):
 			if(logger): logger.addToLog("	initial-steplength=%s"%(alpha))
 			#Find the first guess as if the problem was linear (Tangent method)
 			if((itry==self.ntry) or (alpha < self.zero)):
-				try:
-					dres=prblm.get_dres(modl,dmodl)
-				except NotImplementedError:
-					if(logger): logger.addToLog("WARNING! dresf not implemented; stepper could not find a new step-length initial guess (i.e., line search unsuccessful)")
-					break
-				res=prblm.get_res(modl)
-				dres_res=res.dot(dres)
-				dres_dres=dres.dot(dres)
-				if(dres_dres == 0.):
-					if(logger): logger.addToLog("	!!!Gradient in the null space of linear forward operator!!!")
-					alpha = 1.0
-				else:
-					alpha = -dres_res/dres_dres
-				if(logger): logger.addToLog("	Guessing linear step length of: %s"%(alpha))
+				alpha = self.estimate_initial_guess(prblm,modl,dmodl,logger)
+				if(logger): logger.addToLog("	Guessing step length of: %s"%(alpha))
 			#Test values of objective function for two scaled versions of the step length
 			#Testing c1 scale
 			if(logger): logger.addToLog("	Testing point (c1=%s): m_current+c1*alpha*dm"%(self.c1))
