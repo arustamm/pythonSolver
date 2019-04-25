@@ -46,6 +46,12 @@ class ParabolicStep(pyStepper.Stepper):
 		prblm_mdl = prblm.get_model()
 		#Initial step length value
 		alpha=deepcopy(self.alpha)
+		#Checking if current search direction is a descending one
+		prblm_grad = prblm.get_grad(prblm_mdl)
+		dphi = prblm_grad.dot(dmodl)
+		if(dphi > 0.0):
+			if(logger): logger.addToLog("	Warning! Current search direction is not a descent one!")
+			return alpha,success
 		itry=1
 		total_trials = deepcopy(self.ntry)
 		if(alpha != 0.):
@@ -263,10 +269,14 @@ class ParabolicStepConst(pyStepper.Stepper):
 		model_step = modl.clone()
 		#Getting pointer to problem's model vector
 		prblm_mdl = prblm.get_model()
-		#Getting pointer to problem's gradient vector
-		prblm_grad = prblm.get_grad(prblm_mdl)
 		#Initial step length value
 		alpha=deepcopy(self.alpha)
+		#Getting pointer to problem's gradient vector
+		prblm_grad = prblm.get_grad(prblm_mdl)
+		dphi = prblm_grad.dot(dmodl)
+		if(dphi > 0.0):
+			if(logger): logger.addToLog("	Warning! Current search direction is not a descent one!")
+			return alpha,success
 		itry=1
 		total_trials = deepcopy(self.ntry)
 		if(alpha != 0.):

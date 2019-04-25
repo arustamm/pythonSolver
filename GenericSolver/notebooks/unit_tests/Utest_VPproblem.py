@@ -8,6 +8,7 @@ import pyVector as Vec
 import pyOperator as Op
 import pyVPproblem as VPprblm
 import pyStopperBase as Stopper
+import pyStepperCvSrch as StepperMT
 import numpy as np
 from sys_util import logger
 #Plotting library
@@ -152,14 +153,24 @@ if __name__ == '__main__':
 	# LCGsolver.setDefaults(prefix="lin_inv/test",save_obj=True,save_model=True)
 	VPproblem = VPprblm.ProblemL2VpReg(b_init,a_init,exp_vp_op,data_true,LCGsolver)
 	#Instantiating NLCG solver
-	NLCGsolver = NLCG.NLCGsolver(Stopper.BasicStopper(niter=niter),logger=logger("VPtest.txt"))
+	CvStep = StepperMT.CvSrchStep(gtol=0.1)
+	NLCGsolver = NLCG.NLCGsolver(Stopper.BasicStopper(niter=niter),stepper=CvStep,logger=logger("VP_NLCG_log.txt"))
+	# NLCGsolver = NLCG.NLCGsolver(Stopper.BasicStopper(niter=niter),logger=logger("VP_NLCG_log.txt"))
 	NLCGsolver.setDefaults()
 
 	#Intial step-length value
-	NLCGsolver.stepper.alpha=0.5
+	# NLCGsolver.stepper.alpha=0.5
 	NLCGsolver.run(VPproblem,verbose=True)
-	print("a optimal",VPproblem.lin_model.arr)
-	print("b optimal",VPproblem.model.arr)
+	print("NLCG a optimal: ",VPproblem.lin_model.arr)
+	print("NLCG b optimal: ",VPproblem.model.arr)
+
+	#Testing BFGS
+	# BFGSsolver = LBFGS.LBFGSsolver(Stopper.BasicStopper(niter=niter),logger=logger("VP_BFGS_log.txt"))
+	BFGSsolver = LBFGS.LBFGSsolver(Stopper.BasicStopper(niter=niter),stepper=StepperMT.CvSrchStep(),logger=logger("VP_BFGS_log.txt"))
+	VPproblem = VPprblm.ProblemL2VpReg(b_init,a_init,exp_vp_op,data_true,LCGsolver)
+	BFGSsolver.run(VPproblem,verbose=True)
+	print("BFGS a optimal: ",VPproblem.lin_model.arr)
+	print("BFGS b optimal:",VPproblem.model.arr)
 
 	#Testing regularization term by adding the same problem in the regularization term
 	VPproblemReg = VPprblm.ProblemL2VpReg(b_init,a_init,exp_vp_op,data_true,LCGsolver,h_op_reg=exp_vp_op,epsilon=1.0,data_reg=data_true)

@@ -23,15 +23,16 @@ class LBFGSsolver(pySolver.Solver):
 	"""L-BFGS (Limited-memory Broyden-Fletcher-Goldfarb-Shanno) Solver object"""
 
 
-	def __init__(self,stoppr,stepper=None,m_steps=None,H0=None,prefix=None,logger=None):
+	def __init__(self,stoppr,stepper=None,save_alpha=False,m_steps=None,H0=None,prefix=None,logger=None):
 		"""
 		   Constructor for LBFGS Solver.
-		   stoppr    = [no default]; Stopper object necessary to terminate the solver
-		   stepper   = [Parabolic]; Stepper object necessary to perform line-search step
-		   m_steps   = [None]; Maximum number of steps to store to estimate the inverse Hessian (by default it runs BFGS method)
-		   H0        = [None]; Operator object for the initial estimated Hessian inverse (by default it assumes an identity operator)
-		   prefix = [None]; Prefix of the the files in which the vectors of the estimate Hessian inverse will be saved
-		   logger = [None]; Logger object to save inversion information at runtime
+		   stoppr     = [no default] - stopper class; Stopper object necessary to terminate the solver
+		   stepper    = [Parabolic] - stepper class; Stepper object necessary to perform line-search step
+		   save_alpha = [False] - boolean; Use previous step-length value as initial guess. Otherwise, the algorithm starts from an initial guess of 1.0
+		   m_steps    = [None] - int; Maximum number of steps to store to estimate the inverse Hessian (by default it runs BFGS method)
+		   H0         = [None] - operator class; Operator object for the initial estimated Hessian inverse (by default it assumes an identity operator)
+		   prefix 	  = [None] - string; Prefix of the the files in which the vectors of the estimate Hessian inverse will be saved
+		   logger 	  = [None] - logger class; Logger object to save inversion information at runtime
 		"""
 		#Calling parent construction
 		super(LBFGSsolver,self).__init__()
@@ -47,6 +48,7 @@ class LBFGSsolver(pySolver.Solver):
 		#Overwriting logger of the Stopper object
 		self.stoppr.logger=self.logger
 		#LBFGS-specific parameters
+		self.save_alpha = save_alpha
 		self.H0 = H0
 		self.m_steps = m_steps
 		self.prefix = prefix
@@ -305,6 +307,9 @@ class LBFGSsolver(pySolver.Solver):
 
 			#Increasing iteration counter
 			iter = iter + 1
+
+			#Using alpha = 1.0 after first iteration
+			if(iter != 0 and not self.save_alpha): self.stepper.alpha = 1.0
 
 			#Saving current model and previous search direction in case of restart
 			self.restart.save_parameter("iter",iter)

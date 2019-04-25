@@ -8,6 +8,7 @@ import pyOperator as Op
 import pyProblem as Prblm
 import pyStopperBase as Stopper
 import pyStepperParabolic as Stepper
+import pyStepperCvSrch as StepperMT
 import numpy as np
 from sys_util import logger
 #Plotting library
@@ -122,6 +123,15 @@ if __name__ == '__main__':
 	BFGSsolver2 = LBFGS.LBFGSsolver(Stop,stepper=ParStep,logger=logger("Rosenbrock_BFGS_parab_log.txt"))
 	# BFGSsolver.setDefaults(save_obj=True,save_model=True,prefix="BFGSsolver_ros")
 	BFGSsolver2.run(Ros_prob,verbose=True)
+	print("optimal BFGS x: ", Ros_prob.model.arr[0])
+	print("optimal BFGS y: ", Ros_prob.model.arr[1])
+
+	#Testing BFGS algorithm using CvSrch stepper
+	Ros_prob = Rosenbrock_prblm(x_init,y_init)
+	CvStep = StepperMT.CvSrchStep()
+	BFGSsolver3 = LBFGS.LBFGSsolver(Stop,stepper=CvStep,logger=logger("Rosenbrock_BFGS_CvSrch_log.txt"))
+	# BFGSsolver.setDefaults(save_obj=True,save_model=True,prefix="BFGSsolver_ros")
+	BFGSsolver3.run(Ros_prob,verbose=True)
 	print("optimal BFGS x: ", Ros_prob.model.arr[0])
 	print("optimal BFGS y: ", Ros_prob.model.arr[1])
 
