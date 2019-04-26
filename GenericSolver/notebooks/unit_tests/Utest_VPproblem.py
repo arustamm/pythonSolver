@@ -166,7 +166,7 @@ if __name__ == '__main__':
 
 	#Testing BFGS
 	# BFGSsolver = LBFGS.LBFGSsolver(Stopper.BasicStopper(niter=niter),logger=logger("VP_BFGS_log.txt"))
-	BFGSsolver = LBFGS.LBFGSsolver(Stopper.BasicStopper(niter=niter),stepper=StepperMT.CvSrchStep(),logger=logger("VP_BFGS_log.txt"))
+	BFGSsolver = LBFGS.LBFGSsolver(Stopper.BasicStopper(niter=niter),logger=logger("VP_BFGS_log.txt"))
 	VPproblem = VPprblm.ProblemL2VpReg(b_init,a_init,exp_vp_op,data_true,LCGsolver)
 	BFGSsolver.run(VPproblem,verbose=True)
 	print("BFGS a optimal: ",VPproblem.lin_model.arr)

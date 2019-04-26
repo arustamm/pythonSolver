@@ -101,8 +101,9 @@ if __name__ == '__main__':
 
 
 	#Testing BFGS algorithm
+	ParabStep = Stepper.ParabolicStep()
 	Ros_prob = Rosenbrock_prblm(x_init,y_init)
-	BFGSsolver = LBFGS.LBFGSsolver(Stop,logger=logger("Rosenbrock_BFGS_log.txt"))
+	BFGSsolver = LBFGS.LBFGSsolver(Stop,stepper=ParabStep,logger=logger("Rosenbrock_BFGS_log.txt"))
 	# BFGSsolver.setDefaults(save_obj=True,save_model=True,prefix="BFGSsolver_ros")
 	BFGSsolver.stepper.eval_parab=True
 	BFGSsolver.run(Ros_prob,verbose=True)
@@ -111,7 +112,7 @@ if __name__ == '__main__':
 
 	#Testing LBFGS algorithm
 	Ros_prob = Rosenbrock_prblm(x_init,y_init)
-	LBFGSsolver = LBFGS.LBFGSsolver(Stop,m_steps=1,logger=logger("Rosenbrock_LBFGS_log.txt"))
+	LBFGSsolver = LBFGS.LBFGSsolver(Stop,stepper=ParabStep,m_steps=1,logger=logger("Rosenbrock_LBFGS_log.txt"))
 	# LBFGSsolver.setDefaults(save_obj=True,save_model=True,prefix="LBFGSsolver_ros")
 	LBFGSsolver.run(Ros_prob,verbose=True)
 	print("optimal LBFGS x: ", Ros_prob.model.arr[0])
@@ -128,8 +129,7 @@ if __name__ == '__main__':
 
 	#Testing BFGS algorithm using CvSrch stepper
 	Ros_prob = Rosenbrock_prblm(x_init,y_init)
-	CvStep = StepperMT.CvSrchStep()
-	BFGSsolver3 = LBFGS.LBFGSsolver(Stop,stepper=CvStep,logger=logger("Rosenbrock_BFGS_CvSrch_log.txt"))
+	BFGSsolver3 = LBFGS.LBFGSsolver(Stop,logger=logger("Rosenbrock_BFGS_CvSrch_log.txt"))
 	# BFGSsolver.setDefaults(save_obj=True,save_model=True,prefix="BFGSsolver_ros")
 	BFGSsolver3.run(Ros_prob,verbose=True)
 	print("optimal BFGS x: ", Ros_prob.model.arr[0])

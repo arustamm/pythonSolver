@@ -1,7 +1,7 @@
 #Module containing L-BFGS (Limited-memory Broyden-Fletcher-Goldfarb-Shanno) solver class
 import pySolver
 from pyOperator import scalingOp
-import pyStepperParabolic
+import pyStepperCvSrch as StepperMT
 
 import numpy as np
 from collections import deque
@@ -27,7 +27,7 @@ class LBFGSsolver(pySolver.Solver):
 		"""
 		   Constructor for LBFGS Solver.
 		   stoppr     = [no default] - stopper class; Stopper object necessary to terminate the solver
-		   stepper    = [Parabolic] - stepper class; Stepper object necessary to perform line-search step
+		   stepper    = [CvSrch] - stepper class; Stepper object necessary to perform line-search step
 		   save_alpha = [False] - boolean; Use previous step-length value as initial guess. Otherwise, the algorithm starts from an initial guess of 1.0
 		   m_steps    = [None] - int; Maximum number of steps to store to estimate the inverse Hessian (by default it runs BFGS method)
 		   H0         = [None] - operator class; Operator object for the initial estimated Hessian inverse (by default it assumes an identity operator)
@@ -42,7 +42,7 @@ class LBFGSsolver(pySolver.Solver):
 		if(stepper != None):
 			self.stepper=stepper
 		else:
-			self.stepper=pyStepperParabolic.ParabolicStep()
+			self.stepper=StepperMT.CvSrchStep()
 		#Logger object to write on log file
 		self.logger=logger
 		#Overwriting logger of the Stopper object
