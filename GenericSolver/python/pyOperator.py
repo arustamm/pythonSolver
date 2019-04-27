@@ -41,7 +41,7 @@ class Operator:
 
 	def powerMethod(self,verbose=False,tol=1e-8,n_iter=None,square=False,eval_min=False,return_vec=False):
 		"""
-		   Function to estimate maximum eigenvalue of the operator
+		   Function to estimate maximum eigenvalue of the operator:
 		   verbose    = [False] - boolean; Flag to print information to screen as the method is being run
 		   tol    	  = [1e-6] - float; Tolerance on the change of the estimated eigenvalues
 		   n_iter  	  = [None] - int; Maximum number of operator applications (if not provided, the function will continue until the tolerance is reached)
@@ -141,10 +141,11 @@ class Operator:
 		if(return_vec): return eigen,x
 		return eigen
 
-	def dotTest(self,verb=False,maxError=.0001):
-		"""Function to perform dot-product test
-		   If passing the dot-product test, the function does not throw a Warning
-		   Default relative error 10^-4
+	def dotTest(self,verb=False,maxError=1e-4):
+		"""
+		   Function to perform dot-product test:
+		   verb     = [False] - boolean; Flag to print information to screen as the method is being run
+		   maxError	= [1e-4] - float; The function throws a Warning if the relative error is greater than maxError
 		"""
 		if(verb): print("Dot-product test of forward and adjoint operators")
 		if(verb): print("-------------------------------------------------")
