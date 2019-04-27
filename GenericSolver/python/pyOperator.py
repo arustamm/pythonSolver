@@ -410,7 +410,7 @@ class NonLinearOperator(Operator):
 		"""
 		   Raising an exception, dot-product test must be performed directly onto linear operator.
 		"""
-		raise NotImplementedError("ERROR! Perform dot-product test directly onto linear operator.")
+		raise NotImplementedError("ERROR! Perform dot-product test directly on the linear operator.")
 		return
 
 class CombNonlinearOp(NonLinearOperator):

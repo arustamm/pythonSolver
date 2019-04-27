@@ -30,19 +30,23 @@ class MatMult_incore(Op.Operator):
 	def forward(self,add,model,data):
 		"""Method to compute d = A m"""
 		self.checkDomainRange(model,data)
-		if(not isinstance(model,Vec.vectorIC)): raise TypeError("ERROR! Model vector not a vectorIC object")
-		if(not isinstance(data,Vec.vectorIC)): raise TypeError("ERROR! Data vector not a vectorIC object")
+		if(not isinstance(model,Vec.vector)): raise TypeError("ERROR! Model vector not a vector object")
+		if(not isinstance(data,Vec.vector)): raise TypeError("ERROR! Data vector not a vector object")
 		if(not add): data.zero()
-		data.arr+=np.matmul(self.A,model.arr)
+		model_arr = model.getNdArray()
+		data_arr = data.getNdArray()
+		data_arr+=np.matmul(self.A,model_arr)
 		return
 
 	def adjoint(self,add,model,data):
 		"""Method to compute m = A d"""
 		self.checkDomainRange(model,data)
-		if(not isinstance(model,Vec.vectorIC)): raise TypeError("ERROR! Model vector not a vectorIC object")
-		if(not isinstance(data,Vec.vectorIC)): raise TypeError("ERROR! Data vector not a vectorIC object")
+		if(not isinstance(model,Vec.vector)): raise TypeError("ERROR! Model vector not a vector object")
+		if(not isinstance(data,Vec.vector)): raise TypeError("ERROR! Data vector not a vector object")
 		if(not add): model.zero()
-		model.arr+=np.matmul(self.A.H,data.arr)
+		model_arr = model.getNdArray()
+		data_arr = data.getNdArray()
+		model_arr+=np.matmul(self.A.H,data_arr)
 		return
 
 class MatMult_outcore(Op.Operator):
@@ -64,7 +68,7 @@ class MatMult_outcore(Op.Operator):
 		if(not isinstance(data,Vec.vectorOC)): raise TypeError("ERROR! Data vector not a vectorOC object")
 		if(not add): data.zero()
 		#Reading model and data vector files
-		[model_arr,_]=sep.read_file(model.vecfile)
+		model_arr = model.getNdArray()
 		[data_arr,data_axis]=sep.read_file(data.vecfile)
 		data_arr+=np.matmul(self.A,model_arr)
 		#writing data vector file
@@ -79,15 +83,12 @@ class MatMult_outcore(Op.Operator):
 		if(not add): model.zero()
 		#Reading model and data vector files
 		[model_arr,model_axis]=sep.read_file(model.vecfile)
-		[data_arr,_]=sep.read_file(data.vecfile)
+		data_arr = data.getNdArray()
 		model_arr+=np.matmul(self.A.H,data_arr)
 		#writing data vector file
 		sep.write_file(model.vecfile,model_arr,model_axis)
 		return
 
-#Function necessary to construct a non-linear operator out of a linear one
-def dummy_func(dummy_arg):
-	return
 
 if __name__ == '__main__':
 	#In-core run
@@ -110,7 +111,7 @@ if __name__ == '__main__':
 	LCGsolver = LCG.LCGsolver(Stop)
 	LCGsolver.setDefaults(iter_sampling=10)
 	#Running the solver
-	# LCGsolver.run(L2Prob,verbose=True)
+	LCGsolver.run(L2Prob,verbose=True)
 
 	#Out-of-core run
 	# Creating model vector
@@ -124,7 +125,7 @@ if __name__ == '__main__':
 
 	#Running the solver
 	LCGsolver.setDefaults()
-	# LCGsolver.run(L2Prob_outcore)
+	# LCGsolver.run(L2Prob_outcore,True)
 
 	#Testing inversion of a symmetric matrix (second-order derivative operator)
 	n=200
@@ -135,7 +136,7 @@ if __name__ == '__main__':
 	model_vec_sym = Vec.vectorIC(np.zeros((n,1),dtype=np.float64))
 	data_vec_sym = Vec.vectorIC(np.zeros((n,1),dtype=np.float64))
 	#Constant derivative
-	data_vec_sym.arr.fill(1.)
+	data_vec_sym.set(1.)
 	#Create operator
 	MatMultSym = MatMult_incore(A,model_vec_sym,data_vec_sym)
 	#Computing max and min eigenvalues using power method
@@ -153,7 +154,7 @@ if __name__ == '__main__':
 	L2Prob_sym = Prblm.ProblemL2Linear(model_vec_sym,data_vec_sym,MatMultSym)
 	#Running the solver
 	# LCGsolver.setDefaults(iter_buffer_size=None,iter_sampling=1000,save_obj=True,save_model=True,prefix="sym_test")
-	# LCGsolver.run(L2Prob_sym)
+	LCGsolver.run(L2Prob_sym)
 
 
 	#Testing LCG with regularized problem
@@ -179,7 +180,7 @@ if __name__ == '__main__':
 	# SLSD.run(SymProb1)
 
 	#Testing non-linear regularized problem
-	non_lin_op = Op.NonLinearOperator(MatMultSym,MatMultSym,dummy_func)
+	non_lin_op = Op.NonLinearOperator(MatMultSym,MatMultSym)
 	L2NLRegProb = Prblm.ProblemL2NonLinearReg(model_vec_sym,data_vec_sym,non_lin_op,0.)
 	L2NLRegProb.estimate_epsilon()
 	NLCGsolver = NLCG.NLCGsolver(Stop)

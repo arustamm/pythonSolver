@@ -1,4 +1,4 @@
-#Module containing the definition of inverse problems where Variable-Projection method is used (Golub and Pereyra, 1973)
+#Module containing the definition of inverse problems where the Variable-Projection method is used (Golub and Pereyra, 1973)
 import pyProblem as pyProb
 import pyOperator as pyOp
 import pyVector as pyVec
