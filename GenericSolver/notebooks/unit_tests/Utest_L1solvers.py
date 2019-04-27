@@ -14,7 +14,7 @@ import numpy as np
 import pyISTCsolver as ISTC
 import pyISTAsolver as ISTA
 from Gaussian_smoothing import Gauss_smooth_scipy as Gauss_smooth
-from spatialDerivModule import LaplacianPython
+# from spatialDerivModule import LaplacianPython
 
 if __name__ == '__main__':
 	# true_model = SepVector.getSepVector(ns=[301,601])
@@ -33,7 +33,8 @@ if __name__ == '__main__':
 	#Generating data
 	data = true_model.clone()
 	Gauss_op.forward(False,true_model,data)
-	Lapla_op = LaplacianPython(true_model,true_model,0)
+	# Lapla_op = LaplacianPython(true_model,true_model,0)
+	Lapla_op = None
 	# genericIO.defaultIO.writeVector("data_gauss.H",data)
 	data.writeVec("data_gauss.H")
 

@@ -394,7 +394,7 @@ class CvSrchStep(pyStepper.Stepper):
 			if (brackt and alpha_int_max-alpha_int_min <= self.xtol*alpha_int_max):
 				if(logger): logger.addToLog("	Relative width of the interval of uncertainty is at most xtol of %s."%(self.xtol))
 				break
-			if (phi_alpha <= phi_test1 and abs(dphi_test) <= self.gtol*(-dphi_init)):
+			if (phi_alpha <= phi_test1 and abs(dphi_test) <= self.gtol*(-dphi_init) and phi_alpha < phi_init):
 				success=True
 				if(logger): logger.addToLog("	The sufficient decrease condition and the directional derivative condition hold (i.e., Strong Wolfe conditions met).\n	Stepper successuful for step length value of %s and objective function of %s (feval = %s) "%(alpha,phi_alpha,prblm.get_fevals()))
 				break

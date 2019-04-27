@@ -283,7 +283,7 @@ class NLCGsolver(pySolver.Solver):
 			iter = iter + 1
 			obj1 = prblm.get_obj(cg_mdl)    	#Compute objective function value
 			#Redundant test on verifying convergence
-			if(obj0<obj1):
+			if(obj0<=obj1):
 				msg = "Objective function at new point greater or equal than previous one: obj_fun_old=%s obj_fun_new=%s\nPotential issue in the stepper or in revaluation of objective function! Solver will stop!"%(obj0,obj1)
 				if(self.logger): self.logger.addToLog(msg)
 				if(verbose): print(msg)
