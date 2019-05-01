@@ -39,19 +39,22 @@ class Operator:
 			raise ValueError("Provided data vector does not match operator range")
 		return
 
-	def powerMethod(self,verbose=False,tol=1e-8,n_iter=None,square=False,eval_min=False,return_vec=False):
+	def powerMethod(self,verbose=False,tol=1e-8,n_iter=None,eval_min=False,return_vec=False):
 		"""
 		   Function to estimate maximum eigenvalue of the operator:
 		   verbose    = [False] - boolean; Flag to print information to screen as the method is being run
-		   tol    	  = [1e-6] - float; Tolerance on the change of the estimated eigenvalues
-		   n_iter  	  = [None] - int; Maximum number of operator applications (if not provided, the function will continue until the tolerance is reached)
-		   square  	  = [False] - boolean; If True, only the forward will be applied (i.e., operator is a square matrix).
+		   tol        = [1e-6] - float; Tolerance on the change of the estimated eigenvalues
+		   n_iter     = [None] - int; Maximum number of operator applications (if not provided, the function will continue until the tolerance is reached)
 		   eval_min   = [False] - boolean; If True, the function will compute the minimum eigenvalue as well
 		   return_vec = [False] - boolean; If True, the function will return the estimated eigenvectors as well
 		"""
 		#Cloning input and output vectors
 		if(verbose): print("Running power method to estimate maximum eigenvalue (operator L2 norm)")
 		x = self.domain.clone()
+		#Checking if matrix is square
+		square = False
+		if(self.domain.checkSame(self.range)):
+			square = True
 		if(not square):
 			if(verbose): print("Note: operator is not square, the eigenvalue is associated to A'A not A!")
 			d_temp = self.range.clone()
@@ -145,7 +148,7 @@ class Operator:
 		"""
 		   Function to perform dot-product test:
 		   verb     = [False] - boolean; Flag to print information to screen as the method is being run
-		   maxError	= [1e-4] - float; The function throws a Warning if the relative error is greater than maxError
+		   maxError = [1e-4] - float; The function throws a Warning if the relative error is greater than maxError
 		"""
 		if(verb): print("Dot-product test of forward and adjoint operators")
 		if(verb): print("-------------------------------------------------")
