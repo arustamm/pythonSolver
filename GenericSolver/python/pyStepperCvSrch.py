@@ -45,7 +45,7 @@ class CvSrchStep(pyStepper.Stepper):
 	   SATISFIES THE SUFFICIENT DECREASE CONDITION.
 	"""
 
-	def __init__(self,alpha=0.0,xtol=1.0e-16,ftol=1.0e-4,gtol=0.95,alpha_min=1.0e-10,alpha_max=1.0e10,maxfev=20,xtrapf=4.0,delta=0.66):
+	def __init__(self,alpha=0.0,xtol=1.0e-16,ftol=1.0e-4,gtol=0.95,alpha_min=1.0e-16,alpha_max=1.0e16,maxfev=20,xtrapf=4.0,delta=0.66):
 		"""
 		   CvSrch constructor:
 		   alpha 		 = [0.] - float; Initial step-length guess
