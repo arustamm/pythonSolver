@@ -64,10 +64,8 @@ class LBFGSsolver(pySolver.Solver):
 			step_filename = self.prefix + "step_vector_%s.H"%(iter)
 			grad_diff_filename = self.prefix + "grad_diff_vector_%s.H"%(iter)
 			if(genIO_found and self.use_SepVector): #Writing using genericIO and SepVector
-				genericIO.defaultIO.appendVector(step_filename,self.step_vectors[index])
-				genericIO.defaultIO.closeAppendFile(step_filename)
-				genericIO.defaultIO.appendVector(grad_diff_filename,self.grad_diff_vectors[index])
-				genericIO.defaultIO.closeAppendFile(grad_diff_filename)
+				genericIO.defaultIO.writeVector(step_filename,self.step_vectors[index])
+				genericIO.defaultIO.writeVector(grad_diff_filename,self.grad_diff_vectors[index])
 			else:
 				self.step_vectors[index].writeVec(step_filename)
 				self.grad_diff_vectors[index].writeVec(grad_diff_filename)
