@@ -23,17 +23,16 @@ class LBFGSsolver(pySolver.Solver):
 	"""L-BFGS (Limited-memory Broyden-Fletcher-Goldfarb-Shanno) Solver object"""
 
 
-	def __init__(self,stoppr,stepper=None,save_alpha=False,m_steps=None,save_est=False,H0=None,prefix=None,logger=None):
+	def __init__(self,stoppr,stepper=None,save_alpha=False,m_steps=None,H0=None,logger=None,save_est=False):
 		"""
-		   Constructor for LBFGS Solver.
+		   Constructor for LBFGS Solver:
 		   stoppr     = [no default] - stopper class; Stopper object necessary to terminate the solver
 		   stepper    = [CvSrch] - stepper class; Stepper object necessary to perform line-search step
 		   save_alpha = [False] - boolean; Use previous step-length value as initial guess. Otherwise, the algorithm starts from an initial guess of 1.0
 		   m_steps    = [None] - int; Maximum number of steps to store to estimate the inverse Hessian (by default it runs BFGS method)
-		   save_est   = [False] - boolean; Flag to save inverse Hessian estimate vectors (note self.prefix must be different than None)
 		   H0         = [None] - operator class; Operator object for the initial estimated Hessian inverse (by default it assumes an identity operator)
-		   prefix 	  = [None] - string; Prefix of the the files in which the vectors of the estimate Hessian inverse will be saved
 		   logger 	  = [None] - logger class; Logger object to save inversion information at runtime
+		   save_est   = [False] - boolean; Flag to save inverse Hessian estimate vectors (note self.prefix must be different than None)
 		"""
 		#Calling parent construction
 		super(LBFGSsolver,self).__init__()
@@ -53,7 +52,6 @@ class LBFGSsolver(pySolver.Solver):
 		self.H0 = H0
 		self.m_steps = m_steps
 		self.save_est = save_est
-		self.prefix = prefix
 		self.tmp_vector = None #A copy of the model vector will be create when the function run is invoked
 		return
 

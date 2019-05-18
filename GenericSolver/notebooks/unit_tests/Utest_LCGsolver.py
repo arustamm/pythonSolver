@@ -159,10 +159,16 @@ if __name__ == '__main__':
 
 	#Testing LCG with regularized problem
 	L2Prob_reg = Prblm.ProblemL2LinearReg(model_vec_sym,data_vec_sym,MatMultSym,0.0001)
-	# L2Prob_reg.estimate_epsilon(True)
+	L2Prob_reg.estimate_epsilon(True)
 	#Running the solver
 	# LCGsolver.setDefaults(iter_sampling=100,iter_buffer_size=1,save_obj=True,save_model=True,save_grad=True,save_res=True,prefix="lin_test")
 	LCGsolver.run(L2Prob_reg,verbose=True)
+
+	#Testing estimate_epsilon when initial model different than zero
+	model_vec_sym.rand()
+	L2Prob_reg1 = Prblm.ProblemL2LinearReg(model_vec_sym,data_vec_sym,MatMultSym,0.0001)
+	L2Prob_reg1.estimate_epsilon(True)
+	quit()
 
 	#Testing LCG for symmetric systems
 	low_bound = model_vec_sym.clone()

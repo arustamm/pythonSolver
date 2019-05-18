@@ -378,7 +378,7 @@ class ProblemL2LinearReg(Problem):
 		return
 
 	def estimate_epsilon(self,verbose=False,logger=None):
-		"""Method returning epsilon that balances the first gradient in the 'extended-data' space"""
+		"""Method returning epsilon that balances the first gradient in the 'extended-data' space or initial data residuals"""
 		msg="Epsilon Scale evaluation"
 		if(verbose): print(msg)
 		if(logger): logger.addToLog("REGULARIZED PROBLEM log file\n"+msg)
@@ -389,12 +389,17 @@ class ProblemL2LinearReg(Problem):
 		epsilon = self.epsilon
 		#Setting epsilon to one to evaluate the scale
 		self.epsilon=1.0
-		prblm_grad = self.get_grad(self.model)  #Compute first gradient
-		prblm_res = self.get_res(prblm_grad)	#Compute residual arising from the gradient
-		#Balancing the first gradient in the 'extended-data' space
-		prblm_res.vec1.scaleAdd(self.data)	#Remove data vector (Lg0 - d + d)
-		if(self.prior_model != None):
-			prblm_res.vec2.scaleAdd(self.prior_model)	#Remove prior model vector (Ag0 - m_prior + m_prior)
+		if(self.model.norm() != 0.0):
+			prblm_res = self.get_res(self.model)	#Compute residual arising from initial model != 0.0
+			msg = "	Epsilon balancing data and regularization residuals is: %s"
+		else:
+			prblm_grad = self.get_grad(self.model)  #Compute first gradient
+			prblm_res = self.get_res(prblm_grad)	#Compute residual arising from the gradient
+			#Balancing the first gradient in the 'extended-data' space
+			prblm_res.vec1.scaleAdd(self.data)	#Remove data vector (Lg0 - d + d)
+			if(self.prior_model != None):
+				prblm_res.vec2.scaleAdd(self.prior_model)	#Remove prior model vector (Ag0 - m_prior + m_prior)
+			msg = "	Epsilon balancing the data-space gradients is: %s"
 		res_data_norm=prblm_res.vec1.norm()
 		res_model_norm=prblm_res.vec2.norm()
 		if (isnan(res_model_norm) or isnan(res_data_norm)):
@@ -409,7 +414,7 @@ class ProblemL2LinearReg(Problem):
 		epsilon_balance = res_data_norm/res_model_norm
 		#Resetting feval
 		self.fevals = 0
-		msg = "	Epsilon balancing the data-space gradients is: %s"%(epsilon_balance)
+		msg = msg%(epsilon_balance)
 		if(verbose): print(msg)
 		if(logger): logger.addToLog(msg+"\nREGULARIZED PROBLEM end log file")
 		return epsilon_balance
