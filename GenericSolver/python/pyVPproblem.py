@@ -49,7 +49,7 @@ class ProblemL2VpReg(pyProb.Problem):
 	   Problem form: phi(m) = 1/2*|g(m_nl) + h(m_nl)m_lin - d|_2 + epsilon^2/2*|g'(m_nl) + h'(m_nl)m_lin - d'|_2
 	"""
 
-	def __init__(self,model_nl,lin_model,h_op,data,lin_solver,g_op=None,g_op_reg=None,h_op_reg=None,data_reg=None,epsilon=None,minBound=None,maxBound=None,boundProj=None):
+	def __init__(self,model_nl,lin_model,h_op,data,lin_solver,g_op=None,g_op_reg=None,h_op_reg=None,data_reg=None,epsilon=None,minBound=None,maxBound=None,boundProj=None,prec=None):
 		"""
 			Constructor for solving a inverse problem using the variable-projection method
 			Required arguments:
@@ -67,6 +67,7 @@ class ProblemL2VpReg(pyProb.Problem):
 			minBound	= [None] - vector class; Minimum value bounds
  		    maxBound	= [None] - vector class; Maximum value bounds
  		    boundProj	= [None] - Bounds class; Class with a function "apply(input_vec)" to project input_vec onto some convex set
+			prec       	= [None] - linear operator class; Preconditioning matrix for VP problem
 			####################################################################################################################################
 			Note that to save the results of the linear inversion the user has to specify the saving parameters within the setDefaults of the
 			linear solver. The results can only be saved on files. To the prefix specified within the lin_solver f_eval_# will be added.
@@ -122,9 +123,9 @@ class ProblemL2VpReg(pyProb.Problem):
 			self.res=data.clone()
 		#Instantiating linear inversion problem
 		if(self.h_op_reg != None):
-			self.vp_linear_prob = pyProb.ProblemL2LinearReg(self.lin_model,self.data,self.h_op.h_lin,self.epsilon,reg_op=self.h_op_reg.h_lin,prior_model=self.data_reg)
+			self.vp_linear_prob = pyProb.ProblemL2LinearReg(self.lin_model,self.data,self.h_op.h_lin,self.epsilon,reg_op=self.h_op_reg.h_lin,prior_model=self.data_reg,prec=prec)
 		else:
-			self.vp_linear_prob = pyProb.ProblemL2Linear(self.lin_model,self.data,self.h_op.h_lin)
+			self.vp_linear_prob = pyProb.ProblemL2Linear(self.lin_model,self.data,self.h_op.h_lin,prec=prec)
 		#Zeroing out the residual vector
 		self.res.zero()
 		#Dresidual vector

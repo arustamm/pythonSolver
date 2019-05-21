@@ -106,12 +106,12 @@ if __name__ == '__main__':
 	L2Prob = Prblm.ProblemL2Linear(model_vec,data_vec,MatMult)
 	#Create stopper
 	niter = 2000
-	Stop  = Stopper.BasicStopper(niter=niter,tolobjchng=1e-15)
+	Stop  = Stopper.BasicStopper(niter=niter)#,tolobjchng=1e-15)
 	#Create solver
 	LCGsolver = LCG.LCGsolver(Stop)
 	LCGsolver.setDefaults(iter_sampling=10)
 	#Running the solver
-	LCGsolver.run(L2Prob,verbose=True)
+	# LCGsolver.run(L2Prob,verbose=True)
 
 	#Out-of-core run
 	# Creating model vector
@@ -122,7 +122,6 @@ if __name__ == '__main__':
 	# MatMultOC = MatMult_outcore(A,model_vecOC,data_vecOC)
 	#Create L2-norm linear problem
 	# L2Prob_outcore = Prblm.ProblemL2Linear(model_vecOC,data_vecOC,MatMultOC)
-
 	#Running the solver
 	LCGsolver.setDefaults()
 	# LCGsolver.run(L2Prob_outcore,True)
@@ -139,6 +138,8 @@ if __name__ == '__main__':
 	data_vec_sym.set(1.)
 	#Create operator
 	MatMultSym = MatMult_incore(A,model_vec_sym,data_vec_sym)
+	#Inverse of A as preconditioning
+	Prec = MatMult_incore(np.linalg.inv(A),model_vec_sym,data_vec_sym)
 	#Computing max and min eigenvalues using power method
 	# eg,vec=MatMultSym.powerMethod(verbose=False,square=True,eval_min=True,return_vec=True,tol=1e-18)
 	# print("power",eg)
@@ -154,8 +155,11 @@ if __name__ == '__main__':
 	L2Prob_sym = Prblm.ProblemL2Linear(model_vec_sym,data_vec_sym,MatMultSym)
 	#Running the solver
 	# LCGsolver.setDefaults(iter_buffer_size=None,iter_sampling=1000,save_obj=True,save_model=True,prefix="sym_test")
-	LCGsolver.run(L2Prob_sym)
+	LCGsolver.run(L2Prob_sym,True)
 
+	L2Prob_sym = Prblm.ProblemL2Linear(model_vec_sym,data_vec_sym,MatMultSym,prec=Prec)
+	LCGsolver.run(L2Prob_sym,True)
+	quit()
 
 	#Testing LCG with regularized problem
 	L2Prob_reg = Prblm.ProblemL2LinearReg(model_vec_sym,data_vec_sym,MatMultSym,0.0001)
@@ -168,7 +172,7 @@ if __name__ == '__main__':
 	model_vec_sym.rand()
 	L2Prob_reg1 = Prblm.ProblemL2LinearReg(model_vec_sym,data_vec_sym,MatMultSym,0.0001)
 	L2Prob_reg1.estimate_epsilon(True)
-	quit()
+	model_vec_sym.zero()
 
 	#Testing LCG for symmetric systems
 	low_bound = model_vec_sym.clone()
@@ -178,6 +182,10 @@ if __name__ == '__main__':
 	# SLCG.setDefaults(iter_sampling=5,save_obj=True,save_res=True,save_grad=True,save_model=True,prefix="test")
 	SLCG.run(SymProb,verbose=True)
 	# print(SymProb.model.arr)
+
+	#Testing preconditioned CG
+	SymProbPrec = Prblm.ProblemLinearSymmetric(model_vec_sym,data_vec_sym,MatMultSym,prec=Prec)
+	SLCG.run(SymProbPrec,verbose=True)
 
 	#Testing Linear steepest-descent algorithm for symmetric systems
 	SymProb1 = Prblm.ProblemLinearSymmetric(model_vec_sym,data_vec_sym,MatMultSym)
@@ -191,7 +199,7 @@ if __name__ == '__main__':
 	L2NLRegProb.estimate_epsilon()
 	NLCGsolver = NLCG.NLCGsolver(Stop)
 	# NLCGsolver.setDefaults(iter_sampling=5,save_obj=True,save_res=True,save_grad=True,save_model=True,prefix="test_nl")
-	NLCGsolver.run(L2NLRegProb,verbose=True)
+	# NLCGsolver.run(L2NLRegProb,verbose=True)
 
 
 	#Testing non-linear bounded problem with NLCG

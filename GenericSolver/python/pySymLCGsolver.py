@@ -30,14 +30,22 @@ class SymLCGsolver(pySolver.Solver):
 
 	def run(self,prblm,verbose=False,restart=False):
 		"""Running LCG solver for symmetric systems"""
+		#Resetting stopper before running the inversion
+		self.stoppr.reset()
 		#Checking if we are solving a linear square problem
 		if(not isinstance(prblm,ProblemLinearSymmetric)):
 			raise TypeError("ERROR! Provided problem object not a linear symmetric problem")
+		#Check for preconditioning
+		precond = False
+		if("prec" in dir(prblm)):
+			if(prblm.prec != None): precond = True
 		if(not restart):
+			msg = ""
+			if(precond): msg="PRECONDITIONED "
 			if(self.steepest):
-				msg="LINEAR STEEPEST-DESCENT SOLVER FOR SYMMETRIC MATRIX"
+				msg+="LINEAR STEEPEST-DESCENT SOLVER FOR SYMMETRIC MATRIX"
 			else:
-				msg="LINEAR CONJUGATE GRADIENT SOLVER FOR SYMMETRIC MATRIX"
+				msg+="LINEAR CONJUGATE GRADIENT SOLVER FOR SYMMETRIC MATRIX"
 			if(verbose): print(msg)
 			if(self.logger): self.logger.addToLog(msg+" log file")
 			#Printing restart folder
@@ -50,6 +58,7 @@ class SymLCGsolver(pySolver.Solver):
 			cg_mdl = prblm_mdl.clone()
 			cg_dmodl = prblm_mdl.clone()
 			cg_dmodl.zero()
+			if(precond): cg_prec_res = cg_dmodl.clone()
 
 			#Other internal variables
 			iter = 0
@@ -65,6 +74,7 @@ class SymLCGsolver(pySolver.Solver):
 			obj_old = self.restart.retrieve_parameter("obj_old")
 			cg_mdl    = self.restart.retrieve_vector("cg_mdl")
 			cg_dmodl  = self.restart.retrieve_vector("cg_dmodl")
+			if(precond): cg_prec_res = self.restart.retrieve_vector("cg_prec_res")
 			#Setting the model and residuals to avoid residual double computation
 			prblm.set_model(cg_mdl)
 			prblm_mdl=prblm.get_model()
@@ -92,12 +102,21 @@ class SymLCGsolver(pySolver.Solver):
 			#Saving results
 			self.save_results(iter,prblm,force_save=False)
 
+			#Applying preconditioning to gradient (first time)
+			if(iter == 0 and precond):
+				prblm.prec.forward(False,prblm_res,cg_prec_res)
 			#dmodl = beta * dmodl - res
-			cg_dmodl.scaleAdd(prblm_res,beta,-1.0) 				#update search direction
-			prblm_ddmodl=prblm.get_dres(cg_mdl,cg_dmodl)	#Project gradient in the data space
+			if(precond):
+				cg_dmodl.scaleAdd(cg_prec_res,beta,-1.0) 	#Update search direction
+			else:
+				cg_dmodl.scaleAdd(prblm_res,beta,-1.0) 		#Update search direction
+			prblm_ddmodl=prblm.get_dres(cg_mdl,cg_dmodl)	#Project search direction in the data space
 
 			dot_dmodl_ddmodl=cg_dmodl.dot(prblm_ddmodl)
-			dot_res=prblm_res.dot(prblm_res)
+			if(precond):
+				dot_res=prblm_res.dot(cg_prec_res) # Dot product of residual and preconditioned one
+			else:
+				dot_res=prblm_res.dot(prblm_res)
 			if(dot_res == 0.):
 				msg = "Residual/Gradient vector vanishes identically"
 				if(verbose): print(msg)
@@ -158,8 +177,13 @@ class SymLCGsolver(pySolver.Solver):
 
 			#Computing new objective function value
 			obj1=prblm.get_obj(cg_mdl)
-			#New residual norm
-			dot_res_new=prblm_res.dot(prblm_res)
+			if(precond):
+				#Applying preconditioning to gradient
+				prblm.prec.forward(False,prblm_res,cg_prec_res)
+				dot_res_new=prblm_res.dot(cg_prec_res)
+			else:
+				#New residual norm
+				dot_res_new=prblm_res.dot(prblm_res)
 			if(not self.steepest):
 				beta = dot_res_new/dot_res
 			#Checking monotonic behavior of objective function
@@ -184,6 +208,7 @@ class SymLCGsolver(pySolver.Solver):
 			self.restart.save_parameter("obj_old",obj_old)
 			self.restart.save_vector("cg_mdl",cg_mdl)
 			self.restart.save_vector("cg_dmodl",cg_dmodl)
+			if(precond): self.restart.save_vector("cg_prec_res",cg_prec_res)
 			#Saving data space vectors
 			self.restart.save_vector("prblm_res",prblm_res)
 
@@ -199,10 +224,12 @@ class SymLCGsolver(pySolver.Solver):
 
 		#Writing last inverted model
 		self.save_results(iter,prblm,force_save=True,force_write=True)
+		msg = ""
+		if(precond): msg="PRECONDITIONED "
 		if(self.steepest):
-			if(self.logger): self.logger.addToLog("LINEAR STEEPEST-DESCENT SOLVER FOR SYMMETRIC MATRIX log file end")
+			if(self.logger): self.logger.addToLog(msg+"LINEAR STEEPEST-DESCENT SOLVER FOR SYMMETRIC MATRIX log file end")
 		else:
-			if(self.logger): self.logger.addToLog("LINEAR CONJUGATE GRADIENT SOLVER FOR SYMMETRIC MATRIX log file end")
+			if(self.logger): self.logger.addToLog(msg+"LINEAR CONJUGATE GRADIENT SOLVER FOR SYMMETRIC MATRIX log file end")
 		#Clear restart object
 		self.restart.clear_restart()
 

@@ -188,7 +188,7 @@ class Problem:
 class ProblemL2Linear(Problem):
 	"""Linear inverse problem of the form 1/2*|Lm-d|_2"""
 
-	def __init__(self,model,data,op,minBound=None,maxBound=None,boundProj=None):
+	def __init__(self,model,data,op,minBound=None,maxBound=None,boundProj=None,prec=None):
 		"""
 		   Constructor of linear problem:
 		   model    	= [no default] - vector class; Initial model vector
@@ -197,6 +197,7 @@ class ProblemL2Linear(Problem):
 		   minBound		= [None] - vector class; Minimum value bounds
 		   maxBound		= [None] - vector class; Maximum value bounds
 		   boundProj	= [None] - Bounds class; Class with a function "apply(input_vec)" to project input_vec onto some convex set
+		   prec       	= [None] - linear operator class; Preconditioning matrix
 		"""
 		#Setting the bounds (if any)
 		super(ProblemL2Linear,self).__init__(minBound,maxBound,boundProj)
@@ -215,6 +216,8 @@ class ProblemL2Linear(Problem):
 		self.dres=self.res.clone()
 		#Setting linear operator
 		self.op=op
+		#Preconditioning matrix
+		self.prec=prec
 		#Setting default variables
 		self.setDefaults()
 		self.linear=True
@@ -257,7 +260,7 @@ class ProblemL2Linear(Problem):
 class ProblemLinearSymmetric(Problem):
 	"""Linear inverse problem of the form 1/2m'Am - m'b"""
 
-	def __init__(self,model,data,op,minBound=None,maxBound=None,boundProj=None):
+	def __init__(self,model,data,op,minBound=None,maxBound=None,boundProj=None,prec=None):
 		"""
 		   Constructor of linear symmetric problem:
 		   model    	= [no default] - vector class; Initial model vector
@@ -266,6 +269,7 @@ class ProblemLinearSymmetric(Problem):
 		   minBound		= [None] - vector class; Minimum value bounds
 		   maxBound		= [None] - vector class; Maximum value bounds
 		   boundProj	= [None] - Bounds class; Class with a function "apply(input_vec)" to project input_vec onto some convex set
+		   prec       	= [None] - linear operator class; Preconditioning matrix
 		"""
 		#Setting the bounds (if any)
 		super(ProblemLinearSymmetric,self).__init__(minBound,maxBound,boundProj)
@@ -287,6 +291,8 @@ class ProblemLinearSymmetric(Problem):
 		self.dres=self.res.clone()
 		#Setting linear operator
 		self.op=op
+		#Preconditioning matrix
+		self.prec=prec
 		#Setting default variables
 		self.setDefaults()
 		self.linear=True
@@ -327,7 +333,7 @@ class ProblemLinearSymmetric(Problem):
 class ProblemL2LinearReg(Problem):
 	"""Linear inverse problem regularized of the form 1/2*|Lm-d|_2 + epsilon^2/2*|Am-m_prior|_2"""
 
-	def __init__(self,model,data,op,epsilon,reg_op=None,prior_model=None,minBound=None,maxBound=None,boundProj=None):
+	def __init__(self,model,data,op,epsilon,reg_op=None,prior_model=None,minBound=None,maxBound=None,boundProj=None,prec=None):
 		"""
 		   Constructor of linear regularized problem:
 		   model    	= [no default] - vector class; Initial model vector
@@ -339,6 +345,7 @@ class ProblemL2LinearReg(Problem):
 		   minBound		= [None] - vector class; Minimum value bounds
 		   maxBound		= [None] - vector class; Maximum value bounds
 		   boundProj	= [None] - Bounds class; Class with a function "apply(input_vec)" to project input_vec onto some convex set
+		   prec       	= [None] - linear operator class; Preconditioning matrix
 		"""
 		#Setting the bounds (if any)
 		super(ProblemL2LinearReg,self).__init__(minBound,maxBound,boundProj)
@@ -369,6 +376,8 @@ class ProblemL2LinearReg(Problem):
 		#Setting default variables
 		self.setDefaults()
 		self.linear=True
+		#Preconditioning matrix
+		self.prec=prec
 		#Objective function terms (useful to analyze each term)
 		self.obj_terms=[None,None]
 		return
