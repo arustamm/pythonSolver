@@ -53,8 +53,10 @@ class Operator:
 		x = self.domain.clone()
 		#Checking if matrix is square
 		square = False
-		if(self.domain.checkSame(self.range)):
-			square = True
+		try:
+			if(self.domain.checkSame(self.range)): square = True
+		except RuntimeError:
+			pass
 		if(not square):
 			if(verbose): print("Note: operator is not square, the eigenvalue is associated to A'A not A!")
 			d_temp = self.range.clone()
