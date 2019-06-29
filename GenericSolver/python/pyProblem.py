@@ -194,8 +194,8 @@ class ProblemL2Linear(Problem):
 		   model    	= [no default] - vector class; Initial model vector
 		   data     	= [no default] - vector class; Data vector
 		   op       	= [no default] - linear operator class; L operator
-		   minBound		= [None] - vector class; Minimum value bounds
-		   maxBound		= [None] - vector class; Maximum value bounds
+		   minBound     = [None] - vector class; Minimum value bounds
+		   maxBound     = [None] - vector class; Maximum value bounds
 		   boundProj	= [None] - Bounds class; Class with a function "apply(input_vec)" to project input_vec onto some convex set
 		   prec       	= [None] - linear operator class; Preconditioning matrix
 		"""

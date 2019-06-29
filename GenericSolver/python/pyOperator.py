@@ -146,14 +146,14 @@ class Operator:
 		if(return_vec): return eigen,x
 		return eigen
 
-	def dotTest(self,verb=False,maxError=1e-4):
+	def dotTest(self,verbose=False,maxError=1e-4):
 		"""
 		   Function to perform dot-product test:
-		   verb     = [False] - boolean; Flag to print information to screen as the method is being run
+		   verbose  = [False] - boolean; Flag to print information to screen as the method is being run
 		   maxError = [1e-4] - float; The function throws a Warning if the relative error is greater than maxError
 		"""
-		if(verb): print("Dot-product test of forward and adjoint operators")
-		if(verb): print("-------------------------------------------------")
+		if(verbose): print("Dot-product test of forward and adjoint operators")
+		if(verbose): print("-------------------------------------------------")
 		#Allocating temporary vectors for dot-product test
 		d1=self.domain.clone()
 		d2=self.domain.clone()
@@ -165,55 +165,55 @@ class Operator:
 		r1.rand()
 
 		#Applying forward and adjoint operators with add=False
-		if(verb): print("Applying forward operator add=False")
+		if(verbose): print("Applying forward operator add=False")
 		start = time.time()
 		self.forward(False,d1,r2)
 		end = time.time()
-		if(verb): print("	Runs in: %s seconds"%(end-start))
-		if(verb): print("Applying adjoint operator add=False")
+		if(verbose): print("	Runs in: %s seconds"%(end-start))
+		if(verbose): print("Applying adjoint operator add=False")
 		start = time.time()
 		self.adjoint(False,d2,r1)
 		end = time.time()
-		if(verb): print("	Runs in: %s seconds"%(end-start))
+		if(verbose): print("	Runs in: %s seconds"%(end-start))
 
 		#Computing dot products
 		dt1=d1.dot(d2)
 		dt2=r1.dot(r2)
 
 		#Dot-product testing
-		if(verb): print("Dot products add=False: domain=%s range=%s "%(dt1,dt2))
-		if(verb): print("Absolute error: %s"%(abs(dt1-dt2)))
-		if(verb): print("Relative error: %s \n"%(abs((dt1-dt2)/dt2)))
+		if(verbose): print("Dot products add=False: domain=%s range=%s "%(dt1,dt2))
+		if(verbose): print("Absolute error: %s"%(abs(dt1-dt2)))
+		if(verbose): print("Relative error: %s \n"%(abs((dt1-dt2)/dt2)))
 		if (abs((dt1-dt2)/dt1) > maxError):
 			#Deleting temporary vectors
 			del d1,d2,r1,r2
 			raise Warning("Dot products failure add=False; relative error greater than tolerance of %s"%(maxError))
 
 		#Applying forward and adjoint operators with add=True
-		if(verb): print("\nApplying forward operator add=True")
+		if(verbose): print("\nApplying forward operator add=True")
 		start = time.time()
 		self.forward(True,d1,r2)
 		end = time.time()
-		if(verb): print("	Runs in: %s seconds"%(end-start))
-		if(verb): print("Applying adjoint operator add=True")
+		if(verbose): print("	Runs in: %s seconds"%(end-start))
+		if(verbose): print("Applying adjoint operator add=True")
 		start = time.time()
 		self.adjoint(True,d2,r1)
 		end = time.time()
-		if(verb): print("	Runs in: %s seconds"%(end-start))
+		if(verbose): print("	Runs in: %s seconds"%(end-start))
 
 		#Computing dot products
 		dt1=d1.dot(d2)
 		dt2=r1.dot(r2)
 
-		if(verb): print("Dot products add=True: domain=%s range=%s "%(dt1,dt2))
-		if(verb): print("Absolute error: %s"%(abs(dt1-dt2)))
-		if(verb): print("Relative error: %s \n"%(abs((dt1-dt2)/dt2)))
+		if(verbose): print("Dot products add=True: domain=%s range=%s "%(dt1,dt2))
+		if(verbose): print("Absolute error: %s"%(abs(dt1-dt2)))
+		if(verbose): print("Relative error: %s \n"%(abs((dt1-dt2)/dt2)))
 		if(abs((dt1-dt2)/dt1) > maxError):
 			#Deleting temporary vectors
 			del d1,d2,r1,r2
 			raise Warning("Dot products failure add=True; relative error greater than tolerance of %s"%(maxError))
 
-		if(verb): print("-------------------------------------------------")
+		if(verbose): print("-------------------------------------------------")
 
 		#Deleting temporary vectors
 		del d1,d2,r1,r2

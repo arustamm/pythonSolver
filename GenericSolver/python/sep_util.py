@@ -24,7 +24,12 @@ else:
 		datapath=out.split("=")[1]
 
 #Checking if datapath was found
-if(datapath == None): raise IOError("SEP datapath not found\n Set env variable DATAPATH to folder to write binary files")
+if(datapath == None):
+	if(os.path.isdir("/tmp/")):
+		datapath = "/tmp/"
+		print("WARNING! DATAPATH not found. The folder /tmp will be used to write binary files")
+	else:
+		raise IOError("SEP datapath not found\n Set env variable DATAPATH to a folder to write binary files")
 
 
 def rm_file(filename):

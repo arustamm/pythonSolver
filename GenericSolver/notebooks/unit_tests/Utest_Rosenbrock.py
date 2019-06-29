@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-# import sys
-# sys.path.insert(0, "/net/server/homes/sep/ettore/research/packages/pySolver/GenericSolver/python")
+import sys,os
+sys.path.insert(0, "../../python")
 import pyNLCGsolver as NLCG
 import pyLBFGSsolver as LBFGS
 import pyVector as Vec

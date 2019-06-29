@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-# import sys,os
-# sys.path.insert(0, "/net/server/homes/sep/ettore/research/packages/pySolver/GenericSolver/python")
+import sys,os
+sys.path.insert(0, "../../python")
 import pyVector as Vec
 import pyOperator as Op
 import pyLCGsolver as LCG
@@ -157,9 +157,8 @@ if __name__ == '__main__':
 	# LCGsolver.setDefaults(iter_buffer_size=None,iter_sampling=1000,save_obj=True,save_model=True,prefix="sym_test")
 	LCGsolver.run(L2Prob_sym,True)
 
-	L2Prob_sym = Prblm.ProblemL2Linear(model_vec_sym,data_vec_sym,MatMultSym,prec=Prec)
+	L2Prob_sym = Prblm.ProblemL2Linear(model_vec_sym,data_vec_sym,MatMultSym,prec=Op.ChainOperator(Prec,Prec))
 	LCGsolver.run(L2Prob_sym,True)
-	quit()
 
 	#Testing LCG with regularized problem
 	L2Prob_reg = Prblm.ProblemL2LinearReg(model_vec_sym,data_vec_sym,MatMultSym,0.0001)
