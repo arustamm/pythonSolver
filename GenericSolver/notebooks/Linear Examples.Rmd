@@ -1,0 +1,238 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.1'
+      jupytext_version: 1.1.7
+  kernelspec:
+    display_name: Python 3
+    language: python
+    name: python3
+---
+
+```{python}
+autosave 0
+```
+
+# Linear inversion examples
+
+
+## Preliminary steps
+
+
+### Importing necessary libraries
+
+```{python}
+#Adding library modules to PYTHONPATH
+import sys
+sys.path.append("../python")
+import numpy as np
+#Inversion library-related modules
+import pyVector as Vec
+import pyOperator as Op
+import pyLCGsolver as LCG
+import pySymLCGsolver as SymLCGsolver
+import pyProblem as Prblm
+import pyStopperBase as Stopper
+#Testing the NLCG solver to optimize a regularized linear problem treated as if it was non linear
+import pyNLCGsolver as NLCG
+#Plotting library
+from matplotlib import pyplot as plt
+```
+
+### Defining a matrix-vector multiplication operator
+
+```{python}
+class MatMult(Op.Operator):
+	"""Operator class to perform matrix-vector multiplication"""
+
+	def __init__(self,A,domain,range):
+		"""Constructor for the class: A = matrix to use; domain = domain vector; range = range vector"""
+		if(not isinstance(domain,Vec.vector)): raise TypeError("ERROR! Domain vector not a vector object")
+		if(not isinstance(range,Vec.vector)): raise TypeError("ERROR! Range vector not a vector object")
+		#Setting domain and range of operator and matrix to use during application of the operator
+		self.setDomainRange(domain,range)
+		self.A = np.matrix(A)
+		return
+
+	def forward(self,add,model,data):
+		"""Method to compute d = A m"""
+		self.checkDomainRange(model,data)
+		if(not isinstance(model,Vec.vectorIC)): raise TypeError("ERROR! Model vector not a vectorIC object")
+		if(not isinstance(data,Vec.vectorIC)): raise TypeError("ERROR! Data vector not a vectorIC object")
+		if(not add): data.zero()
+		data.arr+=np.matmul(self.A,model.arr)
+		return
+
+	def adjoint(self,add,model,data):
+		"""Method to compute m = A d"""
+		self.checkDomainRange(model,data)
+		if(not isinstance(model,Vec.vectorIC)): raise TypeError("ERROR! Model vector not a vectorIC object")
+		if(not isinstance(data,Vec.vectorIC)): raise TypeError("ERROR! Data vector not a vectorIC object")
+		if(not add): model.zero()
+		model.arr+=np.matmul(self.A.H,data.arr)
+		return
+```
+
+## Instantiation of vectors and operator
+
+
+For testing the library we will be using a discretized version of the following operator:
+\begin{align}
+y = \frac{d^2f(x)}{dx^2},
+\end{align}
+in which we simply compute the second-order derivative of a function $f(x)$. 
+
+```{python}
+N=200 #Number of points of the function f(x)
+dx=1.0 #Sampling of the function
+D2 = np.matrix(np.zeros((N,N),dtype=np.float64)) #Matrix containing the discretization of the derivative operator
+#The stencil used is simply: (f(ix-1)-2f(ix)+f(ix+1))/(dx*dx)
+np.fill_diagonal(D2, -2/(dx*dx))
+np.fill_diagonal(D2[1:], 1/(dx*dx))
+np.fill_diagonal(D2[:,1:], 1/(dx*dx))
+f = Vec.vectorIC(np.zeros((N,1),dtype=np.float64)) #Initializing numpy-based vector for f(x)
+y = Vec.vectorIC(np.zeros((N,1),dtype=np.float64)) #Initializing numpy-based vector for y
+D2Op = MatMult(D2,f,y)
+```
+
+Before we set any inversion problem, we study some of the properties of the constructed operator Deriv2Op.
+
+```{python}
+#Verifying operator adjointness through dot-product test
+D2Op.dotTest(verbose=True)
+#Computing maximum and minimum eigenvalues of the operator using the power iteration method and 
+#compare them against the ones computed using numpy
+egsOp=D2Op.powerMethod(verbose=False,eval_min=True,tol=1e-300)
+egsNp,_=np.linalg.eig(D2)
+egsNp = egsNp[egsNp.argsort()[::-1]] #Sorting the eigenvalues
+print("\nMaximum eigenvalue: %s (Power method), %s (NUMPY)"%(egsOp[0],egsNp[-1]))
+print("Minimum eigenvalue: %s (Power method), %s (NUMPY)"%(egsOp[1],egsNp[0]))
+```
+
+We can see that the matrix is negative definite. The small mismatch in the estimated eigenvalues is due to the dependence of the power method on the initial random eigenvector.
+
+
+## Inversion tests
+
+
+We will now focus our attention on inverting a function knowning its second-order derivative. In this case we will assume that $y$ is constant and equal to $1$. Therefore, we expect to obtain a parabola with positive curvature. Given the chosen boundary conditions we know that the matrix is invertible since all eigenvalues have the same sign and are different then zero.
+We will solve the following objective functions using linear conjugate-gradient methods:
+\begin{equation*}
+\phi_1(\mathbf{f}) = \frac{1}{2}\|D_2\mathbf{f}-\mathbf{y}\|_2^2
+\end{equation*}
+and
+\begin{equation*}
+\phi_2(\mathbf{f}) = \frac{1}{2}\mathbf{f}^T D_2 \mathbf{f} - \mathbf{f}^{T} \mathbf{y},
+\end{equation*}
+where $D_2$ represents the discretized second-order derivative operator, while $\mathbf{f}$ and $\mathbf{y}$ are the discretized representations of $f$ and $y$, respectively.
+
+```{python}
+y.set(1.0) # y = 1
+#Note that f = 0
+Phi1 = Prblm.ProblemL2Linear(f,y,D2Op)
+Phi2 = Prblm.ProblemLinearSymmetric(f,y,D2Op)
+```
+
+### Instantiation of solver objects
+
+
+First, we create two different solver object for solving the two inversion problem stated above.
+
+```{python}
+#Create stopping criteria and related object
+niter = 2000
+Stop  = Stopper.BasicStopper(niter=niter)
+#Create LCG solver
+LCGsolver = LCG.LCGsolver(Stop)
+LCGsolver.setDefaults(save_obj=True) #Saving objective function within the solver
+#Create LCG solver for symmetric systems
+SLCG = SymLCGsolver.SymLCGsolver(Stop)
+SLCG.setDefaults(save_obj=True)
+```
+
+Secondly, we run the solvers to minimize the objective functions previously defined.
+
+```{python}
+LCGsolver.run(Phi1,verbose=True)
+```
+
+```{python}
+SLCG.run(Phi2,verbose=True)
+```
+
+Finally, we can look at the results.
+
+```{python}
+# %matplotlib inline
+plt.plot(np.log10(LCGsolver.obj/LCGsolver.obj[0]))
+plt.title("LCG convergence")
+plt.xlabel("Iteration #",fontsize=14)
+plt.ylabel("$log_{10}$($\phi_i/\phi_0$)",fontsize=14)
+ax = plt.gca() 
+ax.autoscale(enable=True, axis='x', tight=True)
+```
+
+```{python}
+# %matplotlib inline
+plt.plot(SLCG.obj)
+plt.title("Symmetric LCG convergence")
+plt.xlabel("Iteration #",fontsize=14)
+plt.ylabel("$\phi_i$)",fontsize=14)
+ax = plt.gca() 
+ax.autoscale(enable=True, axis='x', tight=True)
+```
+
+Also, let's compare the two inverted functions with the analytical solution.
+To find the solution for the continuous case we need three conditions:
+\begin{equation}
+\frac{d^2f(x)}{dx^2}=1,\\
+f(x=0)=0,\\
+f(x=x_f)=0.
+\end{equation}
+$x = 0$ and $x = x_f$ are not sampled and lay outside of the interval $\mathbf{x}$.
+
+```{python}
+X = np.linspace(dx,N*dx,N)
+alpha = 0.5
+beta  = -(X[-1]+dx)*0.5
+gamma = 0.0
+f_an  = alpha * X * X + beta * X + gamma
+```
+
+```{python}
+_ = plt.plot(X,Phi1.model.getNdArray(),linewidth=3,label="$f(x)$ from $\phi_1$")
+_ = plt.plot(X,Phi2.model.getNdArray(),linewidth=2,dashes=[6, 2],label="$f(x)$ from $\phi_2$")
+_ = plt.plot(X,f_an,'k',linewidth=2,dashes=[2, 2],label="Analytical solution")
+ax = plt.gca() 
+ax.autoscale(enable=True, axis='x', tight=True)
+ax.legend()
+plt.xlabel("x",fontsize=14)
+plt.ylabel("$f(x)$",fontsize=14)
+_ = plt.title("Inverted functions")
+```
+
+Now, let's try to solve both inversions using the inverse of $D_2$ as a preconditioner
+
+```{python}
+PrecOp = MatMult(np.linalg.inv(D2),f,y) # P = [D_2]^-1
+Phi1Prec = Prblm.ProblemL2Linear(f,y,D2Op,prec=Op.ChainOperator(PrecOp,PrecOp)) #In this line we chain [D_2]^-1 twice
+Phi2Prec = Prblm.ProblemLinearSymmetric(f,y,D2Op,prec=PrecOp)
+```
+
+```{python}
+LCGsolver.setDefaults() # Re-setting default solver values
+SLCG.setDefaults() # Re-setting default solver values
+```
+
+```{python}
+LCGsolver.run(Phi1Prec,verbose=True)
+```
+
+```{python}
+SLCG.run(Phi2Prec,verbose=True)
+```
+
+As expected, we converge to the global minimum in effectively one iteration.

@@ -1,0 +1,147 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.1'
+      jupytext_version: 1.1.7
+  kernelspec:
+    display_name: Python 3
+    language: python
+    name: python3
+---
+
+```{python}
+# %autosave 0
+```
+
+# Testing non-linear solvers on the Rosenbrock function
+
+
+## Problem definition
+
+
+In this notebook we show how to set a user-defined objective function and minimize it using different solvers.
+The function understudy is the well-known convex Rosenbrock function. Its analytical form for the 2D case takes the follwing form:
+\begin{equation}
+\phi(x,y) = (1-x)^2 + 100 (y-x^2)^2,
+\end{equation}
+in which the unique global minimum is at $x=y=1$. The global minimum is inside a long, narrow, parabolic shaped flat valley. To find the valley is trivial. To converge to the global minimum, however, is difficult. Hence, this function represents a good testing case for any non-linear optimization scheme.
+
+```{python}
+#Loading necessary modules
+import sys
+sys.path.insert(0, "../python")
+import pyNLCGsolver as NLCG
+import pyLBFGSsolver as LBFGS
+import pyVector as Vec
+import pyProblem as Prblm
+import pyStopperBase as Stopper
+import pyStepperParabolic as Stepper
+import pyStepperCvSrch as StepperMT
+import numpy as np
+#Plotting library
+import matplotlib.pyplot as plt
+# %matplotlib inline
+```
+
+Let's first define the problem object. Our model vector is going to be $\mathbf{m} = [x \,, \, y]^T$. Since the libary assumes that the objective function is written in terms of some residual vector (i.e., $\phi(\mathbf{r}(\mathbf{m}))$, we will create a vector containing objective function as a single scalar value. 
+
+```{python}
+class Rosenbrock_prblm(Prblm.Problem):
+	"""
+	   Rosenbrock function inverse problem
+	   f(x,y) = (1 - x)^2 + 100*(y -x^2)^2
+	   m = [x y]'
+	   res = objective function value
+	"""
+
+	def __init__(self,x_initial,y_initial):
+		"""Constructor of linear problem"""
+		#Setting the bounds (if any)
+		super(Rosenbrock_prblm,self).__init__(None,None)
+		#Setting initial model
+		self.model  = Vec.vectorIC(np.array((x_initial,y_initial)))
+		self.dmodel = self.model.clone()
+		self.dmodel.zero()
+		#Gradient vector
+		self.grad=self.dmodel.clone()
+		#Residual vector
+		self.res = Vec.vectorIC(np.array((0.,)))
+		#Dresidual vector
+		self.dres=self.res.clone()
+		#Setting default variables
+		self.setDefaults()
+		self.linear=False
+		return
+
+	def objf(self,model):
+		"""Objective function computation"""
+		m = model.getNdArray() #Getting ndArray of the model
+		obj = self.res.arr[0]
+		return obj
+
+	def resf(self,model):
+		"""Residual function"""
+		m = model.getNdArray() #Getting ndArray of the model
+		self.res.getNdArray()[0] = (1.0 - m[0])*(1.0 - m[0]) + 100.0 * (m[1] - m[0]*m[0]) * (m[1] - m[0]*m[0])
+		return self.res
+
+	def gradf(self,model,res):
+		"""Gradient computation"""
+		m = model.getNdArray() #Getting ndArray of the model
+		self.grad.getNdArray()[0] = - 2.0 * (1.0 - m[0]) - 400.0 * m[0] * (m[1] - m[0]*m[0])
+		self.grad.getNdArray()[1] = 200.0 * (m[1] - m[0]*m[0])
+		return self.grad
+
+	def dresf(self,model,dmodel):
+		"""Linear variation of the objective function value"""
+		m = model.getNdArray() #Getting ndArray of the model
+		dm = dmodel.getNdArray() #Getting ndArray of the model
+		self.dres.arr[0] = (- 2.0 * (1.0 - m[0]) - 400.0 * m[0] * (m[1] - m[0]*m[0]))* dm[0] + (200.0 * (m[1] - m[0]*m[0])) * dm[1]
+		return self.dres
+```
+
+### Instantiation of the inverse problem and of the various solvers
+
+```{python}
+#Starting point for all the optimization problem
+x_init = -1.0
+y_init = -1.0
+#Testing solver on Rosenbrock function
+Ros_prob = Rosenbrock_prblm(x_init,y_init)
+```
+
+Before running any inversion, let's compute the objective function for different values of $x$ and $y$. This step will be useful when we want to plot the optimization path taken by the various tested algorithms.
+
+```{python}
+#Computing the objective function for plotting
+x_samples = np.linspace(-1.5,1.5,1000)
+y_samples = np.linspace(-1,3,1000)
+obj_ros = Vec.vectorIC(np.zeros((len(x_samples),len(y_samples))))
+obj_ros_np = obj_ros.getNdArray()
+model_test = Vec.vectorIC(np.array((0.0,0.0)))
+model_test_np = model_test.getNdArray()
+for ix,x_value in enumerate(x_samples):
+	for iy,y_value in enumerate(y_samples):
+		model_test_np[0] = x_value
+		model_test_np[1] = y_value
+		obj_ros_np[ix,iy]=Ros_prob.get_obj(model_test)
+```
+
+First we test a non-linear conjugate-gradient method in which a parabolic stepper with three-point interpolation is used. 
+
+```{python}
+plt.imshow(obj_ros_np.T,cmap='jet',vmin=0.0,vmax=3000,extent=[-1.5,1.5,-1.0,3.0])
+plt.contour(obj_ros_np.T,[0.05,0.1,0.5,2,10,50,125,250,1000,3000],extent=[-1.5,1.5,1.5,-1.5])
+```
+
+```{python}
+print(obj_ros_np.max())
+print(obj_ros_np.min())
+```
+
+```{python}
+
+```
