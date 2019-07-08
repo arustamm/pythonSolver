@@ -42,8 +42,22 @@ import pyStepperParabolic as Stepper
 import pyStepperCvSrch as StepperMT
 import numpy as np
 #Plotting library
+import matplotlib
 import matplotlib.pyplot as plt
+from mpl_toolkits.axes_grid1 import make_axes_locatable
 # %matplotlib inline
+params = {
+    'image.interpolation': 'nearest',
+    'image.cmap': 'gray',
+    'savefig.dpi': 300,  # to adjust notebook inline plot size
+    'axes.labelsize': 12, # fontsize for x and y labels (was 10)
+    'axes.titlesize': 12,
+    'font.size': 12, # was 10
+    'legend.fontsize': 12, # was 10
+    'xtick.labelsize': 12,
+    'ytick.labelsize': 12,
+}
+matplotlib.rcParams.update(params)
 ```
 
 Let's first define the problem object. Our model vector is going to be $\mathbf{m} = [x \,, \, y]^T$. Since the libary assumes that the objective function is written in terms of some residual vector (i.e., $\phi(\mathbf{r}(\mathbf{m}))$, we will create a vector containing objective function as a single scalar value. 
@@ -128,18 +142,31 @@ for ix,x_value in enumerate(x_samples):
 		model_test_np[0] = x_value
 		model_test_np[1] = y_value
 		obj_ros_np[ix,iy]=Ros_prob.get_obj(model_test)
+Ros_prob = Rosenbrock_prblm(x_init,y_init) #Resetting the problem
 ```
 
 First we test a non-linear conjugate-gradient method in which a parabolic stepper with three-point interpolation is used. 
 
 ```{python}
-plt.imshow(obj_ros_np.T,cmap='jet',vmin=0.0,vmax=3000,extent=[-1.5,1.5,-1.0,3.0])
-plt.contour(obj_ros_np.T,[0.05,0.1,0.5,2,10,50,125,250,1000,3000],extent=[-1.5,1.5,1.5,-1.5])
+niter = 500
+Stop  = Stopper.BasicStopper(niter=niter,tolr=1e-32,tolg=1e-32)
+NLCGsolver = NLCG.NLCGsolver(Stop)
+NLCGsolver.setDefaults(save_obj=True,save_model=True)
+NLCGsolver.run(Ros_prob,verbose=True)
 ```
 
 ```{python}
-print(obj_ros_np.max())
-print(obj_ros_np.min())
+fig,ax=plt.subplots()
+im=plt.imshow(obj_ros_np.T,cmap='jet',vmin=0.0,vmax=600,extent=[-1.5,1.5,-1.0,3.0])
+plt.xlabel("x")
+plt.ylabel("y")
+plt.grid()
+cs = plt.contour(obj_ros_np.T,levels=[0.05,0.1,0.5,2,10,50,125,250,500,1000],extent=[-1.5,1.5,3.0,-1.0],
+                 colors="white",linewidths=(0.8,),linestyles=('--'))
+divider = make_axes_locatable(ax)
+cax = divider.append_axes("right", size="5%", pad=0.1)
+plt.colorbar(im, cax=cax)
+ax.set_aspect('auto')
 ```
 
 ```{python}
