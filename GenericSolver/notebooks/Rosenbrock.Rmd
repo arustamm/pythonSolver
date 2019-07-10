@@ -27,7 +27,7 @@ The function understudy is the well-known convex Rosenbrock function. Its analyt
 \begin{equation}
 \phi(x,y) = (1-x)^2 + 100 (y-x^2)^2,
 \end{equation}
-in which the unique global minimum is at $x=y=1$. The global minimum is inside a long, narrow, parabolic shaped flat valley. To find the valley is trivial. To converge to the global minimum, however, is difficult. Hence, this function represents a good testing case for any non-linear optimization scheme.
+in which the unique global minimum is at $x=y=1$. The global minimum is inside a long, narrow, parabolic-shaped flat valley. To find the valley is trivial. To converge to the global minimum, however, is difficult. Hence, this function represents a good testing case for any non-linear optimization scheme.
 
 ```{python}
 #Loading necessary modules
@@ -132,7 +132,7 @@ Before running any inversion, let's compute the objective function for different
 ```{python}
 #Computing the objective function for plotting
 x_samples = np.linspace(-1.5,1.5,1000)
-y_samples = np.linspace(-1,3,1000)
+y_samples = np.linspace(3,-1.5,1000)
 obj_ros = Vec.vectorIC(np.zeros((len(x_samples),len(y_samples))))
 obj_ros_np = obj_ros.getNdArray()
 model_test = Vec.vectorIC(np.array((0.0,0.0)))
@@ -142,27 +142,145 @@ for ix,x_value in enumerate(x_samples):
 		model_test_np[0] = x_value
 		model_test_np[1] = y_value
 		obj_ros_np[ix,iy]=Ros_prob.get_obj(model_test)
-Ros_prob = Rosenbrock_prblm(x_init,y_init) #Resetting the problem
 ```
 
 First we test a non-linear conjugate-gradient method in which a parabolic stepper with three-point interpolation is used. 
 
 ```{python}
-niter = 500
+niter = 1000
 Stop  = Stopper.BasicStopper(niter=niter,tolr=1e-32,tolg=1e-32)
 NLCGsolver = NLCG.NLCGsolver(Stop)
+Ros_prob = Rosenbrock_prblm(x_init,y_init) #Resetting the problem
 NLCGsolver.setDefaults(save_obj=True,save_model=True)
 NLCGsolver.run(Ros_prob,verbose=True)
+#Converting sampled points to arrays for plotting
+x_smpld=[]
+y_smpld=[]
+for iter in range(len(NLCGsolver.model)):
+    x_smpld.append(NLCGsolver.model[iter].getNdArray()[0])
+    y_smpld.append(NLCGsolver.model[iter].getNdArray()[1])
 ```
+
+Let's plot the optimization path taken by the algorithm, which converged to the global minimum in 199 iterations using a parabolic stepper.
 
 ```{python}
 fig,ax=plt.subplots()
-im=plt.imshow(obj_ros_np.T,cmap='jet',vmin=0.0,vmax=600,extent=[-1.5,1.5,-1.0,3.0])
+# im=plt.imshow(obj_ros_np.T,cmap='jet',vmin=0.0,vmax=600,extent=[-1.5,1.5,-1.0,3.0])
+plt.scatter(x_smpld,y_smpld,color='red',s=50,marker="+")
+plt.plot(x_smpld,y_smpld,"--",color='red')
+im=plt.imshow(obj_ros_np.T,cmap='jet',vmin=0.0,vmax=600,extent=[1.5,-1.5,-1.5,3.0])
 plt.xlabel("x")
 plt.ylabel("y")
 plt.grid()
-cs = plt.contour(obj_ros_np.T,levels=[0.05,0.1,0.5,2,10,50,125,250,500,1000],extent=[-1.5,1.5,3.0,-1.0],
+cs = plt.contour(obj_ros_np.T,levels=[0.05,0.1,0.5,2,10,50,125,250,500,1000],extent=[-1.5,1.5,3.0,-1.5],
                  colors="white",linewidths=(0.8,),linestyles=('--'))
+plt.gca().invert_xaxis()
+divider = make_axes_locatable(ax)
+cax = divider.append_axes("right", size="5%", pad=0.1)
+plt.colorbar(im, cax=cax)
+ax.set_aspect('auto')
+```
+
+For the second test, we will test the steppest-descent approach using the same stepper.
+
+```{python}
+NLSDsolver = NLCG.NLCGsolver(Stop,beta_type="SD")
+Ros_prob = Rosenbrock_prblm(x_init,y_init) #Resetting the problem
+NLSDsolver.setDefaults(save_obj=True,save_model=True)
+NLSDsolver.run(Ros_prob,verbose=True)
+#Converting sampled points to arrays for plotting
+x_smpld=[]
+y_smpld=[]
+for iter in range(len(NLSDsolver.model)):
+    x_smpld.append(NLSDsolver.model[iter].getNdArray()[0])
+    y_smpld.append(NLSDsolver.model[iter].getNdArray()[1])
+```
+
+Let's again plot the optimization path. In this case, the algorithm finds only falls close to the vicinity of the global minimum but does not reach even after 1000 iteration. In the figure below, we can see that the algorithm is sampling most of the objective function within the parabolic valley.
+
+```{python}
+fig,ax=plt.subplots()
+# im=plt.imshow(obj_ros_np.T,cmap='jet',vmin=0.0,vmax=600,extent=[-1.5,1.5,-1.0,3.0])
+plt.scatter(x_smpld,y_smpld,color='red',s=50,marker="+")
+plt.plot(x_smpld,y_smpld,"--",color='red')
+im=plt.imshow(obj_ros_np.T,cmap='jet',vmin=0.0,vmax=600,extent=[1.5,-1.5,-1.5,3.0])
+plt.xlabel("x")
+plt.ylabel("y")
+plt.grid()
+cs = plt.contour(obj_ros_np.T,levels=[0.05,0.1,0.5,2,10,50,125,250,500,1000],extent=[-1.5,1.5,3.0,-1.5],
+                 colors="white",linewidths=(0.8,),linestyles=('--'))
+plt.gca().invert_xaxis()
+divider = make_axes_locatable(ax)
+cax = divider.append_axes("right", size="5%", pad=0.1)
+plt.colorbar(im, cax=cax)
+ax.set_aspect('auto')
+```
+
+In the third test, let's apply the BFGS algorithm to find the function's global minimum.
+
+```{python}
+ParabStep = Stepper.ParabolicStep() #Again we use the same parabolic stepper as before
+BFGSsolver = LBFGS.LBFGSsolver(Stop,stepper=ParabStep)
+Ros_prob = Rosenbrock_prblm(x_init,y_init) #Resetting the problem
+BFGSsolver.setDefaults(save_obj=True,save_model=True)
+BFGSsolver.run(Ros_prob,verbose=True)
+#Converting sampled points to arrays for plotting
+x_smpld=[]
+y_smpld=[]
+for iter in range(len(BFGSsolver.model)):
+    x_smpld.append(BFGSsolver.model[iter].getNdArray()[0])
+    y_smpld.append(BFGSsolver.model[iter].getNdArray()[1])
+```
+
+The algorithm has precisely reached the global minimum in 24 iterations. We can clearly see that it is able to find an approximation of the local curvature of the objective function. In fact, it needs to sample very few points within the parabolic-shaped valley. 
+
+```{python}
+fig,ax=plt.subplots()
+# im=plt.imshow(obj_ros_np.T,cmap='jet',vmin=0.0,vmax=600,extent=[-1.5,1.5,-1.0,3.0])
+plt.scatter(x_smpld,y_smpld,color='red',s=50,marker="+")
+plt.plot(x_smpld,y_smpld,"--",color='red')
+im=plt.imshow(obj_ros_np.T,cmap='jet',vmin=0.0,vmax=600,extent=[1.5,-1.5,-1.5,3.0])
+plt.xlabel("x")
+plt.ylabel("y")
+plt.grid()
+cs = plt.contour(obj_ros_np.T,levels=[0.05,0.1,0.5,2,10,50,125,250,500,1000],extent=[-1.5,1.5,3.0,-1.5],
+                 colors="white",linewidths=(0.8,),linestyles=('--'))
+plt.gca().invert_xaxis()
+divider = make_axes_locatable(ax)
+cax = divider.append_axes("right", size="5%", pad=0.1)
+plt.colorbar(im, cax=cax)
+ax.set_aspect('auto')
+```
+
+Finally, let's test again the BFGS method but this time employing the line-search algorithm proposed by More and Thuente (1994). Their line-search method uses a backeting approach in which the strong Wolfe conditions are verified for the tested point. In this case, if these conditons are met, then the method was successful.
+
+```{python}
+BFGSsolver = LBFGS.LBFGSsolver(Stop)
+Ros_prob = Rosenbrock_prblm(x_init,y_init) #Resetting the problem
+BFGSsolver.setDefaults(save_obj=True,save_model=True)
+BFGSsolver.run(Ros_prob,verbose=True)
+#Converting sampled points to arrays for plotting
+x_smpld=[]
+y_smpld=[]
+for iter in range(len(BFGSsolver.model)):
+    x_smpld.append(BFGSsolver.model[iter].getNdArray()[0])
+    y_smpld.append(BFGSsolver.model[iter].getNdArray()[1])
+```
+
+We can see that the algorithm has reached the global minimum in 36 iterations. However, since we employed a different stepping method, in which no parabolic interpolation is used during the optimization, the algorithm had to perfom only 41 objective function evaluations as opposed to 73 necessary by the BFGS method when the parabolic stepper was the line-search algorithm of choice.
+
+```{python}
+fig,ax=plt.subplots()
+# im=plt.imshow(obj_ros_np.T,cmap='jet',vmin=0.0,vmax=600,extent=[-1.5,1.5,-1.0,3.0])
+plt.scatter(x_smpld,y_smpld,color='red',s=50,marker="+")
+plt.plot(x_smpld,y_smpld,"--",color='red')
+im=plt.imshow(obj_ros_np.T,cmap='jet',vmin=0.0,vmax=600,extent=[1.5,-1.5,-1.5,3.0])
+plt.xlabel("x")
+plt.ylabel("y")
+plt.grid()
+cs = plt.contour(obj_ros_np.T,levels=[0.05,0.1,0.5,2,10,50,125,250,500,1000],extent=[-1.5,1.5,3.0,-1.5],
+                 colors="white",linewidths=(0.8,),linestyles=('--'))
+plt.gca().invert_xaxis()
 divider = make_axes_locatable(ax)
 cax = divider.append_axes("right", size="5%", pad=0.1)
 plt.colorbar(im, cax=cax)
