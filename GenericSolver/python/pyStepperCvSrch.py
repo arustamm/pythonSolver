@@ -212,7 +212,7 @@ class CvSrchStep(pyStepper.Stepper):
 			#The case gamma = 0 only arises if the cubic does not tend
 			#to infinity in the direction of the step.
 
-			gamma = s*np.sqrt(mp.maximum(0.,(theta/s)*(theta/s) - (dx/s)*(dp/s)))
+			gamma = s*np.sqrt(np.maximum(0.,(theta/s)*(theta/s) - (dx/s)*(dp/s)))
 			if (stp > stx):
 				gamma = -gamma
 
