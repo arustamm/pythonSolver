@@ -236,3 +236,7 @@ SLCG.run(Phi2Prec,verbose=True)
 ```
 
 As expected, we converge to the global minimum in effectively one iteration.
+
+```{python}
+
+```

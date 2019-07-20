@@ -1,0 +1,76 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.1'
+      jupytext_version: 1.1.7
+  kernelspec:
+    display_name: Python 3
+    language: python
+    name: python3
+---
+
+# Vertical Sesimic Profiling inversion
+
+
+We are going to focus our attention to a common approach when dealing with geophysical inverse problems, regularization and prior information. In this example we will invert synthetic data from a vertical seismic profiling survey. To do so, we will discretize the following equation:
+\begin{align}
+t(z) =  \int_{0}^{z} \frac{1}{v(z')}dz',
+\end{align}
+where $t(z)$ is the traveltime from the surface to the depth $z$ and $v(z')$ represents the propagation speed of the medium. To make the problem linear we will parameterize the problem using slowness instead of speed. The discrete version for a regular $z$ sampling of it can be written as follows:
+\begin{align}
+t_i =  \sum_{j=0}^{N_i} s_j \Delta z,
+\end{align}
+where $\Delta z$ represents the sampling interval in the $z$ direction, while $t_i$ and $s_j$ are the traveltime and slowness at $z_i=N_i \Delta z$ depth, respectively.
+In this example we will assume that the true subsurface vertical speed is given by the following equation:
+\begin{align}
+v(z)=3 + \sqrt{z/1000},
+\end{align}
+expressed in km/s.
+
+```{python}
+import numpy as np
+#Plotting library
+from matplotlib import pyplot as plt
+import matplotlib
+from mpl_toolkits.axes_grid1 import make_axes_locatable
+# %matplotlib inline
+params = {
+    'image.cmap': 'gray',
+    'axes.grid': False,
+    'savefig.dpi': 300,  # to adjust notebook inline plot size
+    'axes.labelsize': 14, # fontsize for x and y labels (was 10)
+    'axes.titlesize': 14,
+    'font.size': 14, 
+    'legend.fontsize': 12,
+    'xtick.labelsize': 14,
+    'ytick.labelsize': 14
+}
+matplotlib.rcParams.update(params)
+#Inversion library-related modules
+import pyVector as Vec
+import pyOperator as Op
+import pyLCGsolver as LCG
+import pyProblem as Prblm
+import pyStopperBase as Stopper
+```
+
+```{python}
+#Definition of the modeling operator forward and its adjoint
+class VSP_op(Op.Operator):
+    """
+       Vertical Sesimic Profiling operator      
+    """
+    
+    def __init__(self,N,M,dz,dz_d):
+        """Operator constructor"""
+        self.dz = dz #Sampling in depth
+        self.dz_d =dz_d #Sampling of the data points
+        self.M = M   #Number of model points
+        self.N = N   #Number of data points
+        if((M-1)*dz < (N-1)*dz_d): 
+            raise ValueError("ERROR! Total distance of data points must be smaller than the one of the model")
+        return
+```
