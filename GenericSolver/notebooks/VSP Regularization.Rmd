@@ -87,7 +87,7 @@ class VSP_op(Op.Operator):
         modelNd = model.getNdArray() #Getting pointer to Numpy model array
         dataNd = data.getNdArray()   #Getting pointer to Numpy data array
         for idata in range(self.N):
-            dataNd[idata] += np.sum(modelNd[:(idata+1)*self.desampling]*dz)
+            dataNd[idata] += np.sum(modelNd[:(idata+1)*self.desampling+1]*dz)
         return
 ```
 
@@ -99,8 +99,8 @@ vel = 3000.0 + np.sqrt(1000.0*z)
 slowness = 1.0/vel
 model_true = Vec.vectorIC(slowness)
 #Desampling of receivers
-desampling = 10 #20 m sampling
-ndata = int(zmax/(dz*desampling))+1
+desampling = 1 #20 m sampling
+ndata = int(zmax/(dz*desampling))
 data_true = Vec.vectorIC((ndata,))
 VSP_10 = VSP_op(model_true,data_true,dz,desampling)
 ```

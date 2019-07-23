@@ -50,6 +50,14 @@ class vector:
 		raise NotImplementedError("zero must be overwritten")
 		return
 
+	def max(self):
+		"""Function to obtain maximum value within a vector"""
+		return self.getNdArray().max()
+
+	def min(self):
+		"""Function to obtain minimum value within a vector"""
+		return self.getNdArray().min()
+
 	def set(self,val):
 		"""Function to set all values in the vector"""
 		raise NotImplementedError("set must be overwritten")
@@ -224,6 +232,14 @@ class superVector(vector):
 		self.vec1.zero()
 		self.vec2.zero()
 		return
+
+	def max(self):
+		"""Function to obtain maximum value within a vector"""
+		return np.max((self.vec1.max(),self.vec2.max()))
+
+	def min(self):
+		"""Function to obtain minimum value within a vector"""
+		return np.min((self.vec1.min(),self.vec2.min()))
 
 	def scale(self,sc):
 		"""Function to scale a vector"""
