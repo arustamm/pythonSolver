@@ -71,8 +71,8 @@ class VSP_op(Op.Operator):
         self.desampling = int(desampling)      #Desampling of the data points (should be 1 or greater)
         self.M = model.getNdArray().shape[0]   #Number of model points
         self.N = data.getNdArray().shape[0]    #Number of data points
-        if((self.M-1)*self.dz < (self.N-1)*self.dz*self.desampling): 
-            raise ValueError("ERROR! Total distance of data points must be smaller than the one of the model")
+        if((self.M-2) < (self.N-2)*self.desampling): 
+            raise ValueError("ERROR! Too many data points! Change desampling or number of data points")
         return
     
     def forward(self,add,model,data):
@@ -86,8 +86,31 @@ class VSP_op(Op.Operator):
         if(not add): data.zero()     #data = 0
         modelNd = model.getNdArray() #Getting pointer to Numpy model array
         dataNd = data.getNdArray()   #Getting pointer to Numpy data array
-        for idata in range(self.N):
-            dataNd[idata] += np.sum(modelNd[:(idata+1)*self.desampling+1]*dz)
+        #First data point
+        dataNd[0] += modelNd[0]*dz
+        for idata in range(1,self.N-1):
+            dataNd[idata] += np.sum(modelNd[:(idata)*self.desampling+1])*dz
+        #Last data point
+        dataNd[-1] += np.sum(modelNd[:])*dz
+        return
+    
+    def adjoint(self,add,model,data):
+        """
+           Adjoint operator from traveltime to slowness
+           add     = [no default] - boolean; Flag to add modeled data to input vector
+           model   = [no default] - vector class; slowness model vector
+           data    = [no default] - vector class; traveltime data vector
+        """
+        self.checkDomainRange(model,data)
+        if(not add): model.zero()    #model = 0
+        modelNd = model.getNdArray() #Getting pointer to Numpy model array
+        dataNd = data.getNdArray()   #Getting pointer to Numpy data array
+        #First data point
+        modelNd[0] += dataNd[0]*dz
+        for idata in range(1,self.N-1):
+            modelNd[:(idata)*self.desampling+1] += dataNd[idata]*dz
+        #Last data point
+        modelNd[:] += dataNd[-1]*dz
         return
 ```
 
@@ -100,7 +123,7 @@ slowness = 1.0/vel
 model_true = Vec.vectorIC(slowness)
 #Desampling of receivers
 desampling = 1 #20 m sampling
-ndata = int(zmax/(dz*desampling))
+ndata = int(zmax/(dz*desampling))+1
 data_true = Vec.vectorIC((ndata,))
 VSP_10 = VSP_op(model_true,data_true,dz,desampling)
 ```
@@ -110,7 +133,35 @@ VSP_10.forward(False,model_true,data_true)
 ```
 
 ```{python}
-data_true.getNdArray()
+VSP_10.dotTest(True)
+```
+
+```{python}
+plt.plot(data_true.getNdArray(),'*')
+```
+
+```{python}
+#Create stopping criteria and related object
+niter = 2000
+Stop  = Stopper.BasicStopper(niter=niter)
+#Create LCG solver
+LCGsolver = LCG.LCGsolver(Stop)
+LCGsolver.setDefaults(save_obj=True) #Saving objective function within the solver
+```
+
+```{python}
+#Inital slowness model
+model = model_true.clone()
+model.zero() #m = 0
+VSP_prob = Prblm.ProblemL2Linear(model,data_true,VSP_10)
+```
+
+```{python}
+LCGsolver.run(VSP_prob,verbose=True)
+```
+
+```{python}
+plt.plot(VSP_prob.model.getNdArray())
 ```
 
 ```{python}
