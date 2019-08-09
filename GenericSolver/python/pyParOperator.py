@@ -16,7 +16,7 @@ def command_read(cmd_file):
 				cmd_tmp=cmd_tmp.replace('\r','')
 				cmd.append(cmd_tmp.strip('\n'))
 	return cmd
-	
+
 def set_random_names(cmd):
 	"""Function to change tmp_rand_name[0-9]+ to random temporary name"""
 	ind=0
@@ -30,13 +30,13 @@ def set_random_names(cmd):
 
 class parOperator(pyop.Operator):
 	"""Class for operators defined by parameter files which runs system commands"""
-	
+
 	def __init__(self,model,data):
 		"""Domain and Range of operator; call set_forward and set_adjoint to set actual operators"""
 		#Setting Domain and Range size
 		self.setDomainRange(model,data)
 		return
-		
+
 	def set_forward(self,cmd_file,input_file,output_file,input_m0_file=None,input_aux=[]):
 		"""Class to set parameter files for forward operator"""
 		self.cmd_file = cmd_file
@@ -48,7 +48,7 @@ class parOperator(pyop.Operator):
 		#Setting random names if tmp_rand_name[0-9]+ are used
 		self.cmd_fwd = set_random_names(cmd_fwd)
 		return
-		
+
 	def set_input_output_fwd(self,input=None,output=None,input_m0=None,input_aux=[]):
 		"""Method to change name of operator input and/or output"""
 		if(input!=None):
@@ -78,7 +78,7 @@ class parOperator(pyop.Operator):
 			else:
 				print("WARNING! %s outside of internal list %s"%(ifile,self.input_aux))
 		return
-		
+
 	def set_adjoint(self,cmd_file,input_file,output_file,input_m0_file=None,input_aux=[]):
 		"""Class to set parameter files for adjoint operator"""
 		self.cmd_file = cmd_file
@@ -90,7 +90,7 @@ class parOperator(pyop.Operator):
 		#Setting random names if tmp_rand_name[0-9]+ are used
 		self.cmd_adj = set_random_names(cmd_adj)
 		return
-		
+
 	def set_input_output_adj(self,input=None,output=None,input_m0=None,input_aux=[]):
 		"""Method to change name of operator input and/or output"""
 		if(input!=None):
@@ -120,25 +120,25 @@ class parOperator(pyop.Operator):
 			else:
 				print("WARNING! %s outside of internal list %s"%(ifile,self.input_aux))
 		return
-		
+
 	def run_operator(self,cmd,print_cmd=False,print_output=False):
 		"""Method to run operator"""
 		for cmd_to_run in cmd:
 			sys_util.RunShellCmd(cmd_to_run,print_cmd,print_output)
-		return 
+		return
 
 	def forward(self,add,model_in,data_in):
 		"""Forward operator"""
 		self.checkDomainRange(model_in,data_in)
 		model = model_in
 		data  = data_in
-		
+
 		#Apply operator to temporary file if necessary to add to given data vector
 		sc = 0.
 		if(add):
 			data = data_in.clone()
 			sc = 1.
-		
+
 		#If not out-of-core vectors convert them
 		if(not isinstance(model,pyvec.vectorOC)):
 			model=pyvec.vectorOC(model)
@@ -148,7 +148,7 @@ class parOperator(pyop.Operator):
 		#Setting input/output and running the operator
 		self.set_input_output_fwd(input=model.vecfile,output=data.vecfile)
 		self.run_operator(self.cmd_fwd)
-		
+
 		#Converting temporary data vector back to correct vector type
 		if(type(data) != type(data_in)):
 			data_tmp = data_in.__new__(type(data_in))
@@ -162,16 +162,16 @@ class parOperator(pyop.Operator):
 	def adjoint(self,add,model_in,data_in):
 		"""Adjoint operator"""
 		self.checkDomainRange(model_in,data_in)
-		
+
 		model = model_in
 		data  = data_in
-		
+
 		#Apply operator to temporary file if necessary to add to given data vector
 		sc = 0.
 		if(add):
 			model = model_in.clone()
 			sc = 1.
-		
+
 		#If not out-of-core vectors convert them
 		if(not isinstance(model,pyvec.vectorOC)):
 			model=pyvec.vectorOC(model)
@@ -181,24 +181,14 @@ class parOperator(pyop.Operator):
 		#Setting input/output and running the operator
 		self.set_input_output_adj(input=data.vecfile,output=model.vecfile)
 		self.run_operator(self.cmd_adj)
-		
+
 		#Converting temporary data vector back to correct vector type
 		if(type(model) != type(model_in)):
 			model_tmp = model_in.__new__(type(model_in))
-			model_tmp = model_tmp.__init__(model)
+			model_tmp.__init__(model)
 			del model
 			model = model_tmp
-			
+
 		#Adding data to input data vector
 		model_in.scaleAdd(model,sc1=sc)
 		return
-		
-
-
-
-
-
-
-
-
-
