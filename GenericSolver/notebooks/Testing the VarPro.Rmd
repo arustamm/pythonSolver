@@ -1,0 +1,107 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.1'
+      jupytext_version: 1.2.4
+  kernelspec:
+    display_name: Python 3
+    language: python
+    name: python3
+---
+
+```{python}
+autosave 0
+```
+
+# Testing the Variable Projection method for Separable non-linear problems
+
+
+In this notebook we are going to test and explore the variable projection method (Golub and Pereyra, 1973) on a simple exponential fitting problem. This kind of inverse problem falls into the set of separable non-linear problems; therefore, the variable-projection method (VarPro) can and should be applied. The analytical/modeling equation is represented by the following:
+\begin{align}
+y_{i} = a \exp(-b t_{i}),
+\end{align}
+where $a$ and $b$ are the model parameters and $t_i$ indicates the $i-th$ time sample. We are going to minimize the simple $L_{2}$ difference between the model and the observed data. Hence, we can write the objective function as the following:
+\begin{align}
+\phi(a,b) = \frac{1}{2} \|\mathbf{y}(a,b) - \mathbf{y}_{obs} \|_2^2.
+\end{align}
+We notice that this objective function is quadratic with respect to parameter $a$ and non-linear with respect to the other.
+
+
+### Importing necessary libraries
+
+```{python}
+#Adding library modules to PYTHONPATH
+import sys
+sys.path.append("../python")
+import numpy as np
+#Inversion library-related modules
+import pyVector as Vec
+import pyOperator as Op
+import pyProblem as Prblm
+import pyStopperBase as Stopper
+#Testing the NLCG solver to optimize a regularized linear problem treated as if it was non linear
+import pyNLCGsolver as NLCG
+#Plotting library
+import matplotlib
+from matplotlib import pyplot as plt
+from mpl_toolkits.axes_grid1 import make_axes_locatable
+# # %matplotlib inline
+params = {
+    'image.cmap': 'gray',
+    'axes.grid': False,
+    'savefig.dpi': 300,  # to adjust notebook inline plot size
+    'axes.labelsize': 14, # fontsize for x and y labels (was 10)
+    'axes.titlesize': 14,
+    'font.size': 14, 
+    'legend.fontsize': 12,
+    'xtick.labelsize': 14,
+    'ytick.labelsize': 14
+}
+matplotlib.rcParams.update(params)
+```
+
+### Defining non-linear modeling operator for symultaneous inversion
+Here we define the model vector as $\mathbf{m}= [a,b]^{T}$
+
+```{python}
+class exponential_nl_sym(Op.Operator):
+
+    def __init__(self,model,t_vec):
+        """y(a,b;t) = a * exp(-b*t) """
+        self.setDomainRange(model,t_vec)
+        self.t_samples = t_vec.getNdArray()
+        return
+
+    def forward(self,add,model,data):
+        """Forward non-linear"""
+        self.checkDomainRange(model,data)
+        modelNd = model.getNdArray()
+        dataNd = data.getNdArray()
+        a = modelNd[0]
+        b = modelNd[1]
+        if(not add): data.zero()
+        dataNd[:]+= a * np.exp(-b*self.t_samples)
+        return
+```
+
+```{python}
+#Generating observed data
+time_vec = Vec.vectorIC(np.linspace(0.,2.,200))
+a_true = 10.0
+b_true = 0.5
+true_m = Vec.vectorIC(np.array([a_true,b_true]))
+exponential_nl_sym = exponential_nl(true_m,time_vec)
+data_true = time_vec.clone()
+expon_nl.forward(False,true_m,data_true)
+```
+
+```{python}
+dir(time_vec)
+```
+
+```{python}
+
+```
