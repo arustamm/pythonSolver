@@ -1,6 +1,8 @@
 #Module containing Linear-Conjugate Gradient Solver class
 #It can also handle steppest-descent algorithm
 from math import isnan
+import numpy as np
+zero = 10**(np.floor(np.log10(np.abs(float(np.finfo(np.float64).tiny))))+2) #Check for avoid Overflow or Underflow
 import pySolver
 
 class LCGsolver(pySolver.Solver):
@@ -171,6 +173,12 @@ class LCGsolver(pySolver.Solver):
 						success = False
 					else:
 						determ = dot_gradd * dot_dres - dot_gradd_dres * dot_gradd_dres
+						#Checking if alpha or beta are becoming infinity
+						if(abs(determ) < zero):
+							msg="Plane-search method fails (i.e., deteminatant is zero: %s), will terminate solver"%(determ)
+							if(verbose): print(msg)
+							if(self.logger): self.logger.addToLog(msg)
+							break
 						dot_gradd_res=prblm_gradd.dot(prblm_res)
 						dot_dres_res=cg_dres.dot(prblm_res)
 						alpha = -(dot_dres*dot_gradd_res - dot_gradd_dres*dot_dres_res) /determ
