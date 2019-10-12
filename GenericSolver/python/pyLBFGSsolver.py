@@ -342,5 +342,7 @@ class LBFGSsolver(pySolver.Solver):
 		else:
 			if(self.logger): self.logger.addToLog("Broyden-Fletcher-Goldfarb-Shanno (BFGS) algorithm log file end")
 		self.restart.clear_restart()
+		#Resetting inverse Hessian matrix
+		self.H0 = None
 		del self.tmp_vector; self.tmp_vector = None
 		return

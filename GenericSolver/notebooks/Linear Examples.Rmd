@@ -39,7 +39,22 @@ import pyStopperBase as Stopper
 #Testing the NLCG solver to optimize a regularized linear problem treated as if it was non linear
 import pyNLCGsolver as NLCG
 #Plotting library
-from matplotlib import pyplot as plt
+import matplotlib
+import matplotlib.pyplot as plt
+from mpl_toolkits.axes_grid1 import make_axes_locatable
+# %matplotlib inline
+params = {
+    'image.interpolation': 'nearest',
+    'image.cmap': 'gray',
+    'savefig.dpi': 300,  # to adjust notebook inline plot size
+    'axes.labelsize': 12, # fontsize for x and y labels (was 10)
+    'axes.titlesize': 12,
+    'font.size': 12, # was 10
+    'legend.fontsize': 12, # was 10
+    'xtick.labelsize': 12,
+    'ytick.labelsize': 12,
+}
+matplotlib.rcParams.update(params)
 ```
 
 ### Defining a matrix-vector multiplication operator
