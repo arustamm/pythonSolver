@@ -84,7 +84,7 @@ def checkVector(vec1,vec2):
 
 class VectorDask(Vec.vector):
 	"""
-	   Definition of a vector object that whose computation are performed through a Dask Client
+	   Definition of a vector object whose computations are performed through a Dask Client
 	"""
 
 	def __init__(self,client,**kwargs):
