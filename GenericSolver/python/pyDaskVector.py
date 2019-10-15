@@ -107,8 +107,8 @@ class VectorDask(Vec.vector):
 		#List containing futures to vectors
 		self.vecDask = []
 		#Getting worker IDs
-		self.wrkIds = list(self.client.get_worker_logs().keys())
-		N_wrk = len(self.wrkIds)
+		wrkIds = list(self.client.get_worker_logs().keys())
+		N_wrk = len(wrkIds)
 		if("vector_template" in kwargs and "chunks" in kwargs):
 			vec_tmplt = kwargs.get("vector_template")
 			chunks = kwargs.get("chunks")
@@ -117,7 +117,7 @@ class VectorDask(Vec.vector):
 			#Copying vector template to all workers
 			vecD = self.client.scatter(vec_tmplt,broadcast=True)
 			#Spreading vectors
-			for iwrk,wrkId in enumerate(self.wrkIds):
+			for iwrk,wrkId in enumerate(wrkIds):
 				for ivec in range(chunks[iwrk]):
 					#Cloning remote vector to create
 					self.vecDask.append(self.client.submit(call_clone,vecD,workers=[wrkId]))
@@ -136,7 +136,7 @@ class VectorDask(Vec.vector):
 				chunks = [np.sum(ix) for ix in np.array_split(chunks,N_wrk)]
 				vec_chunks = np.split(vec_list,np.cumsum(chunks))[:-1]
 			#Spreading vectors
-			for iwrk,wrkId in enumerate(self.wrkIds):
+			for iwrk,wrkId in enumerate(wrkIds):
 				for vec in vec_chunks[iwrk]:
 					self.vecDask.append(self.client.scatter(vec,workers=[wrkId]))
 		elif("dask_vectors" in kwargs):
@@ -145,7 +145,6 @@ class VectorDask(Vec.vector):
 				if(not issubclass(dask_vec.type,Vec.vector)):
 					raise TypeError("ERROR! One instance in dask_vectors is not a vector-derived object!")
 			self.client = client
-			self.wrkIds = list(self.client.get_worker_logs().keys())
 			self.vecDask = dask_vectors
 		else:
 			raise ValueError("ERROR! Wrong arguments passed to constructor! Please, read object help!")

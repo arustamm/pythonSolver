@@ -14,12 +14,13 @@ vec1D = pyDaskVector.VectorDask(client,vectors=vectors)
 
 vec1D.rand()
 vec1D.norm()
+vecClone = vec1D.clone()
 vec1D.checkSame(vecD)
 vec1D.checkSame(vec1D)
 
 #Testing getNdArray
-vec1 = Vec.vectorIC((200,100,30))
-vec2 = Vec.vectorIC((200,100,20))
-vec3 = Vec.vectorIC((200,100,10))
+vec1 = Vec.vectorIC((800,500,100))
+vec2 = Vec.vectorIC((800,500,100))
+vec3 = Vec.vectorIC((800,500,100))
 vec2D = pyDaskVector.VectorDask(client,vectors=(vec1,vec2,vec3))
 arr = vec2D.getNdArray()
