@@ -160,9 +160,28 @@ class VectorDask(Vec.vector):
 
 	#Class vector operations
 	def getNdArray(self):
-		"""Function to return Ndarray of the vector"""
-		raise NotImplementedError("getNdArray must be overwritten")
-		return
+		"""
+		   Function to return Ndarray of the vector
+		   The function will return an Numpy array if dimensions among all the arrays are consistent with each other (i.e., slowest-axis concatenation). Otherwise, a list of all the arrays is going to be returned.
+		"""
+		futures = []
+		for ivec in range(len(self.vecDask)):
+			futures.append(self.client.submit(call_getNdArray,self.vecDask[ivec]))
+		arrays = self.client.gather(futures)
+		#Checking if dimension are consistent with each other
+		shapes = [arr.shape for arr in arrays]
+		#Find maximum number of axis
+		Naxis = np.max([len(shp) for shp in shapes])
+		#Expanding slowest axis if necessary
+		for idx,arr in enumerate(arrays):
+			dim_diff = Naxis - len(arr.shape)
+			if(dim_diff == 1):
+				arrays[idx] = np.expand_dims(arr,axis=0)
+		try:
+			NdArr = np.concatenate(arrays,axis=0)
+			return NdArr
+		except ValueError:
+			return arrays
 
 	def norm(self,N=2):
 		"""Function to compute vector N-norm"""
