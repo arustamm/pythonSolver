@@ -119,8 +119,8 @@ class VectorDask(Vec.vector):
 			#Spreading vectors
 			for iwrk,wrkId in enumerate(wrkIds):
 				for ivec in range(chunks[iwrk]):
-					#Cloning remote vector to create
-					self.vecDask.append(self.client.submit(call_clone,vecD,workers=[wrkId]))
+					#Scattering vector to different workers
+					self.vecDask.append(self.client.scatter(vec_tmplt,workers=[wrkId]))
 		elif("vectors" in kwargs):
 			#Vector list to be spread across workers
 			vec_list = kwargs.get("vectors")
