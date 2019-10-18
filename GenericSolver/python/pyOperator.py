@@ -345,41 +345,49 @@ class ChainOperator(Operator):
 		self.op1.adjoint(add,model,self.tmp_vec)
 		return
 
+# TODO test stackOperator
 class stackOperator(Operator):
-	"""
-			  Stack of operators class
-					| d1 |   | A |
-			   Cm = |    | = |   | m
-					| d2 |   | B |
-	"""
+    """
+              Stack of operators class
+                    | d1 |   | A |
+               Cm = |    | = |   | m
+                    | d2 |   | B |
+    """
 
-	def __init__(self,op1,op2):
-		"""Constructor for the stacked operator"""
-		#Checking if domain of the operators is the same
-		if(not op1.domain.checkSame(op2.domain)):
-			raise ValueError("ERROR! The two provided operators have different domains")
-		self.setDomainRange(op1.domain,Vec.superVector(op1.range,op2.range))
-		self.op1=op1 #A
-		self.op2=op2 #B
-		return
+    def __init__(self, operators_list, op2=None):
+        """Constructor for the stacked operator"""
+        # backward compatibility with two arguments (op1, op2)
+        if op2 is not None:
+            assert type(operators_list) is Operator, "vec1 must be a Operator"
+            assert type(op2) is Operator, "op2 must be a Operator"
+            vectors_list = [operators_list, op2]
 
-	def forward(self,add,model,data):
-		"""Forward operator Cm"""
-		self.checkDomainRange(model,data)
-		# d1 = Am
-		self.op1.forward(add,model,data.vec1)
-		# d2 = Bm
-		self.op2.forward(add,model,data.vec2)
-		return
+        if type(operators_list) != list:
+            raise TypeError('Input argument must be a list')
+        if len(operators_list) < 1:
+            raise ValueError('You cannot create a superVector out of no vector!')
+        if len(set([op.domain for op in operators_list])) != 1:
+            raise ValueError("ERROR! The provided operators have different domains")
+        self.setDomainRange(operators_list[0].domain,
+                            superVector([op.range for op in operators_list]))
+        self.ops = operators_list
+        self.n = len(operators_list)
+        return
 
-	def adjoint(self,add,model,data):
-		"""Adjoint operator C'r = A'r1 + B'r2"""
-		self.checkDomainRange(model,data)
-		# m = A'd1
-		self.op1.adjoint(add,model,data.vec1)
-		# m += B'd2
-		self.op2.adjoint(True,model,data.vec2)
-		return
+    def forward(self, add, model, data):
+        """Forward operator Cm"""
+        self.checkDomainRange(model, data)
+        for idx in range(self.n):
+            self.ops[idx].forward(add, model, data[idx])
+        return
+
+    def adjoint(self, add, model, data):
+        """Adjoint operator C'r = A'r1 + B'r2"""
+        self.checkDomainRange(model, data)
+        self.ops[0].adjoint(add, model, data[0])
+        for idx in range(1, self.n):
+            self.ops[idx].adjoint(True, model, data[idx])
+        return
 
 #Dummy function to use Non-linear operator class for Linear ones
 def dummy_set_background(dummy_arg):
