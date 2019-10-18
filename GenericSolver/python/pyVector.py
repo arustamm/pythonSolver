@@ -186,134 +186,160 @@ class vectorSet:
 					sep_util.write_file(filename,vec.getNdArray(),ax_info)
 		return
 
+# TODO test superVector
 class superVector(vector):
-	"""Column-wise concatenation of vectors [vec1^T vec2^T]^T"""
-	def __init__(self,vec1,vec2):
-		"""SuperVector constructor"""
-		self.vec1=vec1
-		self.vec2=vec2
-		return
+    def __init__(self, vectors_list, vec2=None):
 
-	def __del__(self):
-		"""SuperVector destructor"""
-		del self.vec1
-		del self.vec2
-		return
+        # backward compatibility with two arguments (vec1, vec2)
+        if vec2 is not None:
+            assert type(vectors_list) is vector, "vec1 must be a vector"
+            assert type(vec2) is vector, "vec2 must be a vector"
+            vectors_list = [vectors_list, vec2]
 
-	def getNdArray(self):
-		"""Function to return Ndarray of the vector"""
-		#The function returns a tuple/list containing the pointers to the Ndarrays
-		return [self.vec1.getNdArray(),self.vec2.getNdArray()]
+        """superVector constructor"""
+        if type(vectors_list) != list:
+            raise TypeError('Input argument must be a list')
+        if len(vectors_list) < 1:
+            raise ValueError('You cannot create a superVector out of no vector!')
+        self.vecs = vectors_list
+        self.n = len(vectors_list)
 
-	def norm(self,N=2):
-		"""Function to compute vector N-norm"""
-		norm = np.power(self.vec1.norm(N),N)
-		norm += np.power(self.vec2.norm(N),N)
-		return np.power(norm,1./N)
+    def __del__(self):
+        """superVector destructor"""
+        del self.vecs, self.n
 
-	def set(self,val):
-		"""Function to set all values in the vector"""
-		self.vec1.set(val)
-		self.vec2.set(val)
-		return
+    def getNdArray(self):
+        """Function to return Ndarray of the vector"""
+        return [self.vecs[idx].getNdArray() for idx in range(self.n)]
 
-	def zero(self):
-		"""Function to zero out a vector"""
-		self.vec1.zero()
-		self.vec2.zero()
-		return
+    def norm(self, N=2):
+        """Function to compute vector N-norm"""
+        return np.power(np.power([self.vecs[idx].norm(N) for idx in range(self.n)], N),
+                        1. / N)
 
-	def max(self):
-		"""Function to obtain maximum value within a vector"""
-		return np.max((self.vec1.max(),self.vec2.max()))
+    def set(self, val):
+        """Function to set all values in the vector"""
+        for idx in range(self.n):
+            self.vecs[idx].set(val)
+        return
 
-	def min(self):
-		"""Function to obtain minimum value within a vector"""
-		return np.min((self.vec1.min(),self.vec2.min()))
+    def zero(self):
+        """Function to zero out a vector"""
+        for idx in range(self.n):
+            self.vecs[idx].zero()
+        return
 
-	def scale(self,sc):
-		"""Function to scale a vector"""
-		self.vec1.scale(sc)
-		self.vec2.scale(sc)
-		return
+    def max(self):
+        """Function to obtain maximum value within a vector"""
+        return np.max([self.vecs[idx].max() for idx in range(self.n)])
 
-	def rand(self,snr=1.0):
-		"""Function to randomize a vector"""
-		self.vec1.rand()
-		self.vec2.rand()
-		return
+    def min(self):
+        """Function to obtain minimum value within a vector"""
+        return np.min([self.vecs[idx].min() for idx in range(self.n)])
 
-	def clone(self):
-		"""Function to clone (deep copy) a vector from a vector or a Space"""
-		return superVector(self.vec1.clone(),self.vec2.clone())
+    def scale(self, sc):
+        """Function to scale a vector"""
+        if type(sc) is not list:
+            sc = [sc] * self.n
+        for idx in range(self.n):
+            self.vecs[idx].scale(sc[idx])
+        return
 
-	def cloneSpace(self):
-		"""Function to clone vector space"""
-		return superVector(self.vec1.cloneSpace(),self.vec2.cloneSpace())
+    def rand(self, snr=1.0):
+        """Function to randomize a vector"""
+        for idx in range(self.n):
+            self.vecs[idx].rand()
+        return
 
-	def checkSame(self,vec_in):
-		"""Function to check to make sure the vectors exist in the same space"""
-		#Checking type
-		if(type(vec_in) is not superVector): raise TypeError("Input variable is not a superVector")
-		checkspace1 = self.vec1.checkSame(vec_in.vec1)
-		checkspace2 = self.vec2.checkSame(vec_in.vec2)
-		#Checking space
-		if(not checkspace1): print("WARNING! First vector component not in the same space vec1_component1 = %s; vec2_component1 = %s"%(self.vec1.naxis,vec_in.vec1.naxis))
-		if(not checkspace2): print("WARNING! First vector component not in the same space vec1_component2 = %s; vec2_component2 = %s"%(self.vec2.naxis,vec_in.vec2.naxis))
-		return (checkspace1 and checkspace2)
+    def clone(self):
+        """Function to clone (deep copy) a vector from a vector or a Space"""
+        return superVector(self.vecs)
 
-	#Combination of different vectors
-	def copy(self,vec_in):
-		"""Function to copy vector from input vector"""
-		#Checking type
-		if(type(vec_in) is not superVector): raise TypeError("Input variable is not a superVector")
-		#Checking dimensionality
-		if(not self.checkSame(vec_in)): raise ValueError("ERROR! Dimensionality mismatching between given superVectors")
-		self.vec1.copy(vec_in.vec1)
-		self.vec2.copy(vec_in.vec2)
-		return
+    def cloneSpace(self):
+        """Function to clone vector space"""
+        return superVector([self.vecs[idx].cloneSpace() for idx in range(self.n)])
 
-	def scaleAdd(self,vec_in,sc1=1.0,sc2=1.0):
-		"""Function to scale two vectors and add them to the first one"""
-		#Checking type
-		if(type(vec_in) is not superVector): raise TypeError("Input variable is not a superVector")
-		#Checking dimensionality
-		if(not self.checkSame(vec_in)): raise ValueError("ERROR! Dimensionality mismatching between given superVectors")
-		self.vec1.scaleAdd(vec_in.vec1,sc1,sc2)
-		self.vec2.scaleAdd(vec_in.vec2,sc1,sc2)
-		return
+    def checkSame(self, vecs_in):
+        """Function to check to make sure the vectors exist in the same space"""
+        # Checking type
+        if type(vecs_in) is not superVector:
+            raise TypeError('Input variable is not a superVector')
+        checkspace = np.asarray(
+            [self.vecs[idx].checkSame(vecs_in[idx]) for idx in range(self.n)])
+        notsame = np.where(checkspace == False)[0]
+        for v in notsame:
+            raise Warning('Component %d not in the same space!' % v)
+        return np.all(checkspace == True)
 
-	def dot(self,vec_in):
-		"""Function to compute dot product between two vectors"""
-		#Checking type
-		if(type(vec_in) is not superVector): raise TypeError("Input variable is not a superVector")
-		#Checking dimensionality
-		if(not self.checkSame(vec_in)): raise ValueError("ERROR! Dimensionality mismatching between given superVectors")
-		dot = self.vec1.dot(vec_in.vec1)
-		dot += self.vec2.dot(vec_in.vec2)
-		return dot
+    # Combination of different vectors
+    def copy(self, vecs_in):
+        """Function to copy vector from input vector"""
+        # Checking type
+        if type(vecs_in) is not superVector:
+            raise TypeError("Input variable is not a superVector")
+        # Checking dimensionality
+        if not self.checkSame(vecs_in):
+            raise ValueError(
+                "ERROR! Dimensionality mismatching between given superVectors")
+        for idx in range(self.n):
+            self.vecs[idx].copy(vecs_in[idx])
+        return
 
-	def multiply(self,vec_in):
-		"""Function to multiply element-wise two vectors"""
-		#Checking type
-		if(type(vec_in) is not superVector): raise TypeError("Input variable is not a superVector")
-		#Checking dimensionality
-		if(not self.checkSame(vec_in)): raise ValueError("ERROR! Dimensionality mismatching between given superVectors")
-		self.vec1.multiply(vec_in.vec1)
-		self.vec2.multiply(vec_in.vec2)
-		return
+    def scaleAdd(self, vecs_in, sc1=1.0, sc2=1.0):
+        """Function to scale input vectors and add them to the original ones"""
+        # Checking type
+        if type(vecs_in) is not superVector:
+            raise TypeError("Input variable is not a superVector")
+        # Checking dimensionality
+        if not self.checkSame(vecs_in):
+            raise ValueError(
+                "ERROR! Dimensionality mismatching between given superVectors")
+        for idx in range(self.n):
+            self.vecs[idx].scaleAdd(vecs_in[idx], sc1, sc2)
+        return
 
-	def isDifferent(self,vec_in):
-		"""Function to check if two vectors are identical"""
-		#Checking type
-		if(type(vec_in) is not superVector): raise TypeError("Input variable is not a superVector")
-		return (self.vec1.isDifferent(vec_in.vec1) and self.vec2.isDifferent(vec_in.vec2))
+    def dot(self, vecs_in):
+        """Function to compute dot product between two vectors"""
+        # Checking type
+        if type(vecs_in) is not superVector:
+            raise TypeError("Input variable is not a superVector")
+        # Checking dimensionality
+        if not self.checkSame(vecs_in):
+            raise ValueError(
+                "ERROR! Dimensionality mismatching between given superVectors")
+        return np.sum([self.vecs[idx].dot(vecs_in[idx]) for idx in range(self.n)])
 
-	def clipVector(self,low,high):
-		"""Function to zero out a vector"""
-		self.vec1.clipVector(low.vec1,high.vec1)
-		self.vec2.clipVector(low.vec2,high.vec2)
-		return
+    def multiply(self, vecs_in):
+        """Function to multiply element-wise two vectors"""
+        # Checking type
+        if type(vecs_in) is not superVector:
+            raise TypeError("Input variable is not a superVector")
+        # Checking dimensionality
+        if not self.checkSame(vecs_in):
+            raise ValueError(
+                "ERROR! Dimensionality mismatching between given superVectors")
+        for idx in range(self.n):
+            self.vecs[idx].multiply(vecs_in[idx])
+        return
+
+    def isDifferent(self, vecs_in):
+        """Function to check if two vectors are identical"""
+        # Checking type
+        if type(vecs_in) is not superVector:
+            raise TypeError("Input variable is not a superVector")
+        are_different = np.where(np.asarray(
+            [self.vecs[idx].isDifferent(vecs_in[idx]) for idx in
+             range(self.n)]) == False)[0]
+        return True if len(are_different) == 0 else False
+
+    def clipVector(self, lows, highs):
+        for idx in range(self.n):
+            self.vecs[idx].clipVector(lows[idx], highs[idx])
+        return
+
+    def abs(self):
+        for idx in range(self.n):
+            self.vecs[idx].abs()
 
 
 class vectorIC(vector):
