@@ -38,17 +38,14 @@ class vector:
 	def getNdArray(self):
 		"""Function to return Ndarray of the vector"""
 		raise NotImplementedError("getNdArray must be overwritten")
-		return
 
 	def norm(self,N=2):
 		"""Function to compute vector N-norm"""
 		raise NotImplementedError("norm must be overwritten")
-		return
 
 	def zero(self):
 		"""Function to zero out a vector"""
 		raise NotImplementedError("zero must be overwritten")
-		return
 
 	def max(self):
 		"""Function to obtain maximum value within a vector"""
@@ -61,71 +58,64 @@ class vector:
 	def set(self,val):
 		"""Function to set all values in the vector"""
 		raise NotImplementedError("set must be overwritten")
-		return
 
 	def scale(self,sc):
 		"""Function to scale a vector"""
 		raise NotImplementedError("scale must be overwritten")
-		return
 
 	def rand(self):
 		"""Function to randomize a vector"""
 		raise NotImplementedError("rand must be overwritten")
-		return
 
 	def clone(self):
 		"""Function to clone (deep copy) a vector from a vector or a Space"""
 		raise NotImplementedError("clone must be overwritten")
-		return
 
 	def cloneSpace(self):
 		"""Function to clone vector space"""
 		raise NotImplementedError("cloneSpace must be overwritten")
-		return
 
 	def checkSame(self):
 		"""Function to check to make sure the vectors exist in the same space"""
 		raise NotImplementedError("checkSame must be overwritten")
-		return
 
 	def writeVec(self,filename,mode='w'):
 		"""Function to write vector to file"""
 		raise NotImplementedError("writeVec must be overwritten")
-		return
+
+	def abs(self):
+		"""
+		Return a vector containing the absolute values
+		"""
+		raise NotImplementedError('abs method must be defined')
 
 	#Combination of different vectors
 
 	def copy(self,vec2):
 		"""Function to copy vector"""
 		raise NotImplementedError("copy must be overwritten")
-		return
 
 	def scaleAdd(self,vec2,sc1=1.0,sc2=1.0):
 		"""Function to scale two vectors and add them to the first one"""
 		raise NotImplementedError("scaleAdd must be overwritten")
-		return
 
 	def dot(self,vec2):
 		"""Function to compute dot product between two vectors"""
 		raise NotImplementedError("dot must be overwritten")
-		return
 
 	def multiply(self,vec2):
 		"""Function to multiply element-wise two vectors"""
 		raise NotImplementedError("multiply must be overwritten")
-		return
 
 	def isDifferent(self,vec2):
 		"""Function to check if two vectors are identical"""
 		raise NotImplementedError("isDifferent must be overwritten")
-		return
 
 	def clipVector(self,low,high):
 		"""
 		   Function to bound vector values based on input vectors min and max
 		"""
 		raise NotImplementedError("clipVector must be overwritten")
-		return
 
 #Sep library (Importing after vector since SepVector uses it) if present
 if genIO_found:
