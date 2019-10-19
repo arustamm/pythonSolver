@@ -8,7 +8,6 @@ import numpy as np
 hostnames = ["192.168.66.166","192.168.66.66","192.168.66.67"]
 client = DaskClient(hostnames)
 client = client.getClient()
-# client = daskD.Client("tcp://192.168.66.166:8786")
 vec = Vec.vectorIC((100,100))
 chunks = (3,2,4)
 vecD = pyDaskVector.VectorDask(client,vector_template=vec,chunks=chunks)
@@ -35,16 +34,13 @@ arr = vec2D.getNdArray()
 #Testing with GenericIO
 import SepVector
 vecSep = SepVector.getSepVector(ns=[200,200])
-chunks = (1,)
+chunks = (1,1,1)
 vecD = pyDaskVector.VectorDask(client,vector_template=vecSep,chunks=chunks)
 
-
-#Understanding problem with SepVector
-import SepVector
-from dask_util import DaskClient
-
-hostnames = ["192.168.66.166"]
-client = DaskClient(hostnames)
-client = client.getClient()
-vecSep = SepVector.getSepVector(ns=[100])
-future_vec = client.scatter(vecSep)
+vec1 = vecSep.clone(); vec1.rand()
+vec2 = vecSep.clone(); vec2.rand()
+vec3 = vecSep.clone(); vec3.rand()
+vectors = [vec1,vec2,vec3]
+vecD1 = pyDaskVector.VectorDask(client,vectors=vectors,chunks=chunks)
+vec1.norm()**2+vec2.norm()**2+vec3.norm()**2
+vecD1.norm()**2

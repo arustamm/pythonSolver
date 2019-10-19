@@ -2,6 +2,24 @@
 import pyVector as Vec
 import dask.distributed as daskD
 import numpy as np
+
+#Specific functions to use genericIO vectors
+import imp
+#Verify if SepVector modules are presents
+try:
+	imp.find_module('SepVector')
+	import SepVector
+	def call_constr_hyper(hyper):
+		"""Function to remotely construct an SepVector using the Hypercube"""
+		return SepVector.getSepVector(axes=hyper.axes)
+	def copy_from_NdArray(vecObj,NdArray):
+		"""Function to set vector values from numpy array"""
+		vecObj.getNdArray()[:] = NdArray
+		return
+except ImportError:
+	SepVector = None
+
+
 #Functions necessary to submit method calls using Dask client
 def call_getNdArray(vecObj):
 	"""Function to call getNdArray method"""
@@ -111,6 +129,11 @@ class VectorDask(Vec.vector):
 		N_wrk = len(wrkIds)
 		if("vector_template" in kwargs and "chunks" in kwargs):
 			vec_tmplt = kwargs.get("vector_template")
+			#Checking if an SepVector was passed (by getting Hypercube)
+			hyper=None
+			if(SepVector):
+				if(isinstance(vec_tmplt,SepVector.vector)):
+					hyper = vec_tmplt.getHyper()
 			chunks = kwargs.get("chunks")
 			#Spreading chunks across available workers
 			chunks = [np.sum(ix) for ix in np.array_split(chunks,N_wrk)]
@@ -119,8 +142,12 @@ class VectorDask(Vec.vector):
 			#Spreading vectors
 			for iwrk,wrkId in enumerate(wrkIds):
 				for ivec in range(chunks[iwrk]):
-					#Scattering vector to different workers
-					self.vecDask.append(self.client.scatter(vec_tmplt,workers=[wrkId]))
+					if(hyper):
+						#Instantiating Sep vectors on remote machines
+						self.vecDask.append(self.client.submit(call_constr_hyper,hyper,workers=[wrkId]))
+					else:
+						#Scattering vector to different workers
+						self.vecDask.append(self.client.scatter(vec_tmplt,workers=[wrkId]))
 		elif("vectors" in kwargs):
 			#Vector list to be spread across workers
 			vec_list = kwargs.get("vectors")
@@ -138,7 +165,18 @@ class VectorDask(Vec.vector):
 			#Spreading vectors
 			for iwrk,wrkId in enumerate(wrkIds):
 				for vec in vec_chunks[iwrk]:
-					self.vecDask.append(self.client.scatter(vec,workers=[wrkId]))
+					#Checking if an SepVector was passed
+					IsSepVec = False
+					if(SepVector):
+						if(isinstance(vec,SepVector.vector)): IsSepVec=True
+					if(IsSepVec):
+						#Instantiating Sep vectors on remote machines
+						self.vecDask.append(self.client.submit(call_constr_hyper,vec.getHyper(),workers=[wrkId]))
+						#Copying values from NdArray (Cannot scatter SepVector)
+						daskD.wait(self.vecDask[-1])
+						daskD.wait(self.client.submit(copy_from_NdArray,self.vecDask[-1],vec.getNdArray()))
+					else:
+						self.vecDask.append(self.client.scatter(vec,workers=[wrkId]))
 		elif("dask_vectors" in kwargs):
 			dask_vectors = kwargs.get("dask_vectors")
 			for dask_vec in dask_vectors:

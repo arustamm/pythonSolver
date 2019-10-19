@@ -25,8 +25,14 @@ class DaskClient:
 		cmd = ["dask-ssh"]+hostnames+["--scheduler-port"]+[self.port]
 		self.dask_ssh_proc = subprocess.Popen(cmd,stdout=DEVNULL)
 		self.client = daskD.Client("tcp://"+self.scheduler_host+":"+self.port)
-		#Wating a little time for the scheduler to start
-		time.sleep(1.0)
+		#Waiting until all the requested workers are up and running
+		workers=0
+		requested=len(hostnames)
+		t0 = time.time()
+		while(workers<requested):
+			workers=len(self.client.get_worker_logs().keys())
+			#If the number of workers is not reached in 5 minutes raise exception
+			if(time.time()-t0 > 300.0): raise SystemError("ERROR! dask-ssh cannot start the requested workers within 5 minutes! Try different hostnames.")
 		#Forcing deleting of object
 		atexit.register(self.__del__)
 		return
