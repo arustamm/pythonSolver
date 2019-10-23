@@ -43,6 +43,18 @@ class DaskClient:
 		"""
 		return self.client
 
+	def getWorkerIds(self):
+		"""
+		   Accessor for obtaining the worker IDs
+		"""
+		return list(self.client.get_worker_logs().keys())
+
+	def getNworkers(self):
+		"""
+		   Accessor for obtaining the number of workers
+		"""
+		return len(self.getWorkerIds())
+
 	def __del__(self):
 		"""
 		   Destructor to kill the dask-ssh running process associated with the given Client

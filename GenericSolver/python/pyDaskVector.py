@@ -1,6 +1,7 @@
 #Module containing the definition of Dask-based vector class
 import pyVector as Vec
 import dask.distributed as daskD
+from dask_util import DaskClient
 import numpy as np
 
 #Specific functions to use genericIO vectors
@@ -93,22 +94,22 @@ def call_clipVector(vecObj,low,high):
 #Check consistency between vectors
 def checkVector(vec1,vec2):
 	"""Function to check type and chunks of Dask-vector objects"""
-	if(type(vec2) is not VectorDask): raise TypeError("ERROR! Input variable is not a VectorDask")
+	if(type(vec2) is not DaskVector): raise TypeError("Input variable is not a DaskVector")
 	Nvec1 = len(vec1.vecDask)
 	Nvec2 = len(vec2.vecDask)
 	if(Nvec1 != Nvec2):
-		raise ValueError("ERROR! Number of chunks is different! (self chunks %s; vec2 chunks %s)"%(Nvec1,Nvec2))
+		raise ValueError("Number of chunks is different! (self chunks %s; vec2 chunks %s)"%(Nvec1,Nvec2))
 	return
 
-class VectorDask(Vec.vector):
+class DaskVector(Vec.vector):
 	"""
 	   Definition of a vector object whose computations are performed through a Dask Client
 	"""
 
-	def __init__(self,client,**kwargs):
+	def __init__(self,dask_client,**kwargs):
 		"""
 		   Dask Vector constructor
-		   client = [no default] - dask client; client object to use when submitting tasks
+		   dask_client = [no default] - DaskClient; client object to use when submitting tasks (see dask_util module)
 		   kwargs:
 			 - vector_template = [no default] - vector class; Vector to use to create chunks of vectors
 			 - chunks          = [no default] - list; List defininig the size of the multiple instances of the vector template
@@ -119,14 +120,15 @@ class VectorDask(Vec.vector):
 			 - dask_vectors    = [no default] - list; List containing pointers to futures to vector object (useful for clone function)
 		"""
 		#Client to submit tasks
-		if(not isinstance(client,daskD.client.Client)):
-			raise TypeError("ERROR! Passed client is not a Dask Client object!")
-		self.client = client
+		if(not isinstance(dask_client,DaskClient)):
+			raise TypeError("Passed client is not a Dask Client object!")
+		self.dask_client = dask_client
+		self.client = self.dask_client.getClient()
 		#List containing futures to vectors
 		self.vecDask = []
 		#Getting worker IDs
-		wrkIds = list(self.client.get_worker_logs().keys())
-		N_wrk = len(wrkIds)
+		wrkIds = self.dask_client.getWorkerIds()
+		N_wrk = self.dask_client.getNworkers()
 		if("vector_template" in kwargs and "chunks" in kwargs):
 			vec_tmplt = kwargs.get("vector_template")
 			#Checking if an SepVector was passed (by getting Hypercube)
@@ -144,7 +146,7 @@ class VectorDask(Vec.vector):
 				for ivec in range(chunks[iwrk]):
 					if(hyper):
 						#Instantiating Sep vectors on remote machines
-						self.vecDask.append(self.client.submit(call_constr_hyper,hyper,workers=[wrkId]))
+						self.vecDask.append(self.client.submit(call_constr_hyper,hyper,workers=[wrkId],pure=False))
 					else:
 						#Scattering vector to different workers
 						self.vecDask.append(self.client.scatter(vec_tmplt,workers=[wrkId]))
@@ -157,8 +159,8 @@ class VectorDask(Vec.vector):
 				vec_chunks = np.array_split(vec_list,N_wrk)
 			else:
 				#Spread according to chunk size
-				if(len(vec_list) != np.sum (chunks)):
-					raise ValueError("ERROR! Total number of vectors in chunks not consistent with number of vectors!")
+				if(len(vec_list) != np.sum(chunks)):
+					raise ValueError("Total number of vectors in chunks not consistent with number of vectors!")
 				#Spreading chunks across available workers
 				chunks = [np.sum(ix) for ix in np.array_split(chunks,N_wrk)]
 				vec_chunks = np.split(vec_list,np.cumsum(chunks))[:-1]
@@ -171,21 +173,22 @@ class VectorDask(Vec.vector):
 						if(isinstance(vec,SepVector.vector)): IsSepVec=True
 					if(IsSepVec):
 						#Instantiating Sep vectors on remote machines
-						self.vecDask.append(self.client.submit(call_constr_hyper,vec.getHyper(),workers=[wrkId]))
+						self.vecDask.append(self.client.submit(call_constr_hyper,vec.getHyper(),workers=[wrkId],pure=False))
 						#Copying values from NdArray (Cannot scatter SepVector)
 						daskD.wait(self.vecDask[-1])
-						daskD.wait(self.client.submit(copy_from_NdArray,self.vecDask[-1],vec.getNdArray()))
+						daskD.wait(self.client.submit(copy_from_NdArray,self.vecDask[-1],vec.getNdArray(),pure=False))
 					else:
 						self.vecDask.append(self.client.scatter(vec,workers=[wrkId]))
 		elif("dask_vectors" in kwargs):
 			dask_vectors = kwargs.get("dask_vectors")
 			for dask_vec in dask_vectors:
 				if(not issubclass(dask_vec.type,Vec.vector)):
-					raise TypeError("ERROR! One instance in dask_vectors is not a vector-derived object!")
-			self.client = client
+					raise TypeError("One instance in dask_vectors is not a vector-derived object!")
+			self.dask_client = dask_client
+			self.client = self.dask_client.getClient()
 			self.vecDask = dask_vectors
 		else:
-			raise ValueError("ERROR! Wrong arguments passed to constructor! Please, read object help!")
+			raise ValueError("Wrong arguments passed to constructor! Please, read object help!")
 		return
 
 	def __del__(self):
@@ -203,7 +206,7 @@ class VectorDask(Vec.vector):
 		"""
 		futures = []
 		for ivec in range(len(self.vecDask)):
-			futures.append(self.client.submit(call_getNdArray,self.vecDask[ivec]))
+			futures.append(self.client.submit(call_getNdArray,self.vecDask[ivec],pure=False))
 		arrays = self.client.gather(futures)
 		#Checking if dimension are consistent with each other
 		shapes = [arr.shape for arr in arrays]
@@ -222,7 +225,7 @@ class VectorDask(Vec.vector):
 
 	def norm(self,N=2):
 		"""Function to compute vector N-norm"""
-		norms = self.client.map(call_norm,self.vecDask,N=N)
+		norms = self.client.map(call_norm,self.vecDask,N=N,pure=False)
 		norm = 0.0
 		for future, result in daskD.as_completed(norms, with_results=True):
 			norm += np.power(result,N)
@@ -230,12 +233,12 @@ class VectorDask(Vec.vector):
 
 	def zero(self):
 		"""Function to zero out a vector"""
-		daskD.wait(self.client.map(call_zero,self.vecDask))
+		daskD.wait(self.client.map(call_zero,self.vecDask,pure=False))
 		return
 
 	def max(self):
 		"""Function to obtain maximum value within a vector"""
-		maxs = self.client.map(call_max,self.vecDask)
+		maxs = self.client.map(call_max,self.vecDask,pure=False)
 		max_val = - np.inf
 		for future, result in daskD.as_completed(maxs, with_results=True):
 			if(result > max_val): max_val = result
@@ -243,7 +246,7 @@ class VectorDask(Vec.vector):
 
 	def min(self):
 		"""Function to obtain minimum value within a vector"""
-		mins = self.client.map(call_min,self.vecDask)
+		mins = self.client.map(call_min,self.vecDask,pure=False)
 		min_val = np.inf
 		for future, result in daskD.as_completed(mins, with_results=True):
 			if(result < min_val): min_val = result
@@ -251,37 +254,37 @@ class VectorDask(Vec.vector):
 
 	def set(self,val):
 		"""Function to set all values in the vector"""
-		daskD.wait(self.client.map(call_set,self.vecDask,val=val))
+		daskD.wait(self.client.map(call_set,self.vecDask,val=val,pure=False))
 		return
 
 	def scale(self,sc):
 		"""Function to scale a vector"""
-		daskD.wait(self.client.map(call_scale,self.vecDask,sc=sc))
+		daskD.wait(self.client.map(call_scale,self.vecDask,sc=sc,pure=False))
 		return
 
 	def rand(self):
 		"""Function to randomize a vector"""
-		daskD.wait(self.client.map(call_rand,self.vecDask))
+		daskD.wait(self.client.map(call_rand,self.vecDask,pure=False))
 		return
 
 	def clone(self):
 		"""Function to clone (deep copy) a vector from a vector or a Space"""
-		vectors = self.client.map(call_clone,self.vecDask)
+		vectors = self.client.map(call_clone,self.vecDask,pure=False)
 		daskD.wait(vectors)
-		return VectorDask(self.client,dask_vectors=vectors)
+		return DaskVector(self.dask_client,dask_vectors=vectors)
 
 	def cloneSpace(self):
 		"""Function to clone vector space"""
-		vectors = self.client.map(call_cloneSpace,self.vecDask)
+		vectors = self.client.map(call_cloneSpace,self.vecDask,pure=False)
 		daskD.wait(vectors)
-		return VectorDask(self.client,dask_vectors=vectors)
+		return DaskVector(self.client,dask_vectors=vectors)
 
 	def checkSame(self,vec2):
 		"""Function to check to make sure the vectors exist in the same space"""
 		checkVector(self,vec2)
 		futures = []
 		for ivec in range(len(self.vecDask)):
-			futures.append(self.client.submit(call_checkSame,self.vecDask[ivec],vec2.vecDask[ivec]))
+			futures.append(self.client.submit(call_checkSame,self.vecDask[ivec],vec2.vecDask[ivec],pure=False))
 		results = self.client.gather(futures)
 		return all(results)
 
@@ -297,7 +300,7 @@ class VectorDask(Vec.vector):
 		checkVector(self,vec2)
 		futures = []
 		for ivec in range(len(self.vecDask)):
-			futures.append(self.client.submit(call_copy,self.vecDask[ivec],vec2.vecDask[ivec]))
+			futures.append(self.client.submit(call_copy,self.vecDask[ivec],vec2.vecDask[ivec],pure=False))
 		daskD.wait(futures)
 		return
 
@@ -306,7 +309,7 @@ class VectorDask(Vec.vector):
 		checkVector(self,vec2)
 		futures = []
 		for ivec in range(len(self.vecDask)):
-			futures.append(self.client.submit(call_scaleAdd,self.vecDask[ivec],vec2.vecDask[ivec],sc1,sc2))
+			futures.append(self.client.submit(call_scaleAdd,self.vecDask[ivec],vec2.vecDask[ivec],sc1,sc2,pure=False))
 		daskD.wait(futures)
 		return
 
@@ -315,7 +318,7 @@ class VectorDask(Vec.vector):
 		checkVector(self,vec2)
 		dots = []
 		for ivec in range(len(self.vecDask)):
-			dots.append(self.client.submit(call_dot,self.vecDask[ivec],vec2.vecDask[ivec]))
+			dots.append(self.client.submit(call_dot,self.vecDask[ivec],vec2.vecDask[ivec],pure=False))
 		#Adding all the results together
 		dot = 0.0
 		for future, result in daskD.as_completed(dots, with_results=True):
@@ -327,7 +330,7 @@ class VectorDask(Vec.vector):
 		checkVector(self,vec2)
 		futures = []
 		for ivec in range(len(self.vecDask)):
-			futures.append(self.client.submit(call_multiply,self.vecDask[ivec],vec2.vecDask[ivec]))
+			futures.append(self.client.submit(call_multiply,self.vecDask[ivec],vec2.vecDask[ivec],pure=False))
 		daskD.wait(futures)
 		return
 
@@ -336,7 +339,7 @@ class VectorDask(Vec.vector):
 		checkVector(self,vec2)
 		futures = []
 		for ivec in range(len(self.vecDask)):
-			futures.append(self.client.submit(call_isDifferent,self.vecDask[ivec],vec2.vecDask[ivec]))
+			futures.append(self.client.submit(call_isDifferent,self.vecDask[ivec],vec2.vecDask[ivec],pure=False))
 		results = self.client.gather(futures)
 		return any(results)
 
@@ -348,6 +351,6 @@ class VectorDask(Vec.vector):
 		checkVector(self,high) #Checking high-bound vector
 		futures = []
 		for ivec in range(len(self.vecDask)):
-			futures.append(self.client.submit(call_clipVector,self.vecDask[ivec],low.vecDask[ivec],high.vecDask[ivec]))
+			futures.append(self.client.submit(call_clipVector,self.vecDask[ivec],low.vecDask[ivec],high.vecDask[ivec],pure=False))
 		daskD.wait(futures)
 		return
