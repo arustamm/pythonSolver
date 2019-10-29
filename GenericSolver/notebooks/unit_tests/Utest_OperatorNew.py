@@ -53,3 +53,17 @@ a.zero()
 b = a.clone()
 H.forward(False, a, y)
 H.H.forward(False, b, y)  # b should be equal to a
+
+# Test inversion x = A / y
+y = pyVector.vectorIC(np.ones((200, 1)))
+y * 10
+x = pyVector.vectorIC(np.ones((200, 1)))
+A = pyOperator.scalingOp(x, 10)
+
+y_hat = y.clone()
+y_hat.zero()
+A.forward(False, x, y_hat)
+y.isDifferent(y_hat)
+
+x_hat = A / y
+x.isDifferent(x_hat)

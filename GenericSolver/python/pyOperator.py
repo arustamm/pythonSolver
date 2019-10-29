@@ -48,10 +48,27 @@ class Operator:
             raise ValueError("Scalar operands are not allowed, use '*' instead")
         return self.__mul__(other)
 
-    # # TODO implement
-    def __invert__(self, other):
+    def __truediv__(self, other, niter=2000):
         """x = A / y through CG"""
-        raise NotImplementedError
+        try:
+            from pyLCGsolver import LCGsolver
+            from pyProblem import ProblemL2Linear
+            from pyStopperBase import BasicStopper
+        except ModuleNotFoundError:
+            from GenericSolver.python.pyLCGsolver import LCGsolver
+            from GenericSolver.python.pyProblem import ProblemL2Linear
+            from GenericSolver.python.pyStopperBase import BasicStopper
+
+        if not self.range.checkSame(other):
+            raise ValueError('Operator range and data domain mismatch')
+
+        Stop = BasicStopper(niter=niter)
+        P = ProblemL2Linear(model=self.domain.cloneSpace(), data=other, op=self)
+        Solver = LCGsolver(Stop)
+        Solver.setDefaults(iter_sampling=10)
+        Solver.run(P, verbose=False)
+
+        return P.model
 
     # main function for all kinds of multiplication
     def dot(self, other):
