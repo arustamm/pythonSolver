@@ -94,7 +94,8 @@ class BasicStopper(Stopper):
         res_norm = prblm.get_rnorm(prblm.model)
         grad_norm = prblm.get_gnorm(prblm.model)
         obj = prblm.get_obj(prblm.model)
-        if self.logger: self.logger.addToLog(msg)
+        if self.logger:
+            self.logger.addToLog(msg)
         # Stop by number of iterations
         if 0 < self.niter <= niter:
             stop = True
