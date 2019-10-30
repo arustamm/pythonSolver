@@ -3,14 +3,12 @@
 
 from __future__ import division, print_function, absolute_import
 import warnings
-
-try:
-    from pyVector import vector, superVector
-except ImportError:
-    from GenericSolver.python.pyVector import vector, superVector
 import time
 from copy import deepcopy
 import numpy as np
+from sys import path
+path.insert(0, '.')
+from pyVector import vector, superVector
 
 
 # TODO rename model and data to x and y respectively
@@ -50,14 +48,9 @@ class Operator:
 
     def __truediv__(self, other, niter=2000):
         """x = A / y through CG"""
-        try:
-            from pyLCGsolver import LCGsolver
-            from pyProblem import ProblemL2Linear
-            from pyStopperBase import BasicStopper
-        except ModuleNotFoundError:
-            from GenericSolver.python.pyLCGsolver import LCGsolver
-            from GenericSolver.python.pyProblem import ProblemL2Linear
-            from GenericSolver.python.pyStopperBase import BasicStopper
+        from pyLCGsolver import LCGsolver
+        from pyProblem import ProblemL2Linear
+        from pyStopper import BasicStopper
 
         if not self.range.checkSame(other):
             raise ValueError('Operator range and data domain mismatch')
@@ -83,22 +76,6 @@ class Operator:
             return temp
         else:
             raise TypeError('Expected Operator, (super)Vector or scalar, got %r' % other)
-
-    # TODO not useful
-    def setDomainRange(self, domain, range):
-        """Function to set (cloning space) domain and range of the operator"""
-        self.domain = domain.cloneSpace()
-        self.range = range.cloneSpace()
-
-    # TODO not useful
-    def getDomain(self):
-        """Function to return operator domain"""
-        return self.domain
-
-    # TODO not useful
-    def getRange(self):
-        """Function to return operator range"""
-        return self.range
 
     def checkDomainRange(self, x, y):
         """Function to check model and data vector sizes"""
@@ -228,9 +205,9 @@ class Operator:
 
     def dotTest(self, verbose=False, tol=1e-4):
         """
-           Function to perform dot-product test:
-           :param verbose: boolean; Flag to print information to screen as the method is being run [False]
-           :param tol: float; The function throws a Warning if the relative error is greater than maxError [1e-4]
+        Function to perform dot-product test.
+        :param verbose  : boolean; Flag to print information to screen as the method is being run [False]
+        :param tol      : float; The function throws a Warning if the relative error is greater than maxError [1e-4]
         """
         if verbose:
             print("Dot-product test of forward and adjoint operators")
@@ -252,13 +229,13 @@ class Operator:
         self.forward(False, d1, r2)
         end = time.time()
         if verbose:
-            print("	Runs in: %s seconds" % (end - start))
+            print(" Runs in: %s seconds" % (end - start))
             print("Applying adjoint operator add=False")
         start = time.time()
         self.adjoint(False, d2, r1)
         end = time.time()
         if verbose:
-            print("	Runs in: %s seconds" % (end - start))
+            print(" Runs in: %s seconds" % (end - start))
 
         # Computing dot products
         dt1 = d1.dot(d2)
@@ -281,13 +258,13 @@ class Operator:
         self.forward(True, d1, r2)
         end = time.time()
         if verbose:
-            print("	Runs in: %s seconds" % (end - start))
+            print(" Runs in: %s seconds" % (end - start))
             print("Applying adjoint operator add=True")
         start = time.time()
         self.adjoint(True, d2, r1)
         end = time.time()
         if verbose:
-            print("	Runs in: %s seconds" % (end - start))
+            print(" Runs in: %s seconds" % (end - start))
 
         # Computing dot products
         dt1 = d1.dot(d2)
@@ -480,10 +457,11 @@ class Vstack(Operator):
         # check range
         self.n = len(self.ops)
         op_range = []
-        for idx in range(self.n - 1):
-            if not self.ops[idx].domain.checkSame(self.ops[idx + 1].domain):
-                raise ValueError('Domain incompatibility between Op %d and Op %d' % (idx, idx + 1))
-            op_range += [op.range]
+        for idx in range(self.n):
+            if idx < self.n - 1:
+                if not self.ops[idx].domain.checkSame(self.ops[idx + 1].domain):
+                    raise ValueError('Domain incompatibility between Op %d and Op %d' % (idx, idx + 1))
+            op_range += [self.ops[idx].range]
 
         super(Vstack, self).__init__(domain=op.domain, range=superVector(op_range))
 
@@ -541,27 +519,7 @@ class Hstack(Operator):
             self.ops[idx].adjoint(add, model.vecs[idx], data)
 
 
-# TODO delete
 Transpose = Operator.H
-# class Transpose(Operator):
-#     """
-#     Class of transposition of provided operator
-#     """
-#
-#     def __init__(self, op):
-#         self.setDomainRange(op.range, op.domain)
-#         self.op = op
-#         return
-#
-#     def forward(self, add, model, data):
-#         self.checkDomainRange(model, data)
-#         self.op.adjoint(add, data, model)
-#         return
-#
-#     def adjoint(self, add, model, data):
-#         self.checkDomainRange(model, data)
-#         self.op.forward(add, data, model)
-#         return
 
 
 class scalingOp(Operator):
@@ -620,85 +578,20 @@ class IdentityOp(Operator):
             model.copy(data)
 
 
-sumOperator = _sumOperator
-# class sumOperator(Operator):
-#     """
-#     Sum of two operators
-#         op = op1 + ... + opN
-#     """
-#
-#     def __init__(self, ops):
-#         """Sum operator constructor"""
-#         if not np.all(isinstance(op, Operator) for op in ops):
-#             raise TypeError('All operands must be a Operator')
-#
-#         if not len(set([op.range for op in ops])) == 1 or not len(
-#                 set([op.domain for op in ops])) == 1:
-#             raise ValueError('Cannot add operators: shape mismatch')
-#
-#         super(sumOperator, self).__init__()
-#         self.ops = ops
-#         self.setDomainRange(ops[0].domain, ops[0].range)
-#
-#     def forward(self, add, model, data):
-#         self.checkDomainRange(model, data)
-#         for idx in range(len(self.ops) - 1, 0, -1):
-#             self.ops[idx].forward(add, model, data)
-#
-#     def adjoint(self, add, model, data):
-#         self.checkDomainRange(model, data)
-#         for idx in range(len(self.ops) - 1, 0, -1):
-#             self.ops[idx].adjoint(add, model, data)
+sumOperator = _sumOperator  # for backward compatibility
 
 
-ChainOperator = _prodOperator
-# class ChainOperator(Operator):
-#     """
-#     Product of operators
-#         op = opN * ... * op1
-#     """
-#
-#     def __init__(self, ops):
-#         """Constructor of a Chain of operators (in order of application)"""
-#         if not np.all(isinstance(op, Operator) for op in ops):
-#             raise TypeError('All operands must be a Operator')
-#         for idx in range(len(ops) - 1):
-#             if not ops[idx].range.checkSame(ops[idx + 1].domain):
-#                 raise ValueError('Op %d range differs from Op %d domain' % (idx, idx + 1))
-#         super(ChainOperator, self).__init__()
-#         self.setDomainRange(ops[0].domain, ops[-1].range)
-#         self.ops = ops
-#         self.temp = self.domain.clone().zero()
-#
-#     def forward(self, add, model, data):
-#         """Forward operator BAm"""
-#         self.checkDomainRange(model, data)
-#
-#         # first operator
-#         self.ops[0].forward(False, model, self.temp)
-#         # operators in the middle
-#         for idx in range(1, len(self.ops) - 1):
-#             self.ops[idx].forward(False, self.temp, self.temp)
-#         # last operator
-#         self.ops[-1].forward(add, self.temp, data)
-#
-#     def adjoint(self, add, model, data):
-#         """Adjoint operator A'B'd"""
-#         self.checkDomainRange(model, data)
-#         # last operator
-#         self.ops[-1].adjoint(False, self.temp, data)
-#         # operators in the middle
-#         for idx in range(len(self.ops) - 1, 0, -1):
-#             self.ops[idx].adjoint(False, self.temp, self.temp)
-#         # first operator
-#         self.ops[0].adjoint(add, model, self.temp)
-
+ChainOperator = _prodOperator  # for backward compatibility
 
 #######################
 # NONLINEAR OPERATORS #
 #######################
 
 # Dummy function to use Non-linear operator class for Linear ones
+
+stackOperator = Vstack  # for backward compatibility
+
+
 def dummy_set_background(dummy_arg):
     """
     Dummy function to use Non-linear operator class for Linear ones (it takes one argument and does nothing)
@@ -714,12 +607,12 @@ class NLOperator(Operator):
     def __init__(self, nl_op, lin_op, set_background_func=dummy_set_background):
         """
            Constructor for non-linear operator class:
-           nl_op				= [no default] - operator class;
+           nl_op                = [no default] - operator class;
                                 Non-linear operator class where only the forward is overwritten
-           lin_op				= [no default] - operator class;
+           lin_op               = [no default] - operator class;
                                 Linear Jacobian operator class where only the forward is
                                 overwritten (if not necessary, use pyOperator.ZeroOp)
-           set_background_func	= [dummy_set_background] - function pointer;
+           set_background_func  = [dummy_set_background] - function pointer;
                                 Function to set the model vector on which the
                                 Jacobian operator is evaluated
         """
@@ -811,3 +704,74 @@ class VstackNLOperator(NLOperator):
         # Setting G(m0)
         self.set_background2(model)
         return
+
+
+def main():
+    import numpy as np
+    import pyVector
+    # First test on scaling a vector
+    x = pyVector.vectorIC(np.ones((100, 200)))
+    y = x.clone()
+    S = scalingOp(x, .5)
+    S.forward(False, x, y)
+
+    # Test add operator
+    Z = ZeroOp(x, x)
+    I = IdentityOp(x)
+    sumOp = I + Z
+    sumOp.forward(False, x, y)
+    x.isDifferent(y)
+
+    # Test prod operator
+    I2 = I * 2
+    I2.forward(False, x, y)
+    z = x.clone()
+    z * 2
+    y.isDifferent(z)
+
+    prod = I * Z
+    prod.forward(False, x, y)
+    z = x.clone()
+    z.zero()
+    y.isDifferent(z)
+
+    # Test combinations
+    combo = I + I + Z
+    combo.forward(False, x, y)
+
+    comboS = S * S + Z
+    comboS.forward(False, x, y)
+
+    comboS.adjoint(False, z, x)
+    comboS.H.forward(False, x, z)
+
+    V = Vstack(I, Z)
+    z = pyVector.superVector(x.clone(), x.clone())
+    z.rand()
+    V.forward(False, x, z)
+    V.H.forward(False, y, z)
+
+    H = Hstack(I, Z)
+    a = z.clone()
+    a.zero()
+    b = a.clone()
+    H.forward(False, a, y)
+    H.H.forward(False, b, y)  # b should be equal to a
+
+    # Test inversion x = A / y
+    y = pyVector.vectorIC(np.ones((200, 1)))
+    y * 10
+    x = pyVector.vectorIC(np.ones((200, 1)))
+    A = scalingOp(x, 10)
+
+    y_hat = y.clone()
+    y_hat.zero()
+    A.forward(False, x, y_hat)
+    y.isDifferent(y_hat)
+
+    x_hat = A / y
+    x.isDifferent(x_hat)
+
+
+if __name__ == '__main__':
+    main()
