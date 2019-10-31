@@ -1,5 +1,6 @@
 #Module containing the definition of Dask-based operator class
 from pyDaskVector import DaskVector
+from pyVector import vector
 import pyOperator as Op
 import dask.distributed as daskD
 from dask_util import DaskClient
@@ -26,7 +27,13 @@ def call_adjoint(opObj,add,model,data):
 	"""Function to call adjoint operator"""
 	res = opObj.adjoint(add,model,data)
 	return res
-
+def add_array(vecObj,arr):
+	"""Function to add array to remote vector"""
+	vecObj.getNdArray()[:] += arr
+	return
+def getNdfuture(vecObj):
+	Nd_fut = vecObj.getNdArray()
+	return Nd_fut
 
 class DaskOperator(Op.Operator):
 	"""
@@ -39,7 +46,7 @@ class DaskOperator(Op.Operator):
 		   dask_client = [no default] - DaskClient; client object to use when submitting tasks (see dask_util module)
 		   op_constructor = [no default] - pointer to function; Pointer to constructor
 		   op_args = [no default] - list; List containing lists of arguments to run the constructor. It can instantiate the same operator on multiple workers or different ones if requested by passing a list of list of arguments (e.g., [(arg1,arg2,arg3,...)])
-		   chunks = [no default] - list; List defininig how many operators wants to instantiated. Note, the list must contain the same number of elements as the number of Dask worker in the DaskClient.
+		   chunks = [no default] - list; List defininig how many operators wants to instantiated. Note, the list must contain the same number of elements as the number of Dask workers present in the DaskClient.
 		"""
 		#Client to submit tasks
 		if not isinstance(dask_client,DaskClient):
@@ -106,4 +113,75 @@ class DaskOperator(Op.Operator):
 		for iop,op in enumerate(self.dask_ops):
 			adj_ftr.append(self.client.submit(call_adjoint,op,add,model.vecDask[iop],data.vecDask[iop],pure=False))
 		daskD.wait(adj_ftr)
+		return
+
+class DaskSpreadOp(Op.Operator):
+	"""
+	   Class to spread/stack single vector to/from multiple copies on different workers:
+	        | v1 |   | I |
+	   fwd: | v2 | = | I | v  adj: | v | = | I | v1 + | I | v2 + | I | v3
+	        | v3 |   | I |
+	"""
+
+	def __init__(self,dask_client,domain,chunks):
+		"""
+		   Dask Operator constructor
+		   dask_client = [no default] - DaskClient; client object to use when submitting tasks (see dask_util module)
+		   domain   = [no default] - vector class; Vector template to be spread/stack (note this is also the domain of the operator)
+		   chunks      = [no default] - list; List defininig how many operators wants to instantiated. Note, the list must contain the same number of elements as the number of Dask workers present in the DaskClient.
+		"""
+		if not isinstance(dask_client,DaskClient):
+			raise TypeError("Passed client is not a Dask Client object!")
+		if not isinstance(domain,vector):
+			raise TypeError("domain is not a vector-derived object!")
+		self.dask_client = dask_client
+		self.client = self.dask_client.getClient()
+		self.setDomainRange(domain,DaskVector(self.dask_client,vector_template=domain,chunks=chunks))
+		return
+
+	def forward(self,add,model,data):
+		"""Forward operator"""
+		if not isinstance(data,DaskVector):
+			raise TypeError("Data vector must be a DaskVector!")
+		self.checkDomainRange(model,data)
+		if not add:
+			data.zero()
+		#Model vector checking
+		if isinstance(model,DaskVector):
+			#Getting the future to the first vector in the Dask vector
+			modelNd = self.client.submit(getNdfuture,model.vecDask[0],pure=False)
+		else:
+			#Getting the numpy array to the local model vector
+			modelNd = model.getNdArray()
+
+		#Broadcasting the numpy Array
+		modelNdD = self.client.scatter(modelNd,broadcast=True)
+		futures=[]
+		#Adding current vector
+		for vec in data.vecDask:
+			futures.append(self.client.submit(add_array,vec,modelNdD,pure=False))
+		daskD.wait(futures)
+		return
+
+	def adjoint(self,add,model,data):
+		"""Adjoint operator"""
+		if not isinstance(data,DaskVector):
+			raise TypeError("Data vector must be a DaskVector!")
+		self.checkDomainRange(model,data)
+		if not add:
+			model.zero()
+		arrD=[]
+		# for vec in data.vecDask:
+		# 	arrD.append(self.client.submit(getNdfuture,vec,pure=False))
+		arrD = self.client.map(getNdfuture,data.vecDask,pure=False)
+		daskD.wait(arrD)
+		sum_array = self.client.submit(np.sum,arrD,axis=0,pure=False)
+		daskD.wait(sum_array)
+		if isinstance(model,DaskVector):
+			#Getting the future to the first vector in the Dask vector
+			daskD.wait(self.client.submit(add_array,model,sum_array,pure=False))
+		else:
+			#Getting the numpy array to the local model vector
+			modelNd = model.getNdArray()
+			modelNd[:] += sum_array.result()
 		return

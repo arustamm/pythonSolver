@@ -120,7 +120,7 @@ class DaskVector(Vec.vector):
 			 - dask_vectors    = [no default] - list; List containing pointers to futures to vector object (useful for clone function)
 		"""
 		#Client to submit tasks
-		if(not isinstance(dask_client,DaskClient)):
+		if not isinstance(dask_client,DaskClient):
 			raise TypeError("Passed client is not a Dask Client object!")
 		self.dask_client = dask_client
 		self.client = self.dask_client.getClient()
@@ -129,37 +129,41 @@ class DaskVector(Vec.vector):
 		#Getting worker IDs
 		wrkIds = self.dask_client.getWorkerIds()
 		N_wrk = self.dask_client.getNworkers()
-		if("vector_template" in kwargs and "chunks" in kwargs):
+		if "vector_template" in kwargs and "chunks" in kwargs:
 			vec_tmplt = kwargs.get("vector_template")
-			#Checking if an SepVector was passed (by getting Hypercube)
-			hyper=None
-			if(SepVector):
-				if(isinstance(vec_tmplt,SepVector.vector)):
-					hyper = vec_tmplt.getHyper()
 			chunks = kwargs.get("chunks")
 			#Spreading chunks across available workers
 			chunks = [np.sum(ix) for ix in np.array_split(chunks,N_wrk)]
-			#Copying vector template to all workers
-			vecD = self.client.scatter(vec_tmplt,broadcast=True)
+			#Checking if an SepVector was passed (by getting Hypercube)
+			hyper=False
+			if SepVector:
+				if(isinstance(vec_tmplt,SepVector.vector)):
+					hyper=True
+			#Broadcast vector space
+			if hyper:
+				vec_space = vec_tmplt.getHyper()
+			else:
+				vec_space = vec_tmplt.cloneSpace()
+			vec_spaceD = self.client.scatter(vec_space,broadcast=True)
 			#Spreading vectors
 			for iwrk,wrkId in enumerate(wrkIds):
 				for ivec in range(chunks[iwrk]):
-					if(hyper):
+					if hyper:
 						#Instantiating Sep vectors on remote machines
-						self.vecDask.append(self.client.submit(call_constr_hyper,hyper,workers=[wrkId],pure=False))
+						self.vecDask.append(self.client.submit(call_constr_hyper,vec_spaceD,workers=[wrkId],pure=False))
 					else:
 						#Scattering vector to different workers
-						self.vecDask.append(self.client.scatter(vec_tmplt,workers=[wrkId]))
-		elif("vectors" in kwargs):
+						self.vecDask.append(self.client.submit(call_clone,vec_spaceD,workers=[wrkId],pure=False))
+		elif "vectors" in kwargs:
 			#Vector list to be spread across workers
 			vec_list = kwargs.get("vectors")
 			chunks = kwargs.get("chunks",None)
-			if(chunks is None):
+			if chunks is None:
 				#Spread vectors evenly
 				vec_chunks = np.array_split(vec_list,N_wrk)
 			else:
 				#Spread according to chunk size
-				if(len(vec_list) != np.sum(chunks)):
+				if len(vec_list) != np.sum(chunks):
 					raise ValueError("Total number of vectors in chunks not consistent with number of vectors!")
 				#Spreading chunks across available workers
 				chunks = [np.sum(ix) for ix in np.array_split(chunks,N_wrk)]
@@ -169,9 +173,9 @@ class DaskVector(Vec.vector):
 				for vec in vec_chunks[iwrk]:
 					#Checking if an SepVector was passed
 					IsSepVec = False
-					if(SepVector):
+					if SepVector:
 						if(isinstance(vec,SepVector.vector)): IsSepVec=True
-					if(IsSepVec):
+					if IsSepVec:
 						#Instantiating Sep vectors on remote machines
 						self.vecDask.append(self.client.submit(call_constr_hyper,vec.getHyper(),workers=[wrkId],pure=False))
 						#Copying values from NdArray (Cannot scatter SepVector)
@@ -179,23 +183,27 @@ class DaskVector(Vec.vector):
 						daskD.wait(self.client.submit(copy_from_NdArray,self.vecDask[-1],vec.getNdArray(),pure=False))
 					else:
 						self.vecDask.append(self.client.scatter(vec,workers=[wrkId]))
-		elif("dask_vectors" in kwargs):
+		elif "dask_vectors" in kwargs:
 			dask_vectors = kwargs.get("dask_vectors")
 			for dask_vec in dask_vectors:
-				if(not issubclass(dask_vec.type,Vec.vector)):
+				if not issubclass(dask_vec.type,Vec.vector):
 					raise TypeError("One instance in dask_vectors is not a vector-derived object!")
 			self.dask_client = dask_client
 			self.client = self.dask_client.getClient()
 			self.vecDask = dask_vectors
 		else:
 			raise ValueError("Wrong arguments passed to constructor! Please, read object help!")
+		#Waiting vectors to be instantiated
+		daskD.wait(self.vecDask)
 		return
 
 	def __del__(self):
 		"""
 		   Cancel/Delete all futures within the class (fees memory on workers)
 		"""
-		self.client.cancel(self.vecDask)
+		#If a future is deleted is cancelled, then all the related ones are cancelled too. This is a problem
+		#for the methods clone and cloneSpace. Need to find a solution to the problem
+		# self.client.cancel(self.vecDask)
 		return
 
 	#Class vector operations
@@ -204,9 +212,11 @@ class DaskVector(Vec.vector):
 		   Function to return Ndarray of the vector
 		   The function will return an Numpy array if dimensions among all the arrays are consistent with each other (i.e., slowest-axis concatenation). Otherwise, a list of all the arrays is going to be returned.
 		"""
-		futures = []
-		for ivec in range(len(self.vecDask)):
-			futures.append(self.client.submit(call_getNdArray,self.vecDask[ivec],pure=False))
+		# futures = []
+		#CHANGE TO MAP!
+		# for ivec in range(len(self.vecDask)):
+		# 	futures.append(self.client.submit(call_getNdArray,self.vecDask[ivec],pure=False))
+		futures = self.client.map(call_getNdArray,self.vecDask,pure=False)
 		arrays = self.client.gather(futures)
 		#Checking if dimension are consistent with each other
 		shapes = [arr.shape for arr in arrays]
@@ -277,7 +287,7 @@ class DaskVector(Vec.vector):
 		"""Function to clone vector space"""
 		vectors = self.client.map(call_cloneSpace,self.vecDask,pure=False)
 		daskD.wait(vectors)
-		return DaskVector(self.client,dask_vectors=vectors)
+		return DaskVector(self.dask_client,dask_vectors=vectors)
 
 	def checkSame(self,vec2):
 		"""Function to check to make sure the vectors exist in the same space"""
