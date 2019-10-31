@@ -1,8 +1,5 @@
 # Module containing derived object for basic stopper
-try:
-    import pyProblem
-except ModuleNotFoundError:
-    import GenericSolver.python.pyProblem as pyProblem
+from pyProblem import Problem
 import time
 from timeit import default_timer as timer
 import numpy as np
@@ -25,7 +22,7 @@ class Stopper:
         """Function to reset stopper variables"""
         raise NotImplementedError("Implement reset stopper in the derived class.")
 
-    def run(self, prblm):
+    def run(self, problem):
         """Dummy stopper running method"""
         raise NotImplementedError("Implement run stopper in the derived class.")
 
@@ -50,6 +47,7 @@ class BasicStopper(Stopper):
         # Criteria to evaluate whether or not to stop the solver
         super(BasicStopper, self).__init__()
         self.niter = niter
+        self.zfill = int(np.floor(np.log10(self.niter)) + 1)  # number of digits for printing the iteration number
         self.maxfevals = maxfevals
         self.maxhours = maxhours
         self.tolr = tolr
@@ -76,8 +74,8 @@ class BasicStopper(Stopper):
         return
 
     # Beware stopper is going to change the gradient/obj/res files
-    def run(self, prblm, niter, initial_obj_value=None, verbose=True):
-        if not isinstance(prblm, pyProblem.Problem):
+    def run(self, problem, niter, initial_obj_value=None, verbose=True):
+        if not isinstance(problem, Problem):
             raise TypeError("Input variable is not a Problem object")
         # Variable to impose stopping to solver
         stop = False
@@ -91,9 +89,9 @@ class BasicStopper(Stopper):
         # Printing time stamp to log file if provided
         msg = "Elapsed time: %d hours, %d minutes, %d seconds\n" % (hours, mins, secs) + \
               "Current date & time: %s" % time.strftime("%c")
-        res_norm = prblm.get_rnorm(prblm.model)
-        grad_norm = prblm.get_gnorm(prblm.model)
-        obj = prblm.get_obj(prblm.model)
+        res_norm = problem.get_rnorm(problem.model)
+        grad_norm = problem.get_gnorm(problem.model)
+        obj = problem.get_obj(problem.model)
         if self.logger:
             self.logger.addToLog(msg)
         # Stop by number of iterations
@@ -105,7 +103,7 @@ class BasicStopper(Stopper):
             if self.logger:
                 self.logger.addToLog(msg)
             return stop
-        if 0 < self.maxfevals <= prblm.get_fevals():
+        if 0 < self.maxfevals <= problem.get_fevals():
             stop = True
             msg = "Terminate: maximum number of evaluations\n"
             if verbose:
@@ -158,7 +156,7 @@ class BasicStopper(Stopper):
                     self.logger.addToLog(msg)
                 return stop
         if self.toleta is not None:
-            data_norm = prblm.data.norm()
+            data_norm = problem.data.norm()
             if res_norm < self.toleta * data_norm:
                 stop = True
                 msg = "Terminate: eta tolerance (i.e., |Am - b|/|b|) of %s reached, eta value %s"\
