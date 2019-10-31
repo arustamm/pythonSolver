@@ -39,30 +39,38 @@ class vector:
     def __add__(self, other):  # self + other
         if type(other) in [int, float]:
             self.addbias(other)
+            return self
         elif isinstance(other, vector):
             self.scaleAdd(other)
+            return self
         else:
             raise TypeError('Argument has to be either scalar or vector, got %r instead' % other)
 
     def __sub__(self, other):  # self - other
         self.__add__(-other)
+        return self
 
     def __neg__(self):  # -self
         self.scale(-1)
+        return self
 
     def __mul__(self, other):  # self * other
         if type(other) in [int, float]:
             self.scale(other)
+            return self
         elif isinstance(other, vector):
             self.multiply(other)
+            return self
         else:
             raise NotImplementedError
 
     def __rmul__(self, other):
         if type(other) in [int, float]:
             self.scale(other)
+            return self
         elif isinstance(other, vector):
             self.multiply(other)
+            return self
         else:
             raise NotImplementedError
 
@@ -279,11 +287,13 @@ class superVector(vector):
         """Function to set all values in the vector"""
         for idx in range(self.n):
             self.vecs[idx].set(val)
+        return self
 
     def zero(self):
         """Function to zero out a vector"""
         for idx in range(self.n):
             self.vecs[idx].zero()
+        return self
 
     def max(self):
         """Function to obtain maximum value within a vector"""
@@ -299,20 +309,24 @@ class superVector(vector):
             sc = [sc] * self.n
         for idx in range(self.n):
             self.vecs[idx].scale(sc[idx])
+        return self
 
     def addbias(self, bias):
         """Add a constant to the vector"""
         for idx in range(self.n):
             self.vecs[idx].addbias(bias[idx])
+        return self
 
     def rand(self, snr=1.0):
         """Function to randomize a vector"""
         for idx in range(self.n):
             self.vecs[idx].rand()
+        return self
 
     def clone(self):
         """Function to clone (deep copy) a vector from a vector or a Space"""
-        return superVector(self.vecs)
+        vecs = [self.vecs[idx].clone() for idx in range(self.n)]
+        return superVector(vecs)
 
     def cloneSpace(self):
         """Function to clone vector space"""
@@ -351,6 +365,7 @@ class superVector(vector):
             raise ValueError("ERROR! Dimensionality mismatching between given superVectors")
         for idx in range(self.n):
             self.vecs[idx].scaleAdd(vecs_in.vecs[idx], sc1, sc2)
+        return self
 
     def dot(self, vecs_in):
         """Function to compute dot product between two vectors"""
@@ -372,32 +387,36 @@ class superVector(vector):
             raise ValueError("ERROR! Dimensionality mismatching between given superVectors")
         for idx in range(self.n):
             self.vecs[idx].multiply(vecs_in.vecs[idx])
+        return self
 
     def isDifferent(self, vecs_in):
         """Function to check if two vectors are identical"""
         # Checking type
         if type(vecs_in) is not superVector:
             raise TypeError("Input variable is not a superVector")
-        are_different = np.where(np.asarray([self.vecs[idx].isDifferent(vecs_in.vecs[idx])
-                                             for idx in range(self.n)])
+        are_different = np.where(np.asarray([self.vecs[idx].isDifferent(vecs_in.vecs[idx]) for idx in range(self.n)])
                                  is False)[0]
-        return True if len(are_different) == 0 else False
+        return False if len(are_different) == 0 else True
 
     def clipVector(self, lows, highs):
         for idx in range(self.n):
             self.vecs[idx].clipVector(lows[idx], highs[idx])
+        return self
 
     def abs(self):
         for idx in range(self.n):
             self.vecs[idx].abs()
+        return self
 
     def sign(self):
         for idx in range(self.n):
             self.vecs[idx].sign()
+        return self
 
     def reciprocal(self):
         for idx in range(self.n):
             self.vecs[idx].reciprocal()
+        return self
 
     def maximum(self, vecs_in):
         if type(vecs_in) is not superVector:
@@ -406,10 +425,12 @@ class superVector(vector):
             raise ValueError('Input must have the same length of self')
         for idx in range(self.n):
             self.vecs[idx].maximum(vecs_in.vecs[idx])
+        return self
 
     def conj(self):
         for idx in range(self.n):
             self.vecs[idx].conj()
+        return self
 
 
 class vectorIC(vector):
@@ -459,7 +480,6 @@ class vectorIC(vector):
         """VectorIC destructor"""
         del self.arr
 
-
     def getNdArray(self):
         """Function to return Ndarray of the vector"""
         return self.arr
@@ -471,6 +491,7 @@ class vectorIC(vector):
     def zero(self):
         """Function to zero out a vector"""
         self.arr.fill(0)
+        return self
 
     def max(self):
         return self.arr.max()
@@ -481,13 +502,16 @@ class vectorIC(vector):
     def set(self, val):
         """Function to set all values in the vector"""
         self.arr.fill(val)
+        return self
 
     def scale(self, sc):
         """Function to scale a vector"""
         self.arr *= sc
+        return self
 
     def addbias(self, bias):
         self.arr += bias
+        return self
 
     def rand(self, snr=1.):
         """Fill vector with random number (~U[1,-1]) with a given SNR"""
@@ -572,12 +596,15 @@ class vectorIC(vector):
 
     def abs(self):
         self.arr = np.abs(self.arr)
+        return self
 
     def sign(self):
         self.arr = np.sign(self.arr)
+        return self
 
     def reciprocal(self):
         self.arr = 1. / self.arr
+        return self
 
     def maximum(self, vec2):
         if not isinstance(vec2, vectorIC):
@@ -586,9 +613,11 @@ class vectorIC(vector):
             raise ValueError('Dimensionality not equal: vec1 = %d; vec2 = %d'
                              % (self.naxis, vec2.naxis))
         self.arr = np.maximum(self.arr, vec2.arr)
+        return self
 
     def conj(self):
         self.arr = np.conjugate(self.arr)
+        return self
 
     def copy(self, vec2):
         """Function to copy vector from input vector"""
@@ -611,6 +640,7 @@ class vectorIC(vector):
             raise ValueError("Dimensionality not equal: vec1 = %d; vec2 = %d" % (self.naxis, vec2.naxis))
         # Performing scaling and addition
         self.arr = sc1 * self.arr + sc2 * vec2.arr
+        return self
 
     def dot(self, vec2):
         """Function to compute dot product between two vectors"""
@@ -638,6 +668,7 @@ class vectorIC(vector):
             raise ValueError("Dimensionality not equal: vec1 = %d; vec2 = %d" % (self.naxis, vec2.naxis))
         # Performing element-wise multiplication
         self.arr = np.multiply(self.arr, vec2.arr)
+        return self
 
     def isDifferent(self, vec2):
         """Function to check if two vectors are identical using built-in hash function"""
@@ -666,6 +697,7 @@ class vectorIC(vector):
         if not isinstance(high, vectorIC):
             raise TypeError("Provided input high vector not a vectorIC!")
         self.arr = np.minimum(np.maximum(low.arr, self.arr), high.arr)
+        return self
 
 
 class vectorOC(vector):
@@ -942,24 +974,22 @@ def main():
     x + y  # x should be 2.
     y * 2  # y should be 2.
 
+    z = y.clone().addbias(2)  # 4
+    z1 = y.clone() + 2
+    z2 = y.clone().scale(2)
+    z3 = y.clone() * 2
+
     # superVector from vectors
-    sv_from_vectors = superVector(x.clone(), x.clone())
-
-    # superVector from list of vectors
-    sv_from_list = superVector([x.clone(), x.clone()])
-
+    xx = superVector(x.clone(), x.clone()) * 2  # should be 4, 4
     # superVector from superVector and vector
-    sv_from_sv_and_v = superVector(sv_from_vectors, x.clone())
+    xxx = superVector(xx, x.clone())  # should be 4, 4, 2
 
     # the same operations of add and mul are working also for superVector
-    sv_from_list * 2  # it should be 4
-    sv_from_list * sv_from_vectors  # it should be 8
-
+    yy = xx.clone() * xx
+    yy.zero()
     # Test operators on superVectors
-    a = sv_from_vectors.clone()
-    b = sv_from_vectors.clone()
-    S = pyOperator.scalingOp(a, 2)
-    S.forward(False, a, b)  # b should be 4
+    S = pyOperator.scalingOp(xx, 2)
+    S.forward(False, xx, yy)  # yy should be 4
 
 
 if __name__ == '__main__':
