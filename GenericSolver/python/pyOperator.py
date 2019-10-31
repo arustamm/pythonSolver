@@ -6,8 +6,6 @@ import warnings
 import time
 from copy import deepcopy
 import numpy as np
-from sys import path
-path.insert(0, '.')
 from pyVector import vector, superVector
 
 
@@ -59,7 +57,7 @@ class Operator:
         P = ProblemL2Linear(model=self.domain.cloneSpace(), data=other, op=self)
         Solver = LCGsolver(Stop)
         Solver.setDefaults(iter_sampling=10)
-        Solver.run(P, verbose=False)
+        Solver.run(P, verbose=True)
 
         return P.model
 
@@ -138,7 +136,7 @@ class Operator:
             # Stopping criteria (first number of iterations and then tolerance)
             iiter += 1
             if verbose:
-                print("Estimated maximum eigenvalue at iter %s: %s" % (iiter, eigen))
+                print("Estimated maximum eigenvalue at iter %d: %.2e" % (iiter, eigen))
             if niter is not None:
                 if iiter >= niter:
                     if verbose:
@@ -183,7 +181,7 @@ class Operator:
                 # Stopping criteria (first number of iterations and then tolerance)
                 iiter += 1
                 if verbose:
-                    print("Estimated minimum eigenvalue at iter %s: %s"
+                    print("Estimated minimum eigenvalue at iter %d: %.2e"
                           % (iiter, eigen + eigen_max))
                 if niter is not None:
                     if iiter >= niter:
@@ -243,13 +241,13 @@ class Operator:
 
         # Dot-product testing
         if verbose:
-            print("Dot products add=False: domain=%s range=%s " % (dt1, dt2))
-            print("Absolute error: %s" % (abs(dt1 - dt2)))
-            print("Relative error: %s \n" % (abs((dt1 - dt2) / dt2)))
+            print("Dot products add=False: domain=%.2e range=%.2e " % (dt1, dt2))
+            print("Absolute error: %.2e" % (abs(dt1 - dt2)))
+            print("Relative error: %.2e \n" % (abs((dt1 - dt2) / dt2)))
         if abs((dt1 - dt2) / dt1) > tol:
             # Deleting temporary vectors
             del d1, d2, r1, r2
-            raise Warning("Dot products failure add=False; relative error greater than tolerance of %s" % tol)
+            raise Warning("Dot products failure add=False; relative error greater than tolerance of %.2e" % tol)
 
         # Applying forward and adjoint operators with add=True
         if verbose:
@@ -271,13 +269,13 @@ class Operator:
         dt2 = r1.dot(r2)
 
         if verbose:
-            print("Dot products add=True: domain=%s range=%s " % (dt1, dt2))
-            print("Absolute error: %s" % (abs(dt1 - dt2)))
-            print("Relative error: %s \n" % (abs((dt1 - dt2) / dt2)))
+            print("Dot products add=True: domain=%.2e range=%.2e " % (dt1, dt2))
+            print("Absolute error: %.2e" % (abs(dt1 - dt2)))
+            print("Relative error: %.2e \n" % (abs((dt1 - dt2) / dt2)))
         if abs((dt1 - dt2) / dt1) > tol:
             # Deleting temporary vectors
             del d1, d2, r1, r2
-            raise Warning("Dot products failure add=True; relative error greater than tolerance of %s" % tol)
+            raise Warning("Dot products failure add=True; relative error greater than tolerance of %.2e" % tol)
 
         if verbose:
             print("-" * 49)
@@ -657,7 +655,6 @@ class _combNLOperator(NLOperator):
         self.g_nl_op = A.nl_op
         self.g_range_tmp = A.nl_op.range.clone()
         super(_combNLOperator, self).__init__(self.nl_op, self.lin_op)
-        return
 
     def set_background(self, model):
         """
@@ -668,7 +665,6 @@ class _combNLOperator(NLOperator):
         # Setting F(g(m0))
         self.g_nl_op.forward(False, model, self.g_range_tmp)
         self.set_background2(self.g_range_tmp)
-        return
 
 
 class VstackNLOperator(NLOperator):
@@ -703,12 +699,14 @@ class VstackNLOperator(NLOperator):
         self.set_background1(model)
         # Setting G(m0)
         self.set_background2(model)
-        return
 
 
 def main():
+    from sys import path
+    path.insert(0, '.')
     import numpy as np
     import pyVector
+
     # First test on scaling a vector
     x = pyVector.vectorIC(np.ones((100, 200)))
     y = x.clone()
@@ -745,19 +743,6 @@ def main():
     comboS.adjoint(False, z, x)
     comboS.H.forward(False, x, z)
 
-    V = Vstack(I, Z)
-    z = pyVector.superVector(x.clone(), x.clone())
-    z.rand()
-    V.forward(False, x, z)
-    V.H.forward(False, y, z)
-
-    H = Hstack(I, Z)
-    a = z.clone()
-    a.zero()
-    b = a.clone()
-    H.forward(False, a, y)
-    H.H.forward(False, b, y)  # b should be equal to a
-
     # Test inversion x = A / y
     y = pyVector.vectorIC(np.ones((200, 1)))
     y * 10
@@ -771,6 +756,32 @@ def main():
 
     x_hat = A / y
     x.isDifferent(x_hat)
+
+    # test superVector
+    V = Vstack(I, Z)
+    x = pyVector.vectorIC(np.ones((100, 200)))
+    y = x.clone()
+    y.rand()
+    z = pyVector.superVector(x.clone(), x.clone())
+    z.rand()
+    V.forward(False, x, z)
+    V.H.forward(False, y, z)
+
+    VI = Vstack(I, I * 2)
+    x2 = x.clone()
+    x2 * 2
+    y = pyVector.superVector(x.clone(), x2.clone())
+    VI.forward(False, x, y)
+
+    # TODO non va
+    x_inv = VI / y
+
+    H = Hstack(I, Z)
+    a = z.clone()
+    a.zero()
+    b = a.clone()
+    H.forward(False, a, y)
+    H.H.forward(False, b, y)  # b should be equal to a
 
 
 if __name__ == '__main__':
