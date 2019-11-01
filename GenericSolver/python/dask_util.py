@@ -21,7 +21,7 @@ class DaskClient:
 		#Starting dask-ssh using the provided list of IP addresses
 		self.scheduler_host = hostnames[0]
 		#Random port number
-		self.port = ''.join([str(random.randint(0,9)) for ii in range(4)])
+		self.port = ''.join(["1"]+[str(random.randint(0,9)) for ii in range(3)])
 		cmd = ["dask-ssh"]+hostnames+["--scheduler-port"]+[self.port]
 		self.dask_ssh_proc = subprocess.Popen(cmd,stdout=DEVNULL)
 		self.client = daskD.Client("tcp://"+self.scheduler_host+":"+self.port)

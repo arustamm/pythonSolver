@@ -95,9 +95,8 @@ class DaskOperator(Op.Operator):
 			raise TypeError("Data vector must be a DaskVector!")
 		#Dimensionality check
 		self.checkDomainRange(model,data)
-		fwd_ftr = []
-		for iop,op in enumerate(self.dask_ops):
-			fwd_ftr.append(self.client.submit(call_forward,op,add,model.vecDask[iop],data.vecDask[iop],pure=False))
+		add = [add]*len(self.dask_ops)
+		fwd_ftr = self.client.map(call_forward,self.dask_ops,add,model.vecDask,data.vecDask,pure=False)
 		daskD.wait(fwd_ftr)
 		return
 
@@ -109,9 +108,8 @@ class DaskOperator(Op.Operator):
 			raise TypeError("Data vector must be a DaskVector!")
 		#Dimensionality check
 		self.checkDomainRange(model,data)
-		adj_ftr = []
-		for iop,op in enumerate(self.dask_ops):
-			adj_ftr.append(self.client.submit(call_adjoint,op,add,model.vecDask[iop],data.vecDask[iop],pure=False))
+		add = [add]*len(self.dask_ops)
+		adj_ftr = self.client.map(call_adjoint,self.dask_ops,add,model.vecDask,data.vecDask,pure=False)
 		daskD.wait(adj_ftr)
 		return
 
@@ -136,6 +134,7 @@ class DaskSpreadOp(Op.Operator):
 			raise TypeError("domain is not a vector-derived object!")
 		self.dask_client = dask_client
 		self.client = self.dask_client.getClient()
+		self.chunks = chunks
 		self.setDomainRange(domain,DaskVector(self.dask_client,vector_template=domain,chunks=chunks))
 		return
 
@@ -154,12 +153,12 @@ class DaskSpreadOp(Op.Operator):
 			#Getting the numpy array to the local model vector
 			modelNd = model.getNdArray()
 
-		#Broadcasting the numpy Array
-		modelNdD = self.client.scatter(modelNd,broadcast=True)
-		futures=[]
-		#Adding current vector
-		for vec in data.vecDask:
-			futures.append(self.client.submit(add_array,vec,modelNdD,pure=False))
+		#Broadcasting the numpy Array (DOES NOT WORK PROPERLY)
+		# modelNdD = [self.client.scatter(modelNd,broadcast=True)]*len(data.vecDask)
+		# daskD.wait(modelNdD)
+		modelNdD = [modelNd]*len(data.vecDask)
+		#Spreading current vector
+		futures = self.client.map(add_array,data.vecDask,modelNdD,pure=False)
 		daskD.wait(futures)
 		return
 
@@ -170,9 +169,6 @@ class DaskSpreadOp(Op.Operator):
 		self.checkDomainRange(model,data)
 		if not add:
 			model.zero()
-		arrD=[]
-		# for vec in data.vecDask:
-		# 	arrD.append(self.client.submit(getNdfuture,vec,pure=False))
 		arrD = self.client.map(getNdfuture,data.vecDask,pure=False)
 		daskD.wait(arrD)
 		sum_array = self.client.submit(np.sum,arrD,axis=0,pure=False)

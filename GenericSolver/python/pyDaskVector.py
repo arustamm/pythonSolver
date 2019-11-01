@@ -145,6 +145,7 @@ class DaskVector(Vec.vector):
 			else:
 				vec_space = vec_tmplt.cloneSpace()
 			vec_spaceD = self.client.scatter(vec_space,broadcast=True)
+			daskD.wait(vec_spaceD)
 			#Spreading vectors
 			for iwrk,wrkId in enumerate(wrkIds):
 				for ivec in range(chunks[iwrk]):
@@ -212,10 +213,6 @@ class DaskVector(Vec.vector):
 		   Function to return Ndarray of the vector
 		   The function will return an Numpy array if dimensions among all the arrays are consistent with each other (i.e., slowest-axis concatenation). Otherwise, a list of all the arrays is going to be returned.
 		"""
-		# futures = []
-		#CHANGE TO MAP!
-		# for ivec in range(len(self.vecDask)):
-		# 	futures.append(self.client.submit(call_getNdArray,self.vecDask[ivec],pure=False))
 		futures = self.client.map(call_getNdArray,self.vecDask,pure=False)
 		arrays = self.client.gather(futures)
 		#Checking if dimension are consistent with each other
@@ -292,9 +289,7 @@ class DaskVector(Vec.vector):
 	def checkSame(self,vec2):
 		"""Function to check to make sure the vectors exist in the same space"""
 		checkVector(self,vec2)
-		futures = []
-		for ivec in range(len(self.vecDask)):
-			futures.append(self.client.submit(call_checkSame,self.vecDask[ivec],vec2.vecDask[ivec],pure=False))
+		futures = self.client.map(call_checkSame,self.vecDask,vec2.vecDask,pure=False)
 		results = self.client.gather(futures)
 		return all(results)
 
@@ -308,27 +303,23 @@ class DaskVector(Vec.vector):
 	def copy(self,vec2):
 		"""Function to copy vector"""
 		checkVector(self,vec2)
-		futures = []
-		for ivec in range(len(self.vecDask)):
-			futures.append(self.client.submit(call_copy,self.vecDask[ivec],vec2.vecDask[ivec],pure=False))
+		futures = self.client.map(call_copy,self.vecDask,vec2.vecDask,pure=False)
 		daskD.wait(futures)
 		return
 
 	def scaleAdd(self,vec2,sc1=1.0,sc2=1.0):
 		"""Function to scale two vectors and add them to the first one"""
 		checkVector(self,vec2)
-		futures = []
-		for ivec in range(len(self.vecDask)):
-			futures.append(self.client.submit(call_scaleAdd,self.vecDask[ivec],vec2.vecDask[ivec],sc1,sc2,pure=False))
+		sc1 = [sc1]*len(self.vecDask)
+		sc2 = [sc2]*len(self.vecDask)
+		futures = self.client.map(call_scaleAdd,self.vecDask,vec2.vecDask,sc1,sc2,pure=False)
 		daskD.wait(futures)
 		return
 
 	def dot(self,vec2):
 		"""Function to compute dot product between two vectors"""
 		checkVector(self,vec2)
-		dots = []
-		for ivec in range(len(self.vecDask)):
-			dots.append(self.client.submit(call_dot,self.vecDask[ivec],vec2.vecDask[ivec],pure=False))
+		dots = self.client.map(call_dot,self.vecDask,vec2.vecDask,pure=False)
 		#Adding all the results together
 		dot = 0.0
 		for future, result in daskD.as_completed(dots, with_results=True):
@@ -338,18 +329,14 @@ class DaskVector(Vec.vector):
 	def multiply(self,vec2):
 		"""Function to multiply element-wise two vectors"""
 		checkVector(self,vec2)
-		futures = []
-		for ivec in range(len(self.vecDask)):
-			futures.append(self.client.submit(call_multiply,self.vecDask[ivec],vec2.vecDask[ivec],pure=False))
+		futures = self.client.map(call_multiply,self.vecDask,vec2.vecDask,pure=False)
 		daskD.wait(futures)
 		return
 
 	def isDifferent(self,vec2):
 		"""Function to check if two vectors are identical"""
 		checkVector(self,vec2)
-		futures = []
-		for ivec in range(len(self.vecDask)):
-			futures.append(self.client.submit(call_isDifferent,self.vecDask[ivec],vec2.vecDask[ivec],pure=False))
+		futures = self.client.map(call_isDifferent,self.vecDask,vec2.vecDask,pure=False)
 		results = self.client.gather(futures)
 		return any(results)
 
@@ -359,8 +346,6 @@ class DaskVector(Vec.vector):
 		"""
 		checkVector(self,low) #Checking low-bound vector
 		checkVector(self,high) #Checking high-bound vector
-		futures = []
-		for ivec in range(len(self.vecDask)):
-			futures.append(self.client.submit(call_clipVector,self.vecDask[ivec],low.vecDask[ivec],high.vecDask[ivec],pure=False))
+		futures = self.client.map(call_clipVector,self.vecDask,low.vecDask,high.vecDask,pure=False)
 		daskD.wait(futures)
 		return
