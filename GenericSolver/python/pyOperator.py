@@ -9,7 +9,6 @@ import numpy as np
 from pyVector import vector, superVector
 
 
-# TODO rename model and data to x and y respectively
 class Operator:
     """Abstract python operator class"""
 
@@ -56,7 +55,7 @@ class Operator:
         Stop = BasicStopper(niter=niter)
         P = ProblemL2Linear(model=self.domain.cloneSpace(), data=other, op=self)
         Solver = LCGsolver(Stop)
-        Solver.setDefaults(iter_sampling=10)
+        Solver.setDefaults()
         Solver.run(P, verbose=True)
 
         return P.model
@@ -425,12 +424,10 @@ class _scaledOperator(Operator):
         self.op = A
 
     def forward(self, add, model, data):
-        self.op.forward(add, model, data)
-        data.scale(self.const)
+        self.op.forward(add, model.clone().scale(self.const), data)
 
     def adjoint(self, add, model, data):
-        self.op.adjoint(add, model, data)
-        model.scale(np.conj(self.const))
+        self.op.adjoint(add, model, data.clone().scale(np.conj(self.const)))
 
 
 class Vstack(Operator):
@@ -499,15 +496,17 @@ class Hstack(Operator):
         # check domain
         self.n = len(self.ops)
         domain = []
-        for idx in range(self.n - 1):
-            if not self.ops[idx].range.checkSame(self.ops[idx + 1].range):
-                raise ValueError('Range incompatibility between Op %d and Op %d' % (idx, idx + 1))
+        for idx in range(self.n):
+            if idx < self.n - 1:
+                if not self.ops[idx].range.checkSame(self.ops[idx + 1].range):
+                    raise ValueError('Range incompatibility between Op %d and Op %d' % (idx, idx + 1))
             domain += [op.domain]
         super(Hstack, self).__init__(domain=superVector(domain), range=op.range)
 
     def forward(self, add, model, data):
         self.checkDomainRange(model, data)
-        for idx in range(self.n):
+        self.ops[0].forward(add, model.vecs[0], data)
+        for idx in range(1, self.n):
             self.ops[idx].forward(True, model.vecs[idx], data)
 
     def adjoint(self, add, model, data):
@@ -718,7 +717,8 @@ def main():
     I = IdentityOp(x)
     sumOp = I + Z
     sumOp.forward(False, x, y)
-    x.isDifferent(y)
+    if x.isDifferent(y):
+        print('sumOp not working')
 
     # Test prod operator
     I2 = I * 2
@@ -726,62 +726,66 @@ def main():
     z = x.clone()
     z * 2
     y.isDifferent(z)
+    if y.isDifferent(z):
+        print('prod not working')
 
     prod = I * Z
     prod.forward(False, x, y)
     z = x.clone()
     z.zero()
     y.isDifferent(z)
+    if y.isDifferent(z):
+        print('prod not working')
 
     # Test combinations
-    combo = I + I + Z
-    combo.forward(False, x, y)
+    C = S * S + I
+    C.forward(False, x, y)
 
-    comboS = S * S + Z
-    comboS.forward(False, x, y)
-
-    comboS.adjoint(False, z, x)
-    comboS.H.forward(False, x, z)
+    C.adjoint(False, z, x)
+    C.H.forward(False, x, z)
 
     # Test inversion x = A / y
-    y = pyVector.vectorIC(np.ones((200, 1)))
+    y = pyVector.vectorIC(np.ones((100, 200)))
     y * 10
-    x = pyVector.vectorIC(np.ones((200, 1)))
+    x = pyVector.vectorIC(np.ones((100, 200)))
     A = scalingOp(x, 10)
-
     y_hat = y.clone()
     y_hat.zero()
     A.forward(False, x, y_hat)
     y.isDifferent(y_hat)
-
     x_hat = A / y
-    x.isDifferent(x_hat)
+    if x.isDifferent(x_hat):
+        print('inversion not working')
 
-    # test superVector
-    V = Vstack(I, Z)
+    # test superVector and operator stack
+    V = Vstack(I, I*2)
+    y = V.range.clone().set(1.)
+    x = V.domain.clone().zero()
+    V.adjoint(False, x, y)
     x = pyVector.vectorIC(np.ones((100, 200)))
-    y = x.clone()
-    y.rand()
-    z = pyVector.superVector(x.clone(), x.clone())
-    z.rand()
-    V.forward(False, x, z)
-    V.H.forward(False, y, z)
-
-    VI = Vstack(I, I * 2)
     x2 = x.clone()
     x2 * 2
     y = pyVector.superVector(x.clone(), x2.clone())
-    VI.forward(False, x, y)
+    y_hat = y.clone()
+    V.forward(False, x, y_hat)
+    if y.isDifferent(y_hat):
+        print('Vstack not working')
+    x_inv = V / y
+    if x_inv.isDifferent(x):
+        print('Vstack inversion not working')
 
-    # TODO non va
-    x_inv = VI / y
+    H = Hstack(I, I*2)
+    x = H.domain.clone().set(1.)    # x = 1, 1
+    y = H.range.clone().zero()
+    H.forward(False, x, y)          # y = 3
+    x_hat = x.clone()
+    H.adjoint(False, x_hat, y)      # x_hat = 3, 6
+    x_inv = H / y  # TODO not working but probably it is correct:
+                   #  we have a number of solutions that is twice the number of equations!
+    if x.isDifferent(x_inv):
+        print('Hstack not working')
 
-    H = Hstack(I, Z)
-    a = z.clone()
-    a.zero()
-    b = a.clone()
-    H.forward(False, a, y)
-    H.H.forward(False, b, y)  # b should be equal to a
+    H.dotTest(True)
 
 
 if __name__ == '__main__':
