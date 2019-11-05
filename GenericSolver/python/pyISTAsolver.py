@@ -9,23 +9,11 @@ def _soft_thresh(x, thresh):
     Soft-thresholding function:
         y = sign(x) * max(abs(x) - thresh, 0)
 
-    :param x: array, input values
+    :param x: vector, input values
     :param thresh: float, soft threshold
-    :return : array, output clipped values
+    :return : vector, output clipped values
     """
-    # sign(x)
-    s = x.clone()
-    s.sign()
-    # zeros
-    z = x.clone()
-    z.zero()
-    # abs(x) - thresh
-    a = x.clone()
-    a.abs()
-    a - thresh
-    # maximum between a and z
-    a.maximum(z)
-    return s * a
+    return x.clone().sign() * x.clone().abs().addbias(-thresh).maximum(x.clone().zero())
 
 
 class ISTAsolver(Solver):
