@@ -313,6 +313,8 @@ class superVector(vector):
 
     def addbias(self, bias):
         """Add a constant to the vector"""
+        if type(bias) is not list:
+            bias = [bias] * self.n
         for idx in range(self.n):
             self.vecs[idx].addbias(bias[idx])
         return self
