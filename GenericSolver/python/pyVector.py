@@ -74,6 +74,12 @@ class vector:
         else:
             raise NotImplementedError
 
+    def __pow__(self, power, modulo=None):
+        if type(power) in [int, float]:
+            self.pow(power)
+        else:
+            raise TypeError('power has to be a scalar')
+
     def __abs__(self):
         self.abs()
 
@@ -152,6 +158,11 @@ class vector:
     # TODO implement on seplib
     def conj(self):
         """Compute conjugate transpose of the vector"""
+        raise NotImplementedError
+
+    # TODO implement on seplib
+    def pow(self, power):
+        """Compute element-wise power of the vector"""
         raise NotImplementedError
 
     # Combination of different vectors
@@ -248,6 +259,7 @@ class vectorSet:
                     sep_util.write_file(filename, vec.getNdArray(), ax_info)
 
 
+# TODO non c'è modo di farlo diventare un 'vector'?
 class superVector(vector):
 
     def __init__(self, *args):
@@ -432,6 +444,11 @@ class superVector(vector):
     def conj(self):
         for idx in range(self.n):
             self.vecs[idx].conj()
+        return self
+
+    def pow(self, power):
+        for idx in range(self.n):
+            self.vecs[idx].pow(power)
         return self
 
 
@@ -621,6 +638,10 @@ class vectorIC(vector):
         self.arr = np.conjugate(self.arr)
         return self
 
+    def pow(self, power):
+        """Compute element-wise power of the vector"""
+        self.arr = self.arr ** power
+
     def copy(self, vec2):
         """Function to copy vector from input vector"""
         # Checking whether the input is a vector or not
@@ -702,6 +723,7 @@ class vectorIC(vector):
         return self
 
 
+# TODO add methods
 class vectorOC(vector):
     """Out-of-core python vector class (i.e. values are on disk)"""
 
