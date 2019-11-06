@@ -1003,6 +1003,14 @@ def main():
     z2 = y.clone().scale(2)
     z3 = y.clone() * 2
 
+    # test diagonal
+    x2 = x.clone().set(2)
+    D = pyOperator.DiagonalOp(x2)
+    x4 = x2.clone().set(4)
+    y4 = x4.clone()
+    D.forward(False, x2, y4)
+    x4.isDifferent(y4)
+
     # superVector from vectors
     xx = superVector(x.clone(), x.clone()) * 2  # should be 4, 4
     # superVector from superVector and vector

@@ -38,11 +38,6 @@ class Operator:
     def __mul__(self, other):  # self * other
         return self.dot(other)
 
-    def __matmul__(self, other):  # self @ other
-        if np.isscalar(other):
-            raise ValueError("Scalar operands are not allowed, use '*' instead")
-        return self.__mul__(other)
-
     def __truediv__(self, other, niter=2000):
         """x = A / y through CG"""
         from pyLCGsolver import LCGsolver
@@ -575,6 +570,26 @@ class IdentityOp(Operator):
             model.copy(data)
 
 
+class DiagonalOp(Operator):
+    """Diagonal operator for performing element-wise multiplication"""
+
+    def __init__(self, diag):
+        # if not isinstance(diag, vector):
+        #     raise TypeError('diag has to be a vector')
+        super(DiagonalOp, self).__init__(diag, diag)
+        self.diag = diag
+
+    def forward(self, add, model, data):
+        self.checkDomainRange(model, data)
+        data.scaleAdd(model, 1. if add else 0.)
+        data.multiply(self.diag)
+
+    def adjoint(self, add, model, data):
+        self.checkDomainRange(model, data)
+        model.scaleAdd(data, 1. if add else 0.)
+        model.multiply(self.diag)
+
+
 sumOperator = _sumOperator  # for backward compatibility
 
 
@@ -782,6 +797,7 @@ def main():
     H.adjoint(False, x_hat, y)      # x_hat = 3, 6
     x_inv = H / y  # TODO not working but probably it is correct:
                    #  we have a number of solutions that is twice the number of equations!
+                   #  add a dimensionality check to the inversion (or better, a "onto" attribute to the operator
     if x.isDifferent(x_inv):
         print('Hstack not working')
 
