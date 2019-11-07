@@ -51,7 +51,7 @@ class Operator:
         P = ProblemL2Linear(model=self.domain.cloneSpace(), data=other, op=self)
         Solver = LCGsolver(Stop)
         Solver.setDefaults()
-        Solver.run(P, verbose=True)
+        Solver.run(P, verbose=False)
 
         return P.model
 
@@ -511,9 +511,6 @@ class Hstack(Operator):
             self.ops[idx].adjoint(add, model.vecs[idx], data)
 
 
-Transpose = Operator.H
-
-
 class scalingOp(Operator):
     """scalar multiplication operator"""
 
@@ -590,18 +587,17 @@ class DiagonalOp(Operator):
         model.multiply(self.diag)
 
 
-sumOperator = _sumOperator  # for backward compatibility
-
-
-ChainOperator = _prodOperator  # for backward compatibility
+# for backward compatibility
+Transpose = Operator.H
+sumOperator = _sumOperator
+stackOperator = Vstack
+ChainOperator = _prodOperator
 
 #######################
 # NONLINEAR OPERATORS #
 #######################
 
 # Dummy function to use Non-linear operator class for Linear ones
-
-stackOperator = Vstack  # for backward compatibility
 
 
 def dummy_set_background(dummy_arg):
@@ -722,9 +718,9 @@ def main():
     import pyVector
 
     # First test on scaling a vector
-    x = pyVector.vectorIC(np.ones((100, 200)))
+    x = pyVector.vectorIC(np.empty((100, 200))).set(1)
     y = x.clone()
-    S = scalingOp(x, .5)
+    S = scalingOp(x, 10)
     S.forward(False, x, y)
 
     # Test add operator
@@ -760,14 +756,12 @@ def main():
     C.H.forward(False, x, z)
 
     # Test inversion x = A / y
-    y = pyVector.vectorIC(np.ones((100, 200)))
-    y * 10
-    x = pyVector.vectorIC(np.ones((100, 200)))
+    x = pyVector.vectorIC(np.empty((100, 200))).set(1)
+    y = pyVector.vectorIC(np.empty((100, 200))).set(10)
     A = scalingOp(x, 10)
-    y_hat = y.clone()
-    y_hat.zero()
-    A.forward(False, x, y_hat)
-    y.isDifferent(y_hat)
+    # y_hat = y.clone().zero()
+    # A.forward(False, x, y_hat)
+    # y.isDifferent(y_hat)
     x_hat = A / y
     if x.isDifferent(x_hat):
         print('inversion not working')
@@ -800,8 +794,15 @@ def main():
                    #  add a dimensionality check to the inversion (or better, a "onto" attribute to the operator
     if x.isDifferent(x_inv):
         print('Hstack not working')
+    #
+    # H.dotTest(True)
 
-    H.dotTest(True)
+    # test inversion on superVector
+    x = pyVector.vectorIC(np.empty((100, 200)))
+    xx = pyVector.superVector(x.clone()).set(1)
+    yy = xx.clone().set(10)
+    S = scalingOp(xx, 10)
+    xx_inv = S / yy
 
 
 if __name__ == '__main__':
