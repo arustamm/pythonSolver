@@ -259,7 +259,6 @@ class vectorSet:
                     sep_util.write_file(filename, vec.getNdArray(), ax_info)
 
 
-# TODO non c'è modo di farlo diventare un 'vector'?
 class superVector(vector):
 
     def __init__(self, *args):
@@ -408,9 +407,7 @@ class superVector(vector):
         # Checking type
         if type(vecs_in) is not superVector:
             raise TypeError("Input variable is not a superVector")
-        are_different = np.where(np.asarray([self.vecs[idx].isDifferent(vecs_in.vecs[idx]) for idx in range(self.n)])
-                                 is False)[0]
-        return False if len(are_different) == 0 else True
+        return any([self.vecs[idx].isDifferent(vecs_in.vecs[idx]) for idx in range(self.n)])
 
     def clipVector(self, lows, highs):
         for idx in range(self.n):
