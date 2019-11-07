@@ -1020,15 +1020,6 @@ def main():
     yy = xx.clone() * xx  # 8
     yy.zero()
 
-    # Test operators on superVectors
-    S = pyOperator.scalingOp(xx, 2)
-    x = S.domain.clone().set(1.)
-    y = S.range.clone().set(2)
-    S.forward(False, x, y)  # y should be 2, 2
-    x_hat = x.clone()
-    S.adjoint(False, x_hat, y)  # x_hat should be 4, 4
-    xx_inv = S / y  # TODO not working.
-
 
 if __name__ == '__main__':
     main()
