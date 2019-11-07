@@ -60,8 +60,7 @@ class LCGsolver(Solver):
             # Setting internal vectors (model and search direction vectors)
             prblm_mdl = problem.get_model()
             cg_mdl = prblm_mdl.clone()
-            cg_dmodl = prblm_mdl.clone()
-            cg_dmodl.zero()
+            cg_dmodl = prblm_mdl.clone().zero()
 
             # Other internal variables
             iiter = 0
@@ -90,8 +89,7 @@ class LCGsolver(Solver):
         # Common variables unrelated to restart
         success = True
         if precond:
-            cg_prec_grad = cg_dmodl.clone()
-            cg_prec_grad.zero()
+            cg_prec_grad = cg_dmodl.clone().zero()
 
         # Iteration loop
         while True:
@@ -118,8 +116,7 @@ class LCGsolver(Solver):
                     raise ValueError("Either gradient norm or objective function value NaN!")
                 # Set internal delta residual vector
                 if not precond:
-                    cg_dres = prblm_res.clone()
-                    cg_dres.zero()
+                    cg_dres = prblm_res.clone().zero()
             if prblm_grad.norm() == 0.:
                 print("Gradient vanishes identically")
                 break
@@ -153,8 +150,7 @@ class LCGsolver(Solver):
                     success = False
                     # Writing on log file
                     if self.logger:
-                        self.logger.addToLog(
-                            "Search direction orthogonal to span of linear operator, will terminate solver")
+                        self.logger.addToLog("Search direction orthogonal to span of linear operator, will terminate solver")
                 else:
                     alpha = - dot_grad_prec_grad / dot_cg_dmodld
                     # Writing on log file
@@ -175,8 +171,7 @@ class LCGsolver(Solver):
                         success = False
                         # Writing on log file
                         if self.logger:
-                            self.logger.addToLog(
-                                "Gradient orthogonal to span of linear operator, will terminate solver")
+                            self.logger.addToLog("Gradient orthogonal to span of linear operator, will terminate solver")
                     else:
                         dot_gradd_res = prblm_gradd.dot(prblm_res)
                         alpha = - dot_gradd_res / dot_gradd
@@ -379,8 +374,7 @@ class SymLCGsolver(Solver):
             # Setting internal vectors (model and search direction vectors)
             prblm_mdl = problem.get_model()
             cg_mdl = prblm_mdl.clone()
-            cg_dmodl = prblm_mdl.clone()
-            cg_dmodl.zero()
+            cg_dmodl = prblm_mdl.clone().zero()
             if precond:
                 cg_prec_res = cg_dmodl.clone()
 
