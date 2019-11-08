@@ -115,6 +115,7 @@ class DaskVector(Vec.vector):
 			 - chunks          = [no default] - list; List defininig the size of the multiple instances of the vector template
 			 or
 			 - vectors         = [no default] - list; List containing vectors to be spread across Dask workers
+			 - copy            = [True] - boolean; Whether to copy the content of the vectors or not
 			 - chunks          = [None] - list; List defininig how the vector list should be spread; if not specified the vectors will be evenly distributed
 			 or
 			 - dask_vectors    = [no default] - list; List containing pointers to futures to vector object (useful for clone function)
@@ -158,6 +159,7 @@ class DaskVector(Vec.vector):
 		elif "vectors" in kwargs:
 			#Vector list to be spread across workers
 			vec_list = kwargs.get("vectors")
+			copy = kwargs.get("copy",False)
 			chunks = kwargs.get("chunks",None)
 			if chunks is None:
 				#Spread vectors evenly
@@ -181,9 +183,12 @@ class DaskVector(Vec.vector):
 						self.vecDask.append(self.client.submit(call_constr_hyper,vec.getHyper(),workers=[wrkId],pure=False))
 						#Copying values from NdArray (Cannot scatter SepVector)
 						daskD.wait(self.vecDask[-1])
-						daskD.wait(self.client.submit(copy_from_NdArray,self.vecDask[-1],vec.getNdArray(),pure=False))
+						if(copy): daskD.wait(self.client.submit(copy_from_NdArray,self.vecDask[-1],vec.getNdArray(),pure=False))
 					else:
-						self.vecDask.append(self.client.scatter(vec,workers=[wrkId]))
+						if(copy):
+							self.vecDask.append(self.client.scatter(vec,workers=[wrkId]))
+						else:
+							self.vecDask.append(self.client.submit(call_clone,vec.cloneSpace(),workers=[wrkId],pure=False))
 		elif "dask_vectors" in kwargs:
 			dask_vectors = kwargs.get("dask_vectors")
 			for dask_vec in dask_vectors:
@@ -293,9 +298,18 @@ class DaskVector(Vec.vector):
 		results = self.client.gather(futures)
 		return all(results)
 
-	def writeVec(self,filename,mode='w'):
-		"""Function to write vector to file"""
-		raise NotImplementedError("writeVec must be overwritten")
+	def writeVec(self,filename,mode='w',multi_file=True):
+		"""
+		Function to write vector to file:
+
+		:param filename: string - Filename to write the vector to
+		:param mode: string - Writing mode 'w'=overwrite file or 'a'=append to file ['w']
+		:param multi_file: boolean - If True multiple files will be written with suffix _chunk1,2,3,...;
+		otherwise, a single will be written [True]
+		"""
+		#Check writing mode
+		if(not mode in 'wa'):
+			raise ValueError("Mode must be appending 'a' or writing 'w' ")
 		return
 
 	#Methods combinaning different vectors
