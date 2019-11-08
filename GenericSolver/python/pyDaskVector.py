@@ -159,7 +159,7 @@ class DaskVector(Vec.vector):
 		elif "vectors" in kwargs:
 			#Vector list to be spread across workers
 			vec_list = kwargs.get("vectors")
-			copy = kwargs.get("copy",False)
+			copy = kwargs.get("copy",True)
 			chunks = kwargs.get("chunks",None)
 			if chunks is None:
 				#Spread vectors evenly
