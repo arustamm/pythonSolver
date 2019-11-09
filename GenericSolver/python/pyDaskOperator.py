@@ -55,8 +55,8 @@ class DaskOperator(Op.Operator):
 			raise TypeError("Passed operator arguments not a list!")
 		self.dask_client = dask_client
 		self.client = self.dask_client.getClient()
-		wrkIds = dask_client.getWorkerIds()
-		N_wrk = dask_client.getNworkers()
+		wrkIds = self.dask_client.getWorkerIds()
+		N_wrk = self.dask_client.getNworkers()
 		#Check if number of provided chunks is the same as workers
 		if(len(chunks) != N_wrk):
 			raise ValueError("Number of provide chunks (%s) different than the number of workers (%s)"%(len(chunks),N_wrk))
@@ -96,7 +96,7 @@ class DaskOperator(Op.Operator):
 		#Dimensionality check
 		self.checkDomainRange(model,data)
 		add = [add]*len(self.dask_ops)
-		fwd_ftr = self.client.map(call_forward,self.dask_ops,add,model.vecDask,data.vecDask,pure=False)
+		fwd_ftr = self.client.map(call_forward,self.dask_ops,add,model.vecDask,data.vecDask,pure=False,workers=self.dask_client.getWorkerIds())
 		daskD.wait(fwd_ftr)
 		return
 
@@ -109,7 +109,7 @@ class DaskOperator(Op.Operator):
 		#Dimensionality check
 		self.checkDomainRange(model,data)
 		add = [add]*len(self.dask_ops)
-		adj_ftr = self.client.map(call_adjoint,self.dask_ops,add,model.vecDask,data.vecDask,pure=False)
+		adj_ftr = self.client.map(call_adjoint,self.dask_ops,add,model.vecDask,data.vecDask,pure=False,workers=self.dask_client.getWorkerIds())
 		daskD.wait(adj_ftr)
 		return
 

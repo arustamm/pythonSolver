@@ -90,6 +90,22 @@ class vector:
 
 	def writeVec(self,filename,mode='w'):
 		"""Function to write vector to file"""
+		if genIO_found:
+			if isinstance(self,SepVector.vector):
+				if not (mode in "aw"):
+					raise ValueError("ERROR! mode must be either a (append) or w (write)")
+				if mode == "a":
+					genericIO.defaultIO.appendVector(filename,self,flush=1)
+					genericIO.defaultIO.closeAppendFile(filename)
+				if mode == "w":
+					#genericIO.defaultIO.writeVector(filename,self)
+					#Using sep_util because of problem with os.remove
+					hyper = self.getHyper()
+					ax_info = []
+					for iaxis in range(hyper.getNdim()):
+						ax_info.append([hyper.getAxis(iaxis+1).n,hyper.getAxis(iaxis+1).o,hyper.getAxis(iaxis+1).d,hyper.getAxis(iaxis+1).label])
+					sep_util.write_file(filename,self.getNdArray(),ax_info)
+				return
 		raise NotImplementedError("writeVec must be overwritten")
 		return
 
@@ -151,7 +167,7 @@ class vectorSet:
 		#Checking dimensionality if a vector is present
 		if(self.vecSet):
 			if(not self.vecSet[0].checkSame(vec_in)):
-				raise ValueError("ERROR! Provided vector not in the same Space of the vector set")
+				raise ValueError("Provided vector not in the same Space of the vector set")
 		if(copy):
 			#Copying input vector
 			self.vecSet.append(vec_in.clone())
@@ -163,7 +179,7 @@ class vectorSet:
 	def writeSet(self,filename,mode="a"):
 		"""Method to write to SEPlib file (by default it appends vectors to file)"""
 		if(not (mode in "aw")):
-			raise ValueError("ERROR! mode must be either a (append) or w (write)")
+			raise ValueError("mode must be either a (append) or w (write)")
 		for ivec in self.vecSet:
 			self.writeVec(filename,ivec,mode)
 		self.vecSet = [] #List of vectors of the set
@@ -172,28 +188,15 @@ class vectorSet:
 	def writeVec(self,filename,vec,mode):
 		"""Method to write to vector to file within a Vector set"""
 		#Checking what kind of vector to write
-		if(isinstance(vec,vectorIC) or isinstance(vec,vectorOC)):
-			vec.writeVec(filename,mode)
-		elif(isinstance(vec,superVector)):
+		if isinstance(vec,superVector):
 			#Writing two files for the two components
 			filename_comp1 = "".join(filename.split('.')[:-1])+"_comp1.H"
 			filename_comp2 = "".join(filename.split('.')[:-1])+"_comp2.H"
 			#Writing files (recursively)
 			self.writeVec(filename_comp1,vec.vec1,mode)
 			self.writeVec(filename_comp2,vec.vec2,mode)
-		elif(genIO_found):
-			if(isinstance(vec,SepVector.vector)):
-				if(mode == "a"):
-					genericIO.defaultIO.appendVector(filename,vec,flush=1)
-					genericIO.defaultIO.closeAppendFile(filename)
-				if(mode == "w"):
-					#genericIO.defaultIO.writeVector(filename,vec)
-					#Using sep_util because of problem with os.remove
-					hyper = vec.getHyper()
-					ax_info = []
-					for iaxis in range(hyper.getNdim()):
-						ax_info.append([hyper.getAxis(iaxis+1).n,hyper.getAxis(iaxis+1).o,hyper.getAxis(iaxis+1).d,hyper.getAxis(iaxis+1).label])
-					sep_util.write_file(filename,vec.getNdArray(),ax_info)
+		else:
+			vec.writeVec(filename,mode)
 		return
 
 class superVector(vector):

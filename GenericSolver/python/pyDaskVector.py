@@ -3,6 +3,7 @@ import pyVector as Vec
 import dask.distributed as daskD
 from dask_util import DaskClient
 import numpy as np
+import os
 
 #Specific functions to use genericIO vectors
 import imp
@@ -65,6 +66,10 @@ def call_cloneSpace(vecObj):
 def call_checkSame(vecObj,vec2):
 	"""Function to call cloneSpace method"""
 	res = vecObj.checkSame(vec2)
+	return res
+def call_writeVec(vecObj,filename,mode):
+	"""Function to call cloneSpace method"""
+	res = vecObj.writeVec(filename,mode)
 	return res
 def call_copy(vecObj,vec2):
 	"""Function to call copy method"""
@@ -183,7 +188,10 @@ class DaskVector(Vec.vector):
 						self.vecDask.append(self.client.submit(call_constr_hyper,vec.getHyper(),workers=[wrkId],pure=False))
 						#Copying values from NdArray (Cannot scatter SepVector)
 						daskD.wait(self.vecDask[-1])
-						if(copy): daskD.wait(self.client.submit(copy_from_NdArray,self.vecDask[-1],vec.getNdArray(),pure=False))
+						if(copy):
+							arrD = self.client.scatter(vec.getNdArray(),workers=[wrkId])
+							daskD.wait(arrD)
+							daskD.wait(self.client.submit(copy_from_NdArray,self.vecDask[-1],arrD,pure=False))
 					else:
 						if(copy):
 							self.vecDask.append(self.client.scatter(vec,workers=[wrkId]))
@@ -203,14 +211,14 @@ class DaskVector(Vec.vector):
 		daskD.wait(self.vecDask)
 		return
 
-	def __del__(self):
-		"""
-		   Cancel/Delete all futures within the class (fees memory on workers)
-		"""
-		#If a future is deleted is cancelled, then all the related ones are cancelled too. This is a problem
-		#for the methods clone and cloneSpace. Need to find a solution to the problem
-		# self.client.cancel(self.vecDask)
-		return
+	# def __del__(self):
+	# 	"""
+	# 	   Cancel/Delete all futures within the class (fees memory on workers)
+	# 	"""
+	# 	#If a future is deleted is cancelled, then all the related ones are cancelled too. This is a problem
+	# 	#for the methods clone and cloneSpace. Need to find a solution to the problem
+	# 	self.client.cancel(self.vecDask)
+	# 	return
 
 	#Class vector operations
 	def getNdArray(self):
@@ -310,6 +318,15 @@ class DaskVector(Vec.vector):
 		#Check writing mode
 		if(not mode in 'wa'):
 			raise ValueError("Mode must be appending 'a' or writing 'w' ")
+		#Multi-node writing mode
+		Nvecs = len(self.vecDask)
+		#Creating vector-chunk names
+		vec_names = [os.getcwd()+"/"+"".join(filename.split('.')[:-1])+"_chunk%s.H"%(ii+1) for ii in range(Nvecs)]
+		futures = self.client.map(call_writeVec,self.vecDask,vec_names,[mode]*Nvecs,pure=False)
+		daskD.wait(futures)
+		#Single-file writing mode (concatenating all bindary files)
+		if(not multi_file):
+			raise NotImplementedError("Single-file writing mode not implemented yet!")
 		return
 
 	#Methods combinaning different vectors
