@@ -2,6 +2,7 @@
 import dask.distributed as daskD
 import os
 import subprocess
+from sys_util import RunShellCmd
 import random
 import atexit
 import time
@@ -33,8 +34,12 @@ class DaskClient:
 			workers=len(self.client.get_worker_logs().keys())
 			#If the number of workers is not reached in 5 minutes raise exception
 			if(time.time()-t0 > 300.0): raise SystemError("ERROR! dask-ssh cannot start the requested workers within 5 minutes! Try different hostnames.")
+		#Getting temporary directories to be removed
+		out = RunShellCmd("ls -rd worker* | tail -n%s"%(len(hostnames)*2),get_stat=False)[0].split("\n")[:len(hostnames)*2]
+		self.tmp_fold = out
 		#Forcing deleting of object
 		atexit.register(self.dask_ssh_proc.kill)
+		atexit.register(self.clean_tmp_files)
 		return
 
 	def getClient(self):
@@ -42,6 +47,13 @@ class DaskClient:
 		   Accessor for obtaining the client object
 		"""
 		return self.client
+
+	def clean_tmp_files(self):
+		"""
+		   Removing temporary dask files and folders
+		"""
+		RunShellCmd("rm -rf "+" ".join(self.tmp_fold))
+		return
 
 	def getWorkerIds(self):
 		"""
