@@ -6,10 +6,11 @@ import pyVector as  Vec
 import numpy as np
 
 
-hostnames = ["192.168.66.166","192.168.66.66","192.168.66.67"]
+# hostnames = ["192.168.66.166","192.168.66.66","192.168.66.67"]
+hostnames = ["192.168.66.67","192.168.66.67","192.168.66.66"]
 client = DaskClient(hostnames)
-vec = Vec.vectorIC((200,1))
-chunks = (2,1,1)
+vec = Vec.vectorIC((100,10))
+chunks = (3,1,1)
 vecD = pyDaskVector.DaskVector(client,vector_template=vec,chunks=chunks)
 
 client.getClient().who_has(vecD.vecDask[0])
@@ -40,7 +41,7 @@ vec = Vec.vectorIC((100,1))
 chunks = (10,10,10)
 sc = 10.0
 vecD = pyDaskVector.DaskVector(client,vector_template=vec,chunks=chunks)
-scal_op_args = [(ivec,sc) for ivec in vecD.vecDask]
+scal_op_args = [(vec_i,sc) for vec_i in vecD.vecDask]
 
 scaleOp_constr = pyOp.scalingOp
 dask_scaling = DaskOp.DaskOperator(client,scaleOp_constr,scal_op_args,chunks)

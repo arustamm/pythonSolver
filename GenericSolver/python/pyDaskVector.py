@@ -4,6 +4,8 @@ import dask.distributed as daskD
 from dask_util import DaskClient
 import numpy as np
 import os
+import sep_util as sep
+from sys_util import BUF_SIZE
 
 #Specific functions to use genericIO vectors
 import imp
@@ -306,14 +308,14 @@ class DaskVector(Vec.vector):
 		results = self.client.gather(futures)
 		return all(results)
 
-	def writeVec(self,filename,mode='w',multi_file=True):
+	def writeVec(self,filename,mode='w',multi_file=False):
 		"""
 		Function to write vector to file:
 
 		:param filename: string - Filename to write the vector to
 		:param mode: string - Writing mode 'w'=overwrite file or 'a'=append to file ['w']
 		:param multi_file: boolean - If True multiple files will be written with suffix _chunk1,2,3,...;
-		otherwise, a single will be written [True]
+		otherwise, a single will be written [False]
 		"""
 		#Check writing mode
 		if(not mode in 'wa'):
@@ -324,9 +326,62 @@ class DaskVector(Vec.vector):
 		vec_names = [os.getcwd()+"/"+"".join(filename.split('.')[:-1])+"_chunk%s.H"%(ii+1) for ii in range(Nvecs)]
 		futures = self.client.map(call_writeVec,self.vecDask,vec_names,[mode]*Nvecs,pure=False)
 		daskD.wait(futures)
-		#Single-file writing mode (concatenating all bindary files)
-		if(not multi_file):
-			raise NotImplementedError("Single-file writing mode not implemented yet!")
+		#Single-file writing mode (concatenating all binary files)
+		if not multi_file:
+			#Getting binary-file locations
+			bin_files = [sep.get_binary(vec_name) for vec_name in vec_names]
+			#Getting all-axis information
+			ax_info = [sep.get_axes(vec_name)[:sep.get_num_axes(vec_name)] for vec_name in vec_names]
+			binfile = sep.datapath+filename.split('/')[-1]+'@'
+			#Checks for writing header file
+			len_ax = [len(ax) for ax in ax_info]
+			max_len_idx = np.argmax(len_ax)
+			cat_axis = len_ax[max_len_idx] #Axis on with files are concatenated
+			#Getting largest-vector-axis information
+			main_axes = ax_info[max_len_idx]
+			#Getting number of elements if appending mode is requested
+			if os.path.isfile(filename) and 'a' in mode:
+				file_axes = sep.get_axes(filename)[:sep.get_num_axes(filename)]
+				N_elements = file_axes[-1][0]
+			else:
+				N_elements = 0 #Number of elements on the concatenation axis
+			#Checking compatibility of vectors
+			for axes2check in ax_info:
+				#First checking for len of given axis
+				Naxes = len(axes2check)
+				if  Naxes < cat_axis-1:
+					print("WARNING! Cannot write single file with given vector chunks: number of axes not compatible. Wrote chunks!")
+					return
+				for idx,ax in enumerate(axes2check):
+					if ax[0] != main_axes[idx][0] and idx != cat_axis-1:
+						print("WARNING! Cannot write single file with given vector chunks: elements on axis number %s not compatible. Wrote chunks!"%(idx+1))
+						return
+				if Naxes == cat_axis:
+					N_elements += axes2check[cat_axis-1][0] #Adding number of elements on the given concatenation axis
+				else:
+					N_elements += 1 #Only one element present
+			#Changing number of elements on last axis
+			main_axes[-1][0] = N_elements
+			#Writing header file
+			with open(filename,mode) as fid:
+				for ii,ax in enumerate(main_axes):
+					ax_id = ii + 1
+					fid.write("n%s=%s o%s=%s d%s=%s label%s='%s'\n"%(ax_id,ax[0],ax_id,ax[1],ax_id,ax[2],ax_id,ax[3]))
+				fid.write("in='%s'\n"%(binfile))
+				fid.write("esize=4\n")
+				fid.write("data_format=\"xdr_float\"\n")
+			#Writing binary file ("reading each binary file by chuncks of BUF_SIZE")
+			with open(binfile,mode+'b') as fid:
+				for binfile_ii in bin_files:
+					with open(binfile_ii,'rb') as fid_toread:
+						while True:
+							data = fid_toread.read(BUF_SIZE)
+							if not data: break
+							fid.write(data)
+			#Removing header binary files associated to chunks
+			for idx,vec_name in enumerate(vec_names):
+				os.remove(vec_name)
+				os.remove(bin_files[idx])
 		return
 
 	#Methods combinaning different vectors
