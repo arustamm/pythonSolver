@@ -83,6 +83,14 @@ class vector:
     def __abs__(self):
         self.abs()
 
+    def __truediv__(self, other):  # self / other
+        if type(other) in [int, float]:
+            self.scale(1/other)
+        elif isinstance(other, vector):
+            self.multiply(other.clone().reciprocal())
+        else:
+            raise TypeError('other has to be either a scalar or a vector')
+
     # Class vector operations
     def getNdArray(self):
         """Function to return Ndarray of the vector"""
