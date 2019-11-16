@@ -37,8 +37,8 @@ vec1.norm()**2+vec2.norm()**2+vec3.norm()**2
 vec2D.norm()**2
 
 #Testing Dask Operator
-vec = Vec.vectorIC((100,1))
-chunks = (10,10,10)
+vec = Vec.vectorIC((2,1))
+chunks = (5,5,5)
 sc = 10.0
 vecD = pyDaskVector.DaskVector(client,vector_template=vec,chunks=chunks)
 scal_op_args = [(vec_i,sc) for vec_i in vecD.vecDask]

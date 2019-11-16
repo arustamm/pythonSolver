@@ -329,6 +329,7 @@ class DaskVector(Vec.vector):
 		#Single-file writing mode (concatenating all binary files)
 		if not multi_file:
 			#Getting binary-file locations
+			print(vec_names)
 			bin_files = [sep.get_binary(vec_name) for vec_name in vec_names]
 			#Getting all-axis information
 			ax_info = [sep.get_axes(vec_name)[:sep.get_num_axes(vec_name)] for vec_name in vec_names]

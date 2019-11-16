@@ -27,26 +27,34 @@ def call_adjoint(opObj,add,model,data):
 	"""Function to call adjoint operator"""
 	res = opObj.adjoint(add,model,data)
 	return res
-def add_array(vecObj,arr):
+def add_from_NdArray(vecObj,arr):
 	"""Function to add array to remote vector"""
 	vecObj.getNdArray()[:] += arr
 	return
 def getNdfuture(vecObj):
-	Nd_fut = vecObj.getNdArray()
-	return Nd_fut
+	"""Function to obtain NdArray as a future object"""
+	Nd = vecObj.getNdArray()
+	return Nd
+def call_set_background(opObj,model,func_name):
+	"""Function to call set_background"""
+	set_bck_fun = getattr(opObj,func_name)
+	set_bck_fun(model)
+	return
 
 class DaskOperator(Op.Operator):
 	"""
 	   Class to apply multiple operators in parallel through Dask and DaskVectors
 	"""
 
-	def __init__(self,dask_client,op_constructor,op_args,chunks):
+	def __init__(self,dask_client,op_constructor,op_args,chunks,**kwargs):
 		"""
 		   Dask Operator constructor
 		   dask_client = [no default] - DaskClient; client object to use when submitting tasks (see dask_util module)
 		   op_constructor = [no default] - pointer to function; Pointer to constructor
 		   op_args = [no default] - list; List containing lists of arguments to run the constructor. It can instantiate the same operator on multiple workers or different ones if requested by passing a list of list of arguments (e.g., [(arg1,arg2,arg3,...)])
 		   chunks = [no default] - list; List defininig how many operators wants to instantiated. Note, the list must contain the same number of elements as the number of Dask workers present in the DaskClient.
+		   setbackground_func_name = [None] - string; Name of the function to set the model point on which the Jacobian is computed. See NonLinearOperator in pyOperator module.
+		   spread_op = [None] - DaskSpreadOp; Spreading operator to distribute a model vector to the set_background functions
 		"""
 		#Client to submit tasks
 		if not isinstance(dask_client,DaskClient):
@@ -84,6 +92,15 @@ class DaskOperator(Op.Operator):
 		daskD.wait(dom_vecs+rng_vecs)
 		self.domain = DaskVector(self.dask_client,dask_vectors=dom_vecs)
 		self.range = DaskVector(self.dask_client,dask_vectors=rng_vecs)
+		#Set background function name "necessary for non-linear operator Jacobian"
+		self.set_background_name = kwargs.get("setbackground_func_name",None)
+		if self.set_background_name:
+			#Creating a spreading operator useful
+			self.Sprd = kwargs.get("spread_op",None)
+			if self.Sprd:
+				if not isinstance(self.Sprd,DaskSpreadOp):
+					raise TypeError("Provided spread_op not a DaskSpreadOp class!")
+				self.model_tmp = self.Sprd.getRange().clone()
 		return
 
 
@@ -96,7 +113,7 @@ class DaskOperator(Op.Operator):
 		#Dimensionality check
 		self.checkDomainRange(model,data)
 		add = [add]*len(self.dask_ops)
-		fwd_ftr = self.client.map(call_forward,self.dask_ops,add,model.vecDask,data.vecDask,pure=False,workers=self.dask_client.getWorkerIds())
+		fwd_ftr = self.client.map(call_forward,self.dask_ops,add,model.vecDask,data.vecDask,pure=False)
 		daskD.wait(fwd_ftr)
 		return
 
@@ -109,8 +126,19 @@ class DaskOperator(Op.Operator):
 		#Dimensionality check
 		self.checkDomainRange(model,data)
 		add = [add]*len(self.dask_ops)
-		adj_ftr = self.client.map(call_adjoint,self.dask_ops,add,model.vecDask,data.vecDask,pure=False,workers=self.dask_client.getWorkerIds())
+		adj_ftr = self.client.map(call_adjoint,self.dask_ops,add,model.vecDask,data.vecDask,pure=False)
 		daskD.wait(adj_ftr)
+		return
+
+	def set_background(self,model):
+		"""Function to call set_background function of each dask operator"""
+		if self.set_background_name == None:
+			raise NameError("setbackground_func_name was not defined when constructing the operator!")
+		if(self.Sprd):
+			self.Sprd.forward(False,model,self.model_tmp)
+			model = self.model_tmp
+		setbkg_ftr = self.client.map(call_set_background,self.dask_ops,model.vecDask,[self.set_background_name]*self.dask_client.getNworkers(),pure=False)
+		daskD.wait(setbkg_ftr)
 		return
 
 class DaskSpreadOp(Op.Operator):
@@ -153,13 +181,18 @@ class DaskSpreadOp(Op.Operator):
 			#Getting the numpy array to the local model vector
 			modelNd = model.getNdArray()
 
-		#Broadcasting the numpy Array (DOES NOT WORK PROPERLY)
-		# modelNdD = [self.client.scatter(modelNd,broadcast=True)]*len(data.vecDask)
-		# daskD.wait(modelNdD)
-		modelNdD = [modelNd]*len(data.vecDask)
-		#Spreading current vector
-		futures = self.client.map(add_array,data.vecDask,modelNdD,pure=False)
-		daskD.wait(futures)
+		#Spreading model array to workers
+		if len(self.chunks) == self.dask_client.getNworkers():
+			dataVecList = data.vecDask.copy()
+			for iwrk,wrkId in enumerate(self.dask_client.getWorkerIds()):
+				arrD = self.client.scatter(modelNd,workers=[wrkId])
+				daskD.wait(arrD)
+				for ii in range(self.chunks[iwrk]):
+					daskD.wait(self.client.submit(add_from_NdArray,dataVecList.pop(0),arrD,pure=False))
+		else:
+			#Letting Dask handling the scattering of the data (not ideal)
+			futures = self.client.map(add_from_NdArray,data.vecDask,[modelNd]*len(data.vecDask),pure=False)
+			daskD.wait(futures)
 		return
 
 	def adjoint(self,add,model,data):

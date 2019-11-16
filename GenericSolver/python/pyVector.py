@@ -11,14 +11,6 @@ from sys import version_info
 #other modules
 import sys_util
 import sep_util
-#Verify if SepVector modules are presents
-try:
-	imp.find_module('Hypercube')
-	imp.find_module('SepVector')
-	imp.find_module('genericIO')
-	genIO_found = True
-except ImportError:
-	genIO_found = False
 
 #regex to read output of Solver_ops
 re_dpr=re.compile("DOT RESULT(.*)")
@@ -90,22 +82,6 @@ class vector:
 
 	def writeVec(self,filename,mode='w'):
 		"""Function to write vector to file"""
-		if genIO_found:
-			if isinstance(self,SepVector.vector):
-				if not (mode in "aw"):
-					raise ValueError("ERROR! mode must be either a (append) or w (write)")
-				if mode == "a":
-					genericIO.defaultIO.appendVector(filename,self,flush=1)
-					genericIO.defaultIO.closeAppendFile(filename)
-				if mode == "w":
-					#genericIO.defaultIO.writeVector(filename,self)
-					#Using sep_util because of problem with os.remove
-					hyper = self.getHyper()
-					ax_info = []
-					for iaxis in range(hyper.getNdim()):
-						ax_info.append([hyper.getAxis(iaxis+1).n,hyper.getAxis(iaxis+1).o,hyper.getAxis(iaxis+1).d,hyper.getAxis(iaxis+1).label])
-					sep_util.write_file(filename,self.getNdArray(),ax_info)
-				return
 		raise NotImplementedError("writeVec must be overwritten")
 		return
 
@@ -142,12 +118,6 @@ class vector:
 		"""
 		raise NotImplementedError("clipVector must be overwritten")
 		return
-
-#Sep library (Importing after vector since SepVector uses it) if present
-if genIO_found:
-	import Hypercube
-	import SepVector
-	import genericIO
 
 #Set of vectors (useful to store results and same-Space vectors together)
 class vectorSet:
@@ -347,10 +317,6 @@ class vectorIC(vector):
 			if(np.isfortran(input)): raise TypeError("ERROR! Input array not a C contiguous array!")
 			self.arr = np.array(input,copy=False)
 			self.ax_info = None
-		# elif(isinstance(input,vectorSEP)):
-		# 	#VectorSEP passed to constructor
-		# 	self.arr = input.vec.getNdArray()
-		# 	self.ax_info = input.ax_info
 		elif(isinstance(input,tuple)):
 			#Tuple size passed to constructor
 			self.arr = np.zeros(tuple(reversed(input)))
@@ -430,13 +396,21 @@ class vectorIC(vector):
 	def writeVec(self,filename,mode='w'):
 		"""Function to write vector to file"""
 		#Check writing mode
-		if(not mode in 'wa'): raise ValueError("Mode must be appending 'a' or writing 'w' ")
+		if not mode in 'wa':
+			raise ValueError("Mode must be appending 'a' or writing 'w' ")
+		#Construct ax_info if the object has getHyper
+		if hasattr(self,"getHyper"):
+			hyper = self.getHyper()
+			self.arr = self.getNdArray()
+			self.ax_info = []
+			for iaxis in range(hyper.getNdim()):
+				self.ax_info.append([hyper.getAxis(iaxis+1).n,hyper.getAxis(iaxis+1).o,hyper.getAxis(iaxis+1).d,hyper.getAxis(iaxis+1).label])
 		#writing header/pointer file if not present and not append mode
-		if(not (os.path.isfile(filename) and mode in 'a')):
+		if not (os.path.isfile(filename) and mode in 'a'):
 			binfile = sep_util.datapath+filename.split('/')[-1]+'@'
 			with open(filename,mode) as fid:
 				#Writing axis info
-				if(self.ax_info):
+				if self.ax_info:
 					for ii,ax_info in enumerate(self.ax_info):
 						ax_id = ii + 1
 						fid.write("n%s=%s o%s=%s d%s=%s label%s='%s'\n"%(ax_id,ax_info[0],ax_id,ax_info[1],ax_id,ax_info[2],ax_id,ax_info[3]))
@@ -457,7 +431,7 @@ class vectorIC(vector):
 			if(mode in 'a'):
 				axes = sep_util.get_axes(filename)
 				#Number of vectors already present in the file
-				if(self.naxis == (1,)):
+				if self.naxis == (1,):
 					n_vec = axes[0][0]
 					append_dim = self.ndims
 				else:
@@ -469,7 +443,7 @@ class vectorIC(vector):
 		#Writing binary file
 		with open(binfile,mode+'b') as fid:
 			#Writing big-ending floating point number
-			if(np.isfortran(self.arr)): #Forcing column-wise binary writing
+			if np.isfortran(self.arr): #Forcing column-wise binary writing
 				self.arr.flatten('F').astype('>f').tofile(fid)
 			else:
 				self.arr.astype('>f').tofile(fid)
@@ -567,14 +541,6 @@ class vectorOC(vector):
 			self.vecfile = tmp_vec #Assigning internal vector array
 			#Removing header file? (Default behavior is to remove temporary file)
 			self.remove_file = True
-		# elif(isinstance(input,vectorSEP)):
-		# 	#VectorSEP passed to constructor
-		# 	tmp_vec = sep_util.datapath+"tmp_vectorOC"+str(int(time.time()*1000000))+".H"
-		# 	arr = np.array(input.vec,copy=False)
-		# 	sep_util.write_file(tmp_vec,arr,input.ax_info)
-		# 	self.vecfile = tmp_vec #Assigning internal vector array
-		# 	#Removing header file? (Default behavior is to remove temporary file)
-		# 	self.remove_file = True
 		elif(isinstance(input,str)):
 			#Header file passed to constructor
 			self.vecfile = input #Assigning internal vector array
