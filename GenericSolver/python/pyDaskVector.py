@@ -336,32 +336,34 @@ class DaskVector(Vec.vector):
 			#Checks for writing header file
 			len_ax = [len(ax) for ax in ax_info]
 			max_len_idx = np.argmax(len_ax)
-			cat_axis = len_ax[max_len_idx] #Axis on with files are concatenated
+			cat_axis_multi = len_ax[max_len_idx] #Axis on with files are concatenated
 			#Getting largest-vector-axis information
 			main_axes = ax_info[max_len_idx]
+			N_elements_multi = 0 #Number of elements on the concatenation axis of multifiles
 			#Getting number of elements if appending mode is requested
+			last_axis = [[1,1.0,1.0,"Undefined"]]
 			if os.path.isfile(filename) and 'a' in mode:
-				file_axes = sep.get_axes(filename)[:sep.get_num_axes(filename)]
-				N_elements = file_axes[-1][0]
-			else:
-				N_elements = 0 #Number of elements on the concatenation axis
+				file_axes = sep.get_axes(filename)
+				last_axis[0][0] += file_axes[cat_axis_multi][0]
 			#Checking compatibility of vectors
 			for axes2check in ax_info:
 				#First checking for len of given axis
 				Naxes = len(axes2check)
-				if  Naxes < cat_axis-1:
+				if  Naxes < cat_axis_multi-1:
 					print("WARNING! Cannot write single file with given vector chunks: number of axes not compatible. Wrote chunks!")
 					return
 				for idx,ax in enumerate(axes2check):
-					if ax[0] != main_axes[idx][0] and idx != cat_axis-1:
+					if ax[0] != main_axes[idx][0] and idx != cat_axis_multi-1:
 						print("WARNING! Cannot write single file with given vector chunks: elements on axis number %s not compatible. Wrote chunks!"%(idx+1))
 						return
-				if Naxes == cat_axis:
-					N_elements += axes2check[cat_axis-1][0] #Adding number of elements on the given concatenation axis
+				if Naxes == cat_axis_multi:
+					N_elements_multi += axes2check[cat_axis_multi-1][0] #Adding number of elements on the given concatenation axis
 				else:
-					N_elements += 1 #Only one element present
+					N_elements_multi += 1 #Only one element present
 			#Changing number of elements on last axis
-			main_axes[-1][0] = N_elements
+			main_axes[-1][0] = N_elements_multi
+			#Adding last appending axes if file existed
+			main_axes += last_axis
 			#Writing header file
 			with open(filename,mode) as fid:
 				for ii,ax in enumerate(main_axes):
