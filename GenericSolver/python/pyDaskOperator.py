@@ -6,10 +6,15 @@ import dask.distributed as daskD
 from dask_util import DaskClient
 import numpy as np
 
+#For checking if a single argument was passed to a constructor
+from collections.abc import Iterable
+
 def call_constructor(constr,args):
 	"""Function to call the constructor"""
-	print(args)
-	op = constr(*args)
+	if isinstance(args,Iterable):
+		op = constr(*args)
+	else:
+		op = constr(args)
 	return op
 def call_getDomain(opObj):
 	"""Function to call getDomain method"""
@@ -77,12 +82,15 @@ class DaskOperator(Op.Operator):
 		else:
 			if N_ops > 1:
 				op_args = [op_args for ii in range(N_ops)]
+
 		#Instantiation of the operators on each worker
 		self.dask_ops = []
 		for iwrk,wrkId in enumerate(wrkIds):
 			for iop in range(chunks[iwrk]):
 				self.dask_ops.append(self.client.submit(call_constructor,op_constructor,op_args.pop(0),workers=[wrkId],pure=False))
 		daskD.wait(self.dask_ops)
+		if(self.dask_ops[0].status == 'error'):
+			print(self.dask_ops[0].result())
 		#Creating domain and range of the Dask operator
 		dom_vecs = [] #List of remote domain vectors
 		rng_vecs = [] #List of remote range vectors
