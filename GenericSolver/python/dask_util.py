@@ -9,6 +9,22 @@ import time
 
 DEVNULL = open(os.devnull,'wb')
 
+def create_hostnames(machine_names,Nworkers):
+	"""Function to create hostnames variables (i.e., list of ip addresses) from machine names and number of wokers per machine"""
+
+	ip_adds = []
+	for host in machine_names:
+		line = RunShellCmd("ping %s -c 1 | head -1"%host,get_stat=False)[0]
+		ip_adds.append(line.split(" ")[2][1:-1])
+
+	if(len(Nworkers) != len(ip_adds)):
+		raise ValueError("Lenght of number of workers (%s) not consistent with number of machines available (%s)"%(len(Nworkers),len(ip_adds)))
+
+	hostnames = []
+	for idx,ip in enumerate(ip_adds):
+		hostnames+=[ip]*Nworkers[idx]
+	return hostnames
+
 class DaskClient:
 	"""
 	   Class useful to construct a Dask Client to be used with Dask vectors and operators
