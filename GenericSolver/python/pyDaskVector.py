@@ -13,9 +13,9 @@ import imp
 try:
 	imp.find_module('SepVector')
 	import SepVector
-	def call_constr_hyper(hyper):
-		"""Function to remotely construct an SepVector using the Hypercube"""
-		return SepVector.getSepVector(axes=hyper.axes)
+	def call_constr_hyper(axes_in):
+		"""Function to remotely construct an SepVector using the axis object"""
+		return SepVector.getSepVector(axes=axes_in)
 	def copy_from_NdArray(vecObj,NdArray):
 		"""Function to set vector values from numpy array"""
 		vecObj.getNdArray()[:] = NdArray
@@ -149,7 +149,7 @@ class DaskVector(Vec.vector):
 					hyper=True
 			#Broadcast vector space
 			if hyper:
-				vec_space = vec_tmplt.getHyper()
+				vec_space = vec_tmplt.getHyper().axes #Passing axes since Hypercube cannot be serialized
 			else:
 				vec_space = vec_tmplt.cloneSpace()
 			vec_spaceD = self.client.scatter(vec_space,broadcast=True)
@@ -187,7 +187,7 @@ class DaskVector(Vec.vector):
 						if(isinstance(vec,SepVector.vector)): IsSepVec=True
 					if IsSepVec:
 						#Instantiating Sep vectors on remote machines
-						self.vecDask.append(self.client.submit(call_constr_hyper,vec.getHyper(),workers=[wrkId],pure=False))
+						self.vecDask.append(self.client.submit(call_constr_hyper,vec.getHyper().axes,workers=[wrkId],pure=False))
 						#Copying values from NdArray (Cannot scatter SepVector)
 						daskD.wait(self.vecDask[-1])
 						if(copy):
