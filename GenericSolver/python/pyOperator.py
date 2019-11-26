@@ -60,10 +60,10 @@ class Operator:
         """Matrix-matrix or matrix-vector or matrix-scalar multiplication."""
         if isinstance(other, Operator):  # A * B
             return _prodOperator(self, other)
-        elif np.isscalar(other):  # A * c | # TODO I want to call also c * A (but in the latter __mul__ is of scalar)
+        elif type(other) in [int, float]:  # A * c | # TODO I want to call also c * A (but in the latter __mul__ is of scalar)
             return _scaledOperator(self, other)
         elif isinstance(other, vector) or isinstance(other, superVector):  # A * x
-            temp = self.range.clone().zero()
+            temp = self.range.clone()
             self.forward(False, other, temp)
             return temp
         else:
@@ -741,9 +741,8 @@ def main():
         print('prod not working')
 
     prod = I * Z
-    prod.forward(False, x, y)
-    z = x.clone()
-    z.zero()
+    y = prod * x  # I*Z*x
+    z = x.clone().zero()
     y.isDifferent(z)
     if y.isDifferent(z):
         print('prod not working')
