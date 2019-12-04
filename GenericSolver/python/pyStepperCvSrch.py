@@ -45,15 +45,15 @@ class CvSrchStep(pyStepper.Stepper):
 	   SATISFIES THE SUFFICIENT DECREASE CONDITION.
 	"""
 
-	def __init__(self,alpha=0.0,xtol=1.0e-16,ftol=1.0e-4,gtol=0.95,alpha_min=1.0e-16,alpha_max=1.0e16,maxfev=20,xtrapf=4.0,delta=0.66):
+	def __init__(self,alpha=0.0,xtol=1.0e-16,ftol=1.0e-4,gtol=0.95,alpha_min=1.0e-20,alpha_max=1.0e20,maxfev=20,xtrapf=4.0,delta=0.66):
 		"""
 		   CvSrch constructor:
 		   alpha 		 = [0.] - float; Initial step-length guess
 		   xtol  	 	 = [1e-16] - float; Relative width tolerance: convergence is reached if width falls below xtol * maximum step size.
 		   ftol  	 	 = [1e-16] - float; c1 value to test first Wolfe condition (should be between 0 and 1)
 		   gtol  	 	 = [0.95] - float; c2 value to test second Wolfe condition (should be between c1 or ftol and 1). For Quasi-Newton (e.g., L-BFGS) choose default. Otherwise, for other methods (e.g., NLCG) choose 0.1
-		   alpha_min  	 = [1e-10] - float; Minimum step length value of the step length interval
-		   alpha_max  	 = [1e10] - float; Maximum step length value of the step length interval
+		   alpha_min  	 = [1e-20] - float; Minimum step length value of the step length interval
+		   alpha_max  	 = [1e20] - float; Maximum step length value of the step length interval
 		   maxfev  	     = [20] - int; Maximum number of function evaluation to step length
 		   xtrapf  	     = [4.0] - float; Scaling factor to find right limit of uncertainty interval
 		   delta  	     = [0.66] - float; Value to force sufficient decrease of interval size on successive iterations. Should be a positive value less than 1.
