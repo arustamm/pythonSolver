@@ -7,7 +7,7 @@ import numpy as np
 
 
 # hostnames = ["192.168.66.166","192.168.66.66","192.168.66.67"]
-hostnames = ["192.168.66.67","192.168.66.67","192.168.66.66"]
+hostnames = ["192.168.66.67","192.168.66.166","192.168.66.66"]
 client = DaskClient(hostnames)
 vec = Vec.vectorIC((100,10))
 chunks = (3,1,1)
