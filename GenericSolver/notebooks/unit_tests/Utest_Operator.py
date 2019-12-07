@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 import sys,os
-sys.path.append("/net/server/homes/sep/ettore/research/packages/pySolver/GenericSolver/python")
+sys.path.append("../../python")
 import pyOperator
 from pyParOperator import parOperator
 import pyVector
