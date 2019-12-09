@@ -97,11 +97,11 @@ class vector:
 
 	def max(self):
 		"""Function to obtain maximum value within a vector"""
-		return self.getNdArray().max()
+		raise NotImplementedError("max must be overwritten")
 
 	def min(self):
 		"""Function to obtain minimum value within a vector"""
-		return self.getNdArray().min()
+		raise NotImplementedError("min must be overwritten")
 
 	def set(self, val):
 		"""Function to set all values in the vector"""
@@ -218,23 +218,9 @@ class vectorSet:
 		"""Method to write to SEPlib file (by default it appends vectors to file)"""
 		if mode not in "aw":
 			raise ValueError("ERROR! mode must be either a (append) or w (write)")
-		for ivec in self.vecSet:
-			self.writeVec(filename, ivec, mode)
+		for vec_i in self.vecSet:
+			vec_i.writeVec(filename, mode)
 		self.vecSet = []  # List of vectors of the set
-
-	def writeVec(self,filename,vec,mode):
-		"""Method to write to vector to file within a Vector set"""
-		#Checking what kind of vector to write
-		if isinstance(vec,superVector):
-			for ii,vec_cmp in enumerate(superVector.vecs):
-				#Writing components to different files
-				filename_cmp = "".join(filename.split('.')[:-1])+"_comp%s.H"%(ii+1)
-				#Writing files (recursively)
-				self.writeVec(filename_cmp,vec_cmp,mode)
-		else:
-			vec.writeVec(filename,mode)
-		return
-
 
 class superVector(vector):
 
@@ -425,6 +411,15 @@ class superVector(vector):
 			self.vecs[idx].pow(power)
 		return self
 
+	def writeVec(self,filename,mode="w"):
+		"""Method to write to vector to file within a Vector set"""
+		for ii,vec_cmp in enumerate(self.vecs):
+			#Writing components to different files
+			filename_cmp = "".join(filename.split('.')[:-1])+"_comp%s.H"%(ii+1)
+			#Writing files (recursively)
+			vec_cmp.writeVec(filename_cmp,mode)
+		return
+
 
 class vectorIC(vector):
 	"""In-core python vector class"""
@@ -465,58 +460,55 @@ class vectorIC(vector):
 		self.size = self.arr.size  # Total number of elements
 		super(vectorIC, self).__init__()
 
-	def __del__(self):
-		"""VectorIC destructor"""
-		del self.arr
-
 	def getNdArray(self):
 		"""Function to return Ndarray of the vector"""
 		return self.arr
 
 	def norm(self, N=2):
 		"""Function to compute vector N-norm using Numpy"""
-		return np.linalg.norm(self.arr.flatten(), ord=N)
+		return np.linalg.norm(self.getNdArray().flatten(), ord=N)
 
 	def zero(self):
 		"""Function to zero out a vector"""
-		self.arr.fill(0)
+		self.getNdArray().fill(0)
 		return self
 
 	def max(self):
-		return self.arr.max()
+		"""Function to obtain maximum value in the vector"""
+		return self.getNdArray().max()
 
 	def min(self):
-		return self.arr.min()
+		"""Function to obtain minimum value in the vector"""
+		return self.getNdArray().min()
 
 	def set(self, val):
 		"""Function to set all values in the vector"""
-		self.arr.fill(val)
+		self.getNdArray().fill(val)
 		return self
 
 	def scale(self, sc):
 		"""Function to scale a vector"""
-		self.arr *= sc
+		self.getNdArray()[:] *= sc
 		return self
 
 	def addbias(self, bias):
-		self.arr += bias
+		self.getNdArray()[:] += bias
 		return self
 
 	def rand(self, snr=1.):
 		"""Fill vector with random number (~U[1,-1]) with a given SNR"""
-		rms = np.sqrt(np.mean(np.square(self.arr)))
+		rms = np.sqrt(np.mean(np.square(self.getNdArray())))
 		amp_noise = 1.0
 		if rms != 0.:
 			amp_noise = math.sqrt(3. / snr) * rms  # sqrt(3*Power_signal/SNR)
-		del self.arr
-		self.arr = amp_noise * (2. * np.random.random(tuple(reversed(self.naxis))) - 1.)
+		self.getNdArray()[:] = amp_noise * (2. * np.random.random(self.getNdArray().shape) - 1.)
 
 	def clone(self):
 		"""Function to clone (deep copy) a vector from a vector or a Space"""
 		vec_clone = deepcopy(self)  # Deep clone of vector
 		# Checking if a vector space was provided
-		if vec_clone.arr.size == 0:
-			vec_clone.arr = np.zeros(tuple(reversed(vec_clone.naxis)))
+		if vec_clone.getNdArray().size == 0:
+			vec_clone.getNdArray()[:] = np.zeros(self.getNdArray().shape)
 		return vec_clone
 
 	def cloneSpace(self):
@@ -541,7 +533,6 @@ class vectorIC(vector):
 		#Construct ax_info if the object has getHyper
 		if hasattr(self,"getHyper"):
 			hyper = self.getHyper()
-			self.arr = self.getNdArray()
 			self.ax_info = []
 			for iaxis in range(hyper.getNdim()):
 				self.ax_info.append([hyper.getAxis(iaxis+1).n,hyper.getAxis(iaxis+1).o,hyper.getAxis(iaxis+1).d,hyper.getAxis(iaxis+1).label])
@@ -583,24 +574,23 @@ class vectorIC(vector):
 		#Writing binary file
 		with open(binfile,mode+'b') as fid:
 			#Writing big-ending floating point number
-			if np.isfortran(self.arr): #Forcing column-wise binary writing
-				self.arr.flatten('F').astype('>f').tofile(fid)
+			if np.isfortran(self.getNdArray()): #Forcing column-wise binary writing
+				self.getNdArray().flatten('F').astype('>f').tofile(fid)
 			else:
-				self.arr.astype('>f').tofile(fid)
+				self.getNdArray().astype('>f').tofile(fid)
 		fid.close()
 		return
 
-
 	def abs(self):
-		self.arr = np.abs(self.arr)
+		self.getNdArray()[:] = np.abs(self.getNdArray())
 		return self
 
 	def sign(self):
-		self.arr = np.sign(self.arr)
+		self.getNdArray()[:] = np.sign(self.getNdArray())
 		return self
 
 	def reciprocal(self):
-		self.arr = 1. / self.arr
+		self.getNdArray()[:] = 1. / self.getNdArray()
 		return self
 
 	def maximum(self, vec2):
@@ -609,16 +599,16 @@ class vectorIC(vector):
 		if not self.checkSame(vec2):
 			raise ValueError('Dimensionality not equal: vec1 = %d; vec2 = %d'
 							 % (self.naxis, vec2.naxis))
-		self.arr = np.maximum(self.arr, vec2.arr)
+		self.getNdArray()[:] = np.maximum(self.getNdArray(), vec2.getNdArray())
 		return self
 
 	def conj(self):
-		self.arr = np.conjugate(self.arr)
+		self.getNdArray()[:] = np.conjugate(self.getNdArray())
 		return self
 
 	def pow(self, power):
 		"""Compute element-wise power of the vector"""
-		self.arr = self.arr ** power
+		self.getNdArray()[:] = self.getNdArray() ** power
 
 	def copy(self, vec2):
 		"""Function to copy vector from input vector"""
@@ -629,7 +619,7 @@ class vectorIC(vector):
 		if not self.checkSame(vec2):
 			raise ValueError("Dimensionality not equal: vec1 = %d; vec2 = %d" % (self.naxis, vec2.naxis))
 		# Element-wise copy of the input array
-		self.arr[:] = vec2.arr
+		self.getNdArray()[:] = vec2.getNdArray()
 
 	def scaleAdd(self, vec2, sc1=1.0, sc2=1.0):
 		"""Function to scale a vector"""
@@ -640,7 +630,7 @@ class vectorIC(vector):
 		if not self.checkSame(vec2):
 			raise ValueError("Dimensionality not equal: vec1 = %d; vec2 = %d" % (self.naxis, vec2.naxis))
 		# Performing scaling and addition
-		self.arr = sc1 * self.arr + sc2 * vec2.arr
+		self.getNdArray()[:] = sc1 * self.getNdArray() + sc2 * vec2.getNdArray()
 		return self
 
 	def dot(self, vec2):
@@ -654,7 +644,7 @@ class vectorIC(vector):
 		# Checking dimensionality
 		if not self.checkSame(vec2):
 			raise ValueError("Dimensionality not equal: vec1 = %d; vec2 = %d" % (self.naxis, vec2.naxis))
-		return np.dot(self.arr.flatten(), vec2.arr.flatten())
+		return np.dot(self.getNdArray().flatten(), vec2.getNdArray().flatten())
 
 	def multiply(self, vec2):
 		"""Function to multiply element-wise two vectors"""
@@ -668,7 +658,7 @@ class vectorIC(vector):
 		if not self.checkSame(vec2):
 			raise ValueError("Dimensionality not equal: vec1 = %d; vec2 = %d" % (self.naxis, vec2.naxis))
 		# Performing element-wise multiplication
-		self.arr = np.multiply(self.arr, vec2.arr)
+		self.getNdArray()[:] = np.multiply(self.getNdArray(), vec2.getNdArray())
 		return self
 
 	def isDifferent(self, vec2):
@@ -688,7 +678,7 @@ class vectorIC(vector):
 			vec2.arr.flags.writeable = True
 			isDiff = (chcksum1 != chcksum2)
 		else:
-			isDiff = (not np.array_equal(self.arr, vec2.arr))
+			isDiff = (not np.array_equal(self.getNdArray(), vec2.getNdArray()))
 		return isDiff
 
 	def clipVector(self, low, high):
@@ -697,7 +687,7 @@ class vectorIC(vector):
 			raise TypeError("Provided input low vector not a vectorIC!")
 		if not isinstance(high, vectorIC):
 			raise TypeError("Provided input high vector not a vectorIC!")
-		self.arr = np.minimum(np.maximum(low.arr, self.arr), high.arr)
+		self.getNdArray()[:] = np.minimum(np.maximum(low.getNdArray(), self.getNdArray()), high.getNdArray())
 		return self
 
 

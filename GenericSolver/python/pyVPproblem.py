@@ -162,8 +162,8 @@ class ProblemL2VpReg(pyProb.Problem):
 			self.epsilon=1.0
 			prblm_res = self.get_res(prblm_mdl)	#Compute residual arising from the gradient
 			#Balancing the two terms of the objective function
-			res_data_norm=prblm_res.vec1.norm()
-			res_model_norm=prblm_res.vec2.norm()
+			res_data_norm=prblm_res.vecs[0].norm()
+			res_model_norm=prblm_res.vecs[1].norm()
 			if (isnan(res_model_norm) or isnan(res_data_norm)):
 				raise ValueError("ERROR! Obtained NaN: Residual-data-side-norm = %s, Residual-model-side-norm = %s"%(res_data_norm,res_model_norm))
 			if(res_model_norm == 0.0):
@@ -193,11 +193,11 @@ class ProblemL2VpReg(pyProb.Problem):
 		###########################################
 		#Applying full non-linear modeling operator
 		res = self.res
-		if(self.epsilon != None): res = self.res.vec1
+		if(self.epsilon != None): res = self.res.vecs[0]
 		#Computing non-linear part g(m) (if any)
 		if(self.g_op != None): self.g_op.nl_op.forward(False,model,res)
 		#Computing non-linear part g_reg(m) (if any)
-		if(self.g_op_reg != None): self.g_op_reg.nl_op.forward(False,model,self.res.vec2)
+		if(self.g_op_reg != None): self.g_op_reg.nl_op.forward(False,model,self.res.vecs[1])
 
 		##################################
 		#Setting data for linear inversion
@@ -208,11 +208,11 @@ class ProblemL2VpReg(pyProb.Problem):
 
 		# regularization data term = [g_reg(m) - data_reg if any]
 		if(self.data_reg != None):
-			self.res.vec2.scaleAdd(self.data_reg,1.0,-1.0)
+			self.res.vecs[1].scaleAdd(self.data_reg,1.0,-1.0)
 		#Data term for linear regularization term
 		if("epsilon" in dir(self.vp_linear_prob)):
-			self.res.vec2.scale(-1.0)
-			self.vp_linear_prob.prior_model=self.res.vec2
+			self.res.vecs[1].scale(-1.0)
+			self.vp_linear_prob.prior_model=self.res.vecs[1]
 
 		##################################
 		#Running linear inversion
@@ -249,8 +249,8 @@ class ProblemL2VpReg(pyProb.Problem):
 		#Obtaining the residuals
 		if((self.epsilon != None) and not("epsilon" in dir(self.vp_linear_prob))):
 			#Regularization contains a non-linear operator only
-			self.res.vec1.copy(self.vp_linear_prob.get_res(self.lin_model))
-			self.res.vec2.scale(self.epsilon)
+			self.res.vecs[0].copy(self.vp_linear_prob.get_res(self.lin_model))
+			self.res.vecs[1].scale(self.epsilon)
 		else:
 			self.res.copy(self.vp_linear_prob.get_res(self.lin_model))
 		return self.res
@@ -273,13 +273,13 @@ class ProblemL2VpReg(pyProb.Problem):
 		#Computing contribuition from the regularization term (if any)
 		if(self.epsilon != None):
 			# G'(m_nl)' r_m
-			if(self.g_op_reg != None): self.g_op_reg.lin_op.adjoint(False,self.grad,res.vec2)
+			if(self.g_op_reg != None): self.g_op_reg.lin_op.adjoint(False,self.grad,res.vecs[1])
 			# H'(m_nl,m_lin_opt)' r_m
-			if(self.h_op_reg != None): self.h_op_reg.h_nl.lin_op.adjoint(True,self.grad,res.vec2)
+			if(self.h_op_reg != None): self.h_op_reg.h_nl.lin_op.adjoint(True,self.grad,res.vecs[1])
 			# epsilon * [G'(m_nl)' + H'(m_nl,m_lin_opt)'] r_m
 			self.grad.scale(self.epsilon)
 		res = self.res
-		if(self.epsilon != None): res = self.res.vec1
+		if(self.epsilon != None): res = self.res.vecs[0]
 		# G(m_nl)' r_d
 		if(self.g_op != None): self.g_op.lin_op.adjoint(True,self.grad,res)
 		# H(m_nl,m_lin_opt)' r_d
@@ -296,10 +296,10 @@ class ProblemL2VpReg(pyProb.Problem):
 		"""Method to return objective function value 1/2*|g(m_nl) + h(m_nl)m_lin - d|_2 + epsilon^2/2*|g'(m_nl) + h'(m_nl)m_lin - d'|_2"""
 		if("obj_terms" in dir(self)):
 			#data term
-			val = res.vec1.norm()
+			val = res.vecs[0].norm()
 			self.obj_terms[0]=0.5*val*val
 			#model term
-			val = res.vec2.norm()
+			val = res.vecs[1].norm()
 			self.obj_terms[1]=0.5*val*val
 			obj=self.obj_terms[0]+self.obj_terms[1]
 		else:
