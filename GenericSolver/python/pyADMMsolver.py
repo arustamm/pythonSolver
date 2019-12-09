@@ -1,7 +1,7 @@
 # Module containing the definition of inverse problems where the ADMM method is used
 from pySolver import Solver
-from pyLCGsolver import LCGsolver
-from pyISTAsolver import ISTAsolver
+from pyLinearSolver import LCGsolver
+from pySparseSolver import ISTAsolver
 from pyStopperBase import BasicStopper
 from pyProblem import Problem, ProblemL2LinearReg, ProblemL1Lasso
 import pyOperator, pyVector
