@@ -399,24 +399,19 @@ class _prodOperator(Operator):
 			raise TypeError('Both operands have to be a Operator')
 		if not A.domain.checkSame(B.range):
 			raise ValueError('Cannot multiply operators: shape mismatch')
-
 		super(_prodOperator, self).__init__(B.domain, A.range)
 		self.args = (A, B)
+		self.temp = B.getRange().clone()
 
-	# TODO currently allocating-deallocating temp. Is it better to pre-allocate?
 	def forward(self, add, model, data):
 		self.checkDomainRange(model, data)
-		temp = data.clone()
-		self.args[1].forward(False, model, temp)
-		self.args[0].forward(add, temp, data)
-		del temp
+		self.args[1].forward(False, model, self.temp)
+		self.args[0].forward(add, self.temp, data)
 
 	def adjoint(self, add, model, data):
 		self.checkDomainRange(model, data)
-		temp = model.clone()
-		self.args[0].adjoint(False, temp, data)
-		self.args[1].adjoint(add, model, temp)
-		del temp
+		self.args[0].adjoint(False, self.temp, data)
+		self.args[1].adjoint(add, model, self.temp)
 
 
 class _scaledOperator(Operator):
@@ -606,7 +601,12 @@ class DiagonalOp(Operator):
 Transpose = Operator.H
 sumOperator = _sumOperator
 stackOperator = Vstack
-ChainOperator = _prodOperator
+def ChainOperator(A,B):
+	"""
+	 	Chain of two operators
+				d = B A m
+	"""
+	return _prodOperator(B,A)
 
 #######################
 # NONLINEAR OPERATORS #

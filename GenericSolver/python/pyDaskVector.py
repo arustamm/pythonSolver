@@ -101,7 +101,8 @@ def call_clipVector(vecObj,low,high):
 #Check consistency between vectors
 def checkVector(vec1,vec2):
 	"""Function to check type and chunks of Dask-vector objects"""
-	if(type(vec2) is not DaskVector): raise TypeError("Input variable is not a DaskVector")
+	if(type(vec1) is not DaskVector): raise TypeError("Self vector is not a DaskVector")
+	if(type(vec2) is not DaskVector): raise TypeError("Input vector is not a DaskVector")
 	Nvec1 = len(vec1.vecDask)
 	Nvec2 = len(vec2.vecDask)
 	if(Nvec1 != Nvec2):
