@@ -79,7 +79,6 @@ class Operator:
 		"""Function to return operator range"""
 		return self.range
 
-
 	def setDomainRange(self,domain,range):
 		"""Function to set (cloning space) domain and range of the operator"""
 		self.domain = domain.cloneSpace()
@@ -448,11 +447,17 @@ class Vstack(Operator):
 		"""Constructor for the stacked operator"""
 
 		self.ops = []
-		for idx, op in enumerate(args):
-			if type(op) is Vstack:
-				self.ops += op.ops
-			elif isinstance(op, Operator):
-				self.ops.append(op)
+		for _, arg in enumerate(args):
+			if type(arg) is Vstack:
+				self.ops += arg.ops
+			elif isinstance(arg, Operator):
+				self.ops.append(arg)
+			elif isinstance(arg, list):
+				for _, op in arg:
+					if type(op) is Vstack:
+						self.ops += op.ops
+					elif isinstance(op, Operator):
+						self.ops.append(op)
 			else:
 				raise TypeError('Argument must be either Operator or Vstack')
 
@@ -465,7 +470,7 @@ class Vstack(Operator):
 					raise ValueError('Domain incompatibility between Op %d and Op %d' % (idx, idx + 1))
 			op_range += [self.ops[idx].range]
 
-		super(Vstack, self).__init__(domain=op.domain, range=superVector(op_range))
+		super(Vstack, self).__init__(domain=self.ops[0].domain, range=superVector(op_range))
 
 	def forward(self, add, model, data):
 		"""Forward operator Cm"""
@@ -492,11 +497,17 @@ class Hstack(Operator):
 		"""Constructor for the stacked operator"""
 
 		self.ops = []
-		for op in args:
-			if type(op) is Hstack:
-				self.ops += op.ops
-			elif isinstance(op, Operator):
-				self.ops.append(op)
+		for _, arg in enumerate(args):
+			if type(arg) is Hstack:
+				self.ops += arg.ops
+			elif isinstance(arg, Operator):
+				self.ops.append(arg)
+			elif isinstance(arg, list):
+				for _, op in arg:
+					if type(op) is Hstack:
+						self.ops += op.ops
+					elif isinstance(op, Operator):
+						self.ops.append(op)
 			else:
 				raise TypeError('Argument must be either Operator or Hstack')
 
@@ -508,7 +519,7 @@ class Hstack(Operator):
 				if not self.ops[idx].range.checkSame(self.ops[idx + 1].range):
 					raise ValueError('Range incompatibility between Op %d and Op %d' % (idx, idx + 1))
 			domain += [op.domain]
-		super(Hstack, self).__init__(domain=superVector(domain), range=op.range)
+		super(Hstack, self).__init__(domain=superVector(domain), range=self.ops[0].range)
 
 	def forward(self, add, model, data):
 		self.checkDomainRange(model, data)
