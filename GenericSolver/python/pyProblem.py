@@ -1,5 +1,5 @@
 # Module containing the definition of abstract inverse problems
-import pyVector as Vec
+import pyVector as pyVec
 import pyOperator as pyOp
 from math import isnan
 
@@ -454,10 +454,108 @@ class ProblemL2LinearReg(Problem):
 		"""Method to return gradient vector g = L'r_d + epsilon*A'r_m"""
 		# Scaling by epsilon the model residual vector (saving temporarily residual regularization)
 		# g = epsilon*A'r_m
-		self.op.op2.adjoint(False, self.grad, res.vecs[1])
+		self.op.ops[1].adjoint(False, self.grad, res.vecs[1])
 		self.grad.scale(self.epsilon)
 		# g = L'r_d + epsilon*A'r_m
-		self.op.op1.adjoint(True, self.grad, res.vecs[0])
+		self.op.ops[0].adjoint(True, self.grad, res.vecs[0])
+		return self.grad
+
+	def dresf(self, model, dmodel):
+		"""Method to return residual vector dres = (L + epsilon * A)dm"""
+		# Computing Ldm = dres_d
+		self.op.forward(False, dmodel, self.dres)
+		# Scaling by epsilon
+		self.dres.vecs[1].scale(self.epsilon)
+		return self.dres
+
+	def objf(self, res):
+		"""Method to return objective function value 1/2|Lm-d|_2 + epsilon^2/2*|Am-m_prior|_2"""
+		for idx in range(res.n):
+			self.obj_terms[idx] = 0.5 * res.vecs[idx].norm()**2
+		return sum(self.obj_terms)
+
+
+class ProblemL2LinearMultiReg(Problem):
+	"""Linear inverse problem regularized of the form
+	.. math ::
+		0.5 |Op m - d|_2^2 +
+		\sum_i eps_i |R_i m - dr_i|_2^2
+	"""
+
+	def __init__(self, model, data, op, epsilon, reg_op=None, prior_model=None, prec=None,
+				minBound=None, maxBound=None, boundProj=None):
+		"""
+		Constructor of linear regularized problem:
+		model    	= [no default] - vector class; Initial model vector
+		data     	= [no default] - vector class; Data vector
+		op       	= [no default] - linear operator class; L operator
+		epsilon     = [no default] - float; regularization weight
+		reg_op      = [Identity] - linear operator class; A regularization operator
+		prior_model = [None] - vector class; Prior model for regularization term
+		minBound	= [None] - vector class; Minimum value bounds
+		maxBound	= [None] - vector class; Maximum value bounds
+		boundProj	= [None] - Bounds class; Class with a function "apply(input_vec)" to project input_vec onto some convex set
+		prec       	= [None] - linear operator class; Preconditioning matrix
+		"""
+		# Setting the bounds (if any)
+		super(ProblemL2LinearMultiReg, self).__init__(minBound, maxBound, boundProj)
+		
+		self.model = model.clone()
+		self.dmodel = model.clone().zero()
+		self.grad = self.dmodel.clone()
+		self.data = data
+		self.prior_model = prior_model
+		self.epsilon = epsilon  # Regularization weight
+		
+		# Operators
+		self.regs = pyOp.Vstack(reg_op if reg_op is not None else pyOp.IdentityOp(self.model))
+		if self.prior_model is not None:
+			if not self.prior_model.checkSame(self.regs.range):
+				raise ValueError("Prior model space no constistent with range of regularization operator")
+		
+		self.op = pyOp.Vstack(op, self.regs)  # Modeling operator
+		
+		# Residual vector (data and model residual vectors)
+		self.res_regs = self.regs.range.clone().zero()
+		self.res = pyVec.superVector(op.range.clone().zero(), self.res_regs)
+		
+		# Dresidual vector
+		self.dres = self.res.clone()
+		# Setting default variables
+		self.setDefaults()
+		self.linear = True
+		# Preconditioning matrix
+		self.prec = prec
+		# Objective function terms (useful to analyze each term)
+		self.obj_terms = [None] * self.op.n
+
+	def __del__(self):
+		"""Default destructor"""
+		return
+
+	def resf(self, model):
+		"""Method to return residual vector r = [r_d; r_m]: r_d = Lm - d; r_m = epsilon * (Am - m_prior) """
+		if model.norm() != 0.:
+			self.op.forward(False, model, self.res)
+		else:
+			self.res.zero()
+		# Computing r_d = Lm - d
+		self.res.vecs[0].scaleAdd(self.data, 1., -1.)
+		# Computing r_m = Am - m_prior
+		if self.prior_model is not None:
+			self.res_regs.scaleAdd(self.prior_model, 1., -1.)
+		# Scaling by epsilon epsilon*r_m
+		self.res_regs.scale(self.epsilon)
+		return self.res
+
+	def gradf(self, model, res):
+		"""Method to return gradient vector g = L'r_d + epsilon*A'r_m"""
+		# Scaling by epsilon the model residual vector (saving temporarily residual regularization)
+		# g = epsilon*A'r_m
+		self.op.ops[1].adjoint(False, self.grad, res.vecs[1])
+		self.grad.scale(self.epsilon)
+		# g = L'r_d + epsilon*A'r_m
+		self.op.ops[0].adjoint(True, self.grad, res.vecs[0])
 		return self.grad
 
 	def dresf(self, model, dmodel):
@@ -504,7 +602,7 @@ class ProblemL1Lasso(Problem):
 		# Setting linear operator
 		self.op = op  # Modeling operator
 		# Residual vector (data and model residual vectors)
-		self.res = Vec.superVector(op.range.clone(), op.domain.clone())
+		self.res = pyVec.superVector(op.range.clone(), op.domain.clone())
 		self.res.zero()
 		# Dresidual vector
 		self.dres = None  # Not necessary for the inversion
@@ -528,7 +626,9 @@ class ProblemL1Lasso(Problem):
 		return
 
 	def objf(self, res):
-	"""Method to return objective function value 1/2*| y - Am |_2 + lambda*| m |_1"""
+		"""
+		Method to return objective function value 1/2*| y - Am |_2 + lambda*| m |_1
+		"""
 		# data term
 		self.obj_terms[0] = 0.5 * res.vecs[0].norm()**2
 		# model term
