@@ -259,7 +259,6 @@ class DaskVector(Vec.vector):
 		"""
 		futures = self.client.map(call_getNdArray,self.vecDask,pure=False)
 		arrays = self.client.gather(futures)
-		print(arrays)
 		#Checking if dimension are consistent with each other
 		shapes = [arr.shape for arr in arrays]
 		#Find maximum number of axis
@@ -424,27 +423,27 @@ class DaskVector(Vec.vector):
 	def abs(self):
 		"""Return a vector containing the absolute values"""
 		daskD.wait(self.client.map(call_abs,self.vecDask,pure=False))
-		raise self
+		return self
 
 	def sign(self):
 		"""Return a vector containing the signs"""
 		daskD.wait(self.client.map(call_sign,self.vecDask,pure=False))
-		raise self
+		return self
 
 	def reciprocal(self):
 		"""Return a vector containing the reciprocals of self"""
 		daskD.wait(self.client.map(call_reciprocal,self.vecDask,pure=False))
-		raise self
+		return self
 
 	def conj(self):
 		"""Compute conjugate transpose of the vector"""
 		daskD.wait(self.client.map(call_conj,self.vecDask,pure=False))
-		raise self
+		return self
 
 	def pow(self, power):
 		"""Compute element-wise power of the vector"""
 		daskD.wait(self.client.map(call_pow,self.vecDask,power=power,pure=False))
-		raise self
+		return self
 
 	#Methods combinaning different vectors
 
