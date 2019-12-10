@@ -112,7 +112,8 @@ class vector:
 		raise NotImplementedError("scale must be overwritten")
 
 	def addbias(self, bias):
-		return self.getNdArray() + bias
+		"""Function to add bias to a vector"""
+		raise NotImplementedError("addbias must be overwritten")
 
 	def rand(self):
 		"""Function to randomize a vector"""
@@ -157,12 +158,12 @@ class vector:
 	# TODO implement on seplib
 	def conj(self):
 		"""Compute conjugate transpose of the vector"""
-		raise NotImplementedError
+		raise NotImplementedError('conj method must be implemented')
 
 	# TODO implement on seplib
 	def pow(self, power):
 		"""Compute element-wise power of the vector"""
-		raise NotImplementedError
+		raise NotImplementedError('pow method must be implemented')
 
 	# Combination of different vectors
 
@@ -331,6 +332,7 @@ class superVector(vector):
 			raise ValueError("ERROR! Dimensionality mismatching between given superVectors")
 		for idx in range(self.n):
 			self.vecs[idx].copy(vecs_in.vecs[idx])
+		return self
 
 	def scaleAdd(self, vecs_in, sc1=1.0, sc2=1.0):
 		"""Function to scale input vectors and add them to the original ones"""
@@ -503,6 +505,7 @@ class vectorIC(vector):
 		if rms != 0.:
 			amp_noise = math.sqrt(3. / snr) * rms  # sqrt(3*Power_signal/SNR)
 		self.getNdArray()[:] = amp_noise * (2. * np.random.random(self.getNdArray().shape) - 1.)
+		return self
 
 	def clone(self):
 		"""Function to clone (deep copy) a vector from a vector or a Space"""
@@ -610,6 +613,7 @@ class vectorIC(vector):
 	def pow(self, power):
 		"""Compute element-wise power of the vector"""
 		self.getNdArray()[:] = self.getNdArray() ** power
+		return self
 
 	def copy(self, vec2):
 		"""Function to copy vector from input vector"""
@@ -621,6 +625,7 @@ class vectorIC(vector):
 			raise ValueError("Dimensionality not equal: vec1 = %d; vec2 = %d" % (self.naxis, vec2.naxis))
 		# Element-wise copy of the input array
 		self.getNdArray()[:] = vec2.getNdArray()
+		return self
 
 	def scaleAdd(self, vec2, sc1=1.0, sc2=1.0):
 		"""Function to scale a vector"""

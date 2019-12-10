@@ -53,6 +53,10 @@ def call_scale(vecObj,sc):
 	"""Function to call scale method"""
 	res = vecObj.scale(sc)
 	return res
+def call_addbias(vecObj,bias):
+	"""Function to call addbias method"""
+	res = vecObj.addbias(bias)
+	return res
 def call_rand(vecObj):
 	"""Function to call rand method"""
 	res = vecObj.rand()
@@ -72,6 +76,30 @@ def call_checkSame(vecObj,vec2):
 def call_writeVec(vecObj,filename,mode):
 	"""Function to call cloneSpace method"""
 	res = vecObj.writeVec(filename,mode)
+	return res
+def call_abs(vecObj):
+	"""Function to call abs method"""
+	res = vecObj.abs()
+	return res
+def call_sign(vecObj):
+	"""Function to call sign method"""
+	res = vecObj.sign()
+	return res
+def call_reciprocal(vecObj):
+	"""Function to call reciprocal method"""
+	res = vecObj.reciprocal()
+	return res
+def call_maximum(vecObj,vec2):
+	"""Function to call maximum method"""
+	res = vecObj.maximum(vec2)
+	return res
+def call_conj(vecObj):
+	"""Function to call conj method"""
+	res = vecObj.conj()
+	return res
+def call_pow(vecObj,power):
+	"""Function to call pow method"""
+	res = vecObj.pow(power)
 	return res
 def call_copy(vecObj,vec2):
 	"""Function to call copy method"""
@@ -257,7 +285,7 @@ class DaskVector(Vec.vector):
 	def zero(self):
 		"""Function to zero out a vector"""
 		daskD.wait(self.client.map(call_zero,self.vecDask,pure=False))
-		return
+		return self
 
 	def max(self):
 		"""Function to obtain maximum value within a vector"""
@@ -278,17 +306,22 @@ class DaskVector(Vec.vector):
 	def set(self,val):
 		"""Function to set all values in the vector"""
 		daskD.wait(self.client.map(call_set,self.vecDask,val=val,pure=False))
-		return
+		return self
 
 	def scale(self,sc):
 		"""Function to scale a vector"""
 		daskD.wait(self.client.map(call_scale,self.vecDask,sc=sc,pure=False))
-		return
+		return self
+
+	def addbias(self, bias):
+		"""Function to add bias to a vector"""
+		daskD.wait(self.client.map(call_addbias,self.vecDask,bias=bias,pure=False))
+		return self
 
 	def rand(self):
 		"""Function to randomize a vector"""
 		daskD.wait(self.client.map(call_rand,self.vecDask,pure=False))
-		return
+		return self
 
 	def clone(self):
 		"""Function to clone (deep copy) a vector from a vector or a Space"""
@@ -387,14 +420,44 @@ class DaskVector(Vec.vector):
 				os.remove(bin_files[idx])
 		return
 
+	def abs(self):
+		"""Return a vector containing the absolute values"""
+		daskD.wait(self.client.map(call_abs,self.vecDask,pure=False))
+		raise self
+
+	def sign(self):
+		"""Return a vector containing the signs"""
+		daskD.wait(self.client.map(call_sign,self.vecDask,pure=False))
+		raise self
+
+	def reciprocal(self):
+		"""Return a vector containing the reciprocals of self"""
+		daskD.wait(self.client.map(call_reciprocal,self.vecDask,pure=False))
+		raise self
+
+	def conj(self):
+		"""Compute conjugate transpose of the vector"""
+		daskD.wait(self.client.map(call_conj,self.vecDask,pure=False))
+		raise self
+
+	def pow(self, power):
+		"""Compute element-wise power of the vector"""
+		daskD.wait(self.client.map(call_pow,self.vecDask,power=power,pure=False))
+		raise self
+
 	#Methods combinaning different vectors
+
+	def maximum(self, vec2):
+		"""Return a new vector of element-wise maximum of self and vec2"""
+		checkVector(self,vec2)
+		daskD.wait(self.client.map(call_maximum,self.vecDask,vec2.vecDask,pure=False))
+		return self
 
 	def copy(self,vec2):
 		"""Function to copy vector"""
 		checkVector(self,vec2)
-		futures = self.client.map(call_copy,self.vecDask,vec2.vecDask,pure=False)
-		daskD.wait(futures)
-		return
+		daskD.wait(self.client.map(call_copy,self.vecDask,vec2.vecDask,pure=False))
+		return self
 
 	def scaleAdd(self,vec2,sc1=1.0,sc2=1.0):
 		"""Function to scale two vectors and add them to the first one"""
@@ -403,7 +466,7 @@ class DaskVector(Vec.vector):
 		sc2 = [sc2]*len(self.vecDask)
 		futures = self.client.map(call_scaleAdd,self.vecDask,vec2.vecDask,sc1,sc2,pure=False)
 		daskD.wait(futures)
-		return
+		return self
 
 	def dot(self,vec2):
 		"""Function to compute dot product between two vectors"""
@@ -420,7 +483,7 @@ class DaskVector(Vec.vector):
 		checkVector(self,vec2)
 		futures = self.client.map(call_multiply,self.vecDask,vec2.vecDask,pure=False)
 		daskD.wait(futures)
-		return
+		return self
 
 	def isDifferent(self,vec2):
 		"""Function to check if two vectors are identical"""
@@ -437,4 +500,4 @@ class DaskVector(Vec.vector):
 		checkVector(self,high) #Checking high-bound vector
 		futures = self.client.map(call_clipVector,self.vecDask,low.vecDask,high.vecDask,pure=False)
 		daskD.wait(futures)
-		return
+		return self
