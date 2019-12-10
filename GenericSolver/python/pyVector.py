@@ -237,12 +237,14 @@ class superVector(vector):
 		for v in args:
 			if v is None:
 				continue
-			if isinstance(v, list):
-				self.vecs += v
-			elif type(v) is superVector:
-				self.vecs += v.vecs
 			elif isinstance(v, vector):
 				self.vecs.append(v)
+			elif isinstance(v, list):
+				for vv in v:
+					if vv is None:
+						continue
+					elif isinstance(vv, vector):
+						self.vecs.append(vv)
 			else:
 				raise TypeError('Argument must be either a vector or a superVector')
 
