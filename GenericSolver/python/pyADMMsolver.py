@@ -2,10 +2,10 @@
 import pyOperator
 import pyVector
 from pyLinearSolver import LCGsolver
-from pyProblem import Problem, ProblemL1Lasso
+from pyProblem import Problem, ProblemL1Lasso, ProblemL2LinearMultiReg
 from pySolver import Solver
 from pySparseSolver import ISTAsolver
-from pyStopperBase import BasicStopper
+from pyStopper import BasicStopper
 
 
 class ProblemLinearReg(Problem):
@@ -44,21 +44,26 @@ class ProblemLinearReg(Problem):
         self.maxBound = maxBound
         self.boundProj = boundProj
 
-        # L1 Regularizations (mandatory)
-        self.epsL1 = epsL1 if len(epsL1) != 0 else [.1]
-        self.regsL1 = regsL1 if len(regsL1) != 0 else [pyOperator.IdentityOp(self.model)]
-        self.nregsL1 = len(self.regsL1)
-        self.regL1_op = pyOperator.Vstack(self.regsL1)  # for shrinkage
-
+        # L1 Regularizations
+        self.regL1_op = None if regsL1 is None else pyOperator.Vstack(regsL1)
+        self.nregsL1 = self.regL1_op.n if self.regL1_op is not None else 0
+        self.epsL1 = epsL1 if epsL1 is not None else []
+        if type(self.epsL1) in [int, float]:
+            self.epsL1 = [self.epsL1]
+        assert len(self.epsL1) == self.nregsL1, 'The number of L1 regs and related weights mismatch!'
+        
         # L2 Regularizations (not mandatory)
-        self.regsL2 = [] if regsL2 is None else regsL2
-        self.epsL2 = [] if epsL2 is None else epsL2
-        self.nregsL2 = len(self.regsL2)
-        if self.nregsL2 > 0:
-            if dataregsL2 is None:
-                self.dataregsL2 = pyVector.superVector([r2.range.clone().zero() for r2 in self.regsL2])
+        self.regL2_op = None if regsL2 is None else pyOperator.Vstack(regsL2)
+        self.nregsL2 = self.regL2_op.n if self.regL2_op is not None else 0
+        self.epsL2 = epsL2 if epsL2 is not None else []
+        if type(self.epsL2) in [int, float]:
+            self.epsL2 = [self.epsL2]
+        assert len(self.epsL2) == self.nregsL2, 'The number of L2 regs and related weights mismatch!'
+        
+        if self.regL2_op is not None:
+            self.dataregsL2 = dataregsL2 if dataregsL2 is not None else self.regL2_op.range.clone()
         else:
-            self.dataregsL2 = []
+            self.dataregsL2 = None
 
         # At this point we should have:
         # - a list of L1 regularizers;
@@ -69,6 +74,7 @@ class ProblemLinearReg(Problem):
 
         # Last settings
         self.obj_terms = [None] * (1 + self.nregsL2 + self.nregsL1)
+        self.linear = True
 
     def __del__(self):
         """Default destructor"""
@@ -131,8 +137,6 @@ class SplitBregmanSolver(Solver):
         self.breg_a = None
         self.dataregsL1 = None
         
-        self.iter_msg = 'iter = %s, obj = %.2e, resnorm = %.2e, gradnorm = %.2e, feval = %d'
-
     def __del__(self):
         print('Destructor called, Split-Bregman deleted')
     
@@ -142,17 +146,20 @@ class SplitBregmanSolver(Solver):
     def run(self, problem, verbose=False, restart=False, initial_guess=None):
         """Running SplitBregman solver"""
         assert type(problem) == ProblemLinearReg, 'problem has to be a ProblemLinearReg'
-
+        if problem.nregsL1 == 0:
+            raise ValueError('ERROR! Provide at least one L1 regularizer!')
+        
         # reset stopper before running the inversion
         self.stopper.reset()
 
         # initialize all the vectors and operators for Split-Bregman
-        self.breg_b = pyVector.superVector([r.range.clone().zero() for r in problem.regsL1])
+        self.breg_b = problem.regL1_op.range.clone()
         self.breg_a = self.breg_b.clone()
         dataregsL1 = self.breg_b.clone()
-
+        RL1x = problem.regL1_op.range.clone()  # store RegL1 * solution
+        
+        # reweight the eps according to dfw
         eps = [(e / problem.dfw)**.5 for e in problem.epsL2 + problem.epsL1]
-        RL1x = problem.regsL1.range.clone()  # store RegL1 * solution
 
         # inner L2 reg problem
         inner_problem = ProblemL2LinearMultiReg(
@@ -160,7 +167,7 @@ class SplitBregmanSolver(Solver):
             data=problem.data,
             op=problem.op,
             epsilon=eps,
-            reg_op=pyOperator.Vstack(problem.regsL2 + problem.regsL1),
+            reg_op=pyOperator.Vstack(problem.regL2_op, problem.regL1_op),
             prior_model=pyVector.superVector(problem.dataregsL2, dataregsL1),
             minBound=problem.minBound,
             maxBound=problem.maxBound,
@@ -175,9 +182,9 @@ class SplitBregmanSolver(Solver):
             if self.logger:
                 self.logger.addToLog(msg)
             self.restart.read_restart()
-        outer_iter = self.restart.retrieve_parameter("iter")
-        initial_obj_value = self.restart.retrieve_parameter("obj_initial")
-        solution = self.restart.retrieve_vector("solution")
+            outer_iter = self.restart.retrieve_parameter("iter")
+            initial_obj_value = self.restart.retrieve_parameter("obj_initial")
+            solution = self.restart.retrieve_vector("solution")
         
         else:
             solution = initial_guess.clone() if initial_guess is not None else problem.model.clone().zero()
@@ -197,8 +204,6 @@ class SplitBregmanSolver(Solver):
         # Main iteration loop
         while True:
             obj0 = problem.get_obj(solution)
-        
-            if outer_iter == 0:
             
             for _ in range(self.niter_inner):
                 
@@ -212,7 +217,7 @@ class SplitBregmanSolver(Solver):
                 inner_problem.linear = True
                 self.inner_solver.run(inner_problem)
                 solution = inner_problem.model
-                
+
                 # compute RL1*x
                 problem.regsL1.forward(False, solution, RL1x)
 
@@ -381,6 +386,13 @@ def main():
     x = pyVector.vectorIC(np.empty((100))).set(1)
     y = x.clone() * 10
     S = pyOperator.scalingOp(x, 10)
+    
+    problem = ProblemLinearReg(model=x, data=y, op=S,
+                               regsL1=pyOperator.IdentityOp(x), epsL1=.1)
+    print('Problem built!')
+    SplitBregman = SplitBregmanSolver(BasicStopper(niter=10))
+    SplitBregman.setDefaults()
+    SplitBregman.run(problem, verbose=True)
     
     return 0
 
