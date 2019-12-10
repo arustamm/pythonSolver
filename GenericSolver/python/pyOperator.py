@@ -453,7 +453,7 @@ class Vstack(Operator):
 			elif isinstance(arg, Operator):
 				self.ops.append(arg)
 			elif isinstance(arg, list):
-				for _, op in arg:
+				for op in arg:
 					if type(op) is Vstack:
 						self.ops += op.ops
 					elif isinstance(op, Operator):
@@ -503,7 +503,7 @@ class Hstack(Operator):
 			elif isinstance(arg, Operator):
 				self.ops.append(arg)
 			elif isinstance(arg, list):
-				for _, op in arg:
+				for op in arg:
 					if type(op) is Hstack:
 						self.ops += op.ops
 					elif isinstance(op, Operator):
