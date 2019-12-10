@@ -5,7 +5,7 @@ import pyOperator as pyOp
 from pyStepper import CvSrchStep, ParabolicStep
 from pyStopper import BasicStopper
 from pyProblem import ProblemLinearSymmetric
-from pyLCGsolver import SymLCGsolver
+from pyLinearSolver import SymLCGsolver
 
 # Testing if genericIO and SepVector module is present
 try:
