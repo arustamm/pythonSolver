@@ -2,7 +2,7 @@
 import pyOperator
 import pyVector
 from pyLinearSolver import LCGsolver
-from pyProblem import Problem, ProblemL1Lasso, ProblemL2LinearMultiReg
+from pyProblem import Problem, ProblemL1Lasso, ProblemL2LinearReg
 from pySolver import Solver
 from pySparseSolver import ISTAsolver
 from pyStopper import BasicStopper
@@ -130,7 +130,7 @@ def _shrinkage(x, thresh, eps=1e-10):
     """
     y = x.clone()
     y / x.clone().abs().addbias(eps)
-    return y * x.clone().abs().addbias(-thresh).maximum(x.clone().zero())
+    return y * x.clone().abs().addbias([-t for t in thresh]).maximum(x.clone().zero())
 
 
 class SplitBregmanSolver(Solver):
@@ -162,7 +162,8 @@ class SplitBregmanSolver(Solver):
         self.breg_weight = breg_weight
         self.use_prev_sol = use_prev_sol  # as initial guess for the inner problem
 
-        self.inner_solver = LCGsolver(BasicStopper(niter=self.niter_solver), steepest=False, logger=None)
+        self.inner_solver = LCGsolver(BasicStopper(niter=self.niter_solver),
+                                      steepest=False, logger=self.logger)
         self.inner_solver.setDefaults(iter_sampling=1, flush_memory=True)
 
         self.breg_b = None
@@ -192,9 +193,9 @@ class SplitBregmanSolver(Solver):
         
         # reweight the eps according to dfw
         eps = [(e / problem.dfw)**.5 for e in problem.epsL2 + problem.epsL1]
-
+        
         # inner L2 reg problem
-        inner_problem = ProblemL2LinearMultiReg(
+        inner_problem = ProblemL2LinearReg(
             model=problem.model,
             data=problem.data,
             op=problem.op,
@@ -230,7 +231,7 @@ class SplitBregmanSolver(Solver):
             msg += "\tBregman update weight:\t%.2e\n" % self.breg_weight
             msg += 90 * '#' + '\n'
             if verbose:
-                print(msg.replace("log file", ""))
+                print(msg.replace(" log file", ""))
             if self.logger:
                 self.logger.addToLog(msg)
                 
@@ -251,7 +252,7 @@ class SplitBregmanSolver(Solver):
                 solution = inner_problem.model
 
                 # compute RL1*x
-                problem.regsL1.forward(False, solution, RL1x)
+                problem.regL1_op.forward(False, solution, RL1x)
 
                 # update breg_a
                 self.breg_a = _shrinkage(RL1x.clone() + self.breg_b, thresh=eps[-problem.nregsL1:])
@@ -431,4 +432,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-    
