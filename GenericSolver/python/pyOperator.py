@@ -640,7 +640,7 @@ class NLOperator(Operator):
 	Non-linear operator class
 	"""
 
-	def __init__(self, nl_op, lin_op, set_background_func=dummy_set_background):
+	def __init__(self, nl_op, lin_op=None, set_background_func=dummy_set_background):
 		"""
 		   Constructor for non-linear operator class:
 		   nl_op                = [no default] - operator class;
@@ -654,14 +654,14 @@ class NLOperator(Operator):
 		"""
 		# Setting non-linear and linearized operators
 		self.nl_op = nl_op
-		self.lin_op = lin_op
+		self.lin_op = lin_op if lin_op != None else nl_op
 		self.set_background = set_background_func
 		# Checking if domain of the operators is the same
-		if not nl_op.domain.checkSame(lin_op.domain):
+		if not self.nl_op.domain.checkSame(self.lin_op.domain):
 			raise ValueError("ERROR! The two provided operators have different domains")
-		if not nl_op.range.checkSame(lin_op.range):
+		if not self.nl_op.range.checkSame(self.lin_op.range):
 			raise ValueError("ERROR! The two provided operators have different ranges")
-		super(NLOperator, self).__init__(nl_op.domain, nl_op.range)
+		super(NLOperator, self).__init__(self.nl_op.domain, self.nl_op.range)
 
 	def dotTest(self):
 		"""
