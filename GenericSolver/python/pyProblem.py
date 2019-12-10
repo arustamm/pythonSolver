@@ -475,57 +475,6 @@ class ProblemL2LinearReg(Problem):
 		return sum(self.obj_terms)
 
 
-# TODO the only difference ProblemL2LinearReg is the self.regs and self.res_regs
-# 	maybe we can just merge them?
-class ProblemL2LinearMultiReg(ProblemL2LinearReg):
-	"""Linear inverse problem regularized of the form
-	.. math ::
-		0.5 |Op m - d|_2^2 +
-		\sum_i eps_i |R_i m - dr_i|_2^2
-	"""
-
-	def __init__(self, model, data, op, epsilon, reg_op=None, prior_model=None, prec=None,
-				minBound=None, maxBound=None, boundProj=None):
-		"""
-		Constructor of linear regularized problem:
-		model    	= [no default] - vector class; Initial model vector
-		data     	= [no default] - vector class; Data vector
-		op       	= [no default] - linear operator class; L operator
-		epsilon     = [None] - float; regularization weights
-		reg_op      = [Identity] - linear operator class; A regularization operator
-		prior_model = [None] - vector class; Prior model for regularization term
-		minBound	= [None] - vector class; Minimum value bounds
-		maxBound	= [None] - vector class; Maximum value bounds
-		boundProj	= [None] - Bounds class; Class with a function "apply(input_vec)" to project input_vec onto some convex set
-		prec       	= [None] - linear operator class; Preconditioning matrix
-		"""
-		# Setting the bounds (if any)
-		super(ProblemL2LinearMultiReg, self).__init__(model, data, op, epsilon, reg_op, prior_model, prec,
-													  minBound, maxBound, boundProj)
-		
-		# Override Operators
-		self.regs = pyOp.Vstack(reg_op if reg_op is not None else pyOp.IdentityOp(self.model))
-		if self.prior_model is not None:
-			if not self.prior_model.checkSame(self.regs.range):
-				raise ValueError("Prior model space no constistent with range of regularization operator")
-		
-		self.op = pyOp.Vstack(op, self.regs)  # Modeling operator
-		
-		# Residual vector (data and model residual vectors)
-		self.res = pyVec.superVector(op.range.clone().zero(),
-									 self.regs.range.clone().zero())
-		
-		# Dresidual vector
-		self.dres = self.res.clone()
-		# Setting default variables
-		self.setDefaults()
-		self.linear = True
-		# Preconditioning matrix
-		self.prec = prec
-		# Objective function terms (useful to analyze each term)
-		self.obj_terms = [None] * self.op.n
-
-
 class ProblemL1Lasso(Problem):
 	"""Convex problem 1/2*| y - Am |_2 + lambda*| m |_1"""
 
