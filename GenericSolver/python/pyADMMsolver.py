@@ -193,9 +193,10 @@ class SplitBregmanSolver(Solver):
             msg += 90 * '#' + '\n'
             msg += "\tRestart folder: %s\n" % self.restart.restart_folder
             msg += "\tData Fidelity weight: %.2e\n" % problem.dfw
-            msg += "\tL2 Regularizer weights: %s\n" % str(problem.epsL2)
-            msg += "\tL1 Regularizer weights: %s\n" % str(problem.epsL1)
+            msg += "\tL2 Regularizer weights: " + str(['%.2e' % n for n in problem.epsL2]) + "\n"
+            msg += "\tL1 Regularizer weights: " + str(['%.2e' % n for n in problem.epsL1]) + "\n"
             msg += 90 * '#' + '\n'
+            msg = msg.replace("'","")
             if verbose:
                 print(msg.replace("log file", ""))
             if self.logger:
