@@ -450,14 +450,12 @@ class Vstack(Operator):
 		for _, arg in enumerate(args):
 			if arg is None:
 				continue
-			if type(arg) is Vstack:
-				self.ops += arg.ops
 			elif isinstance(arg, Operator):
 				self.ops.append(arg)
 			elif isinstance(arg, list):
 				for op in arg:
-					if type(op) is Vstack:
-						self.ops += op.ops
+					if op is None:
+						continue
 					elif isinstance(op, Operator):
 						self.ops.append(op)
 			else:
@@ -497,19 +495,17 @@ class Hstack(Operator):
 
 	def __init__(self, *args):
 		"""Constructor for the stacked operator"""
-
+		
 		self.ops = []
 		for _, arg in enumerate(args):
 			if arg is None:
 				continue
-			if type(arg) is Hstack:
-				self.ops += arg.ops
 			elif isinstance(arg, Operator):
 				self.ops.append(arg)
 			elif isinstance(arg, list):
 				for op in arg:
-					if type(op) is Hstack:
-						self.ops += op.ops
+					if op is None:
+						continue
 					elif isinstance(op, Operator):
 						self.ops.append(op)
 			else:
@@ -522,7 +518,7 @@ class Hstack(Operator):
 			if idx < self.n - 1:
 				if not self.ops[idx].range.checkSame(self.ops[idx + 1].range):
 					raise ValueError('Range incompatibility between Op %d and Op %d' % (idx, idx + 1))
-			domain += [op.domain]
+			domain += [self.ops[0].domain]
 		super(Hstack, self).__init__(domain=superVector(domain), range=self.ops[0].range)
 
 	def forward(self, add, model, data):
