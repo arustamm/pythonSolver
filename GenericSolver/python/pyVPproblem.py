@@ -139,6 +139,7 @@ class ProblemL2VpReg(pyProb.Problem):
 		self.lin_solver=lin_solver
 		self.lin_solver.flush_memory = True
 		self.lin_solver_prefix = self.lin_solver.prefix
+		self.vp_linear_prob.linear=True
 		return
 
 	def __del__(self):
@@ -227,7 +228,6 @@ class ProblemL2VpReg(pyProb.Problem):
 			self.h_op_reg.set_nl(model)
 		#Resetting inversion problem variables
 		self.vp_linear_prob.setDefaults()
-		self.vp_linear_prob.linear=True
 		#Saving linear inversion results if requested
 		if(self.lin_solver_prefix != None):
 			self.lin_solver.setPrefix(self.lin_solver_prefix + "_feval%s"%(fevals))
