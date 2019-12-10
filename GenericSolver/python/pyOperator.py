@@ -448,6 +448,8 @@ class Vstack(Operator):
 
 		self.ops = []
 		for _, arg in enumerate(args):
+			if arg is None:
+				continue
 			if type(arg) is Vstack:
 				self.ops += arg.ops
 			elif isinstance(arg, Operator):
@@ -498,6 +500,8 @@ class Hstack(Operator):
 
 		self.ops = []
 		for _, arg in enumerate(args):
+			if arg is None:
+				continue
 			if type(arg) is Hstack:
 				self.ops += arg.ops
 			elif isinstance(arg, Operator):
