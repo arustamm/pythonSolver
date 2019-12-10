@@ -235,6 +235,8 @@ class superVector(vector):
 
 		self.vecs = []
 		for v in args:
+			if v is None:
+				continue
 			if isinstance(v, list):
 				self.vecs += v
 			elif type(v) is superVector:
