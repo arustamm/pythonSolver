@@ -259,6 +259,7 @@ class DaskVector(Vec.vector):
 		"""
 		futures = self.client.map(call_getNdArray,self.vecDask,pure=False)
 		arrays = self.client.gather(futures)
+		print(arrays)
 		#Checking if dimension are consistent with each other
 		shapes = [arr.shape for arr in arrays]
 		#Find maximum number of axis

@@ -512,7 +512,7 @@ class vectorIC(vector):
 		vec_clone = deepcopy(self)  # Deep clone of vector
 		# Checking if a vector space was provided
 		if vec_clone.getNdArray().size == 0:
-			vec_clone.getNdArray()[:] = np.zeros(self.getNdArray().shape)
+			vec_clone.arr = np.zeros(tuple(reversed(vec_clone.naxis)))
 		return vec_clone
 
 	def cloneSpace(self):
