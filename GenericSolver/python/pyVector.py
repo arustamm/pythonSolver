@@ -222,6 +222,7 @@ class vectorSet:
 			vec_i.writeVec(filename, mode)
 		self.vecSet = []  # List of vectors of the set
 
+
 class superVector(vector):
 
 	def __init__(self, *args):
