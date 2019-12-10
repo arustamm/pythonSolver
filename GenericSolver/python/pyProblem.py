@@ -528,7 +528,7 @@ class ProblemL1Lasso(Problem):
 		return
 
 	def objf(self, res):
-	"""Method to return objective function value 1/2*| y - Am |_2 + lambda*| m |_1"""
+		"""Method to return objective function value 1/2*| y - Am |_2 + lambda*| m |_1"""
 		# data term
 		self.obj_terms[0] = 0.5 * res.vecs[0].norm()**2
 		# model term
