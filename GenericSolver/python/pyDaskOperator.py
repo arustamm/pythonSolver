@@ -40,11 +40,11 @@ def getNdfuture(vecObj):
 	"""Function to obtain NdArray as a future object"""
 	Nd = vecObj.getNdArray()
 	return Nd
-def call_set_background(opObj,model,func_name):
-	"""Function to call set_background"""
-	set_bck_fun = getattr(opObj,func_name)
-	set_bck_fun(model)
-	return
+def call_func_name(opObj,func_name,*args):
+	"""Function to call a method by name"""
+	fun2call = getattr(opObj,func_name)
+	res = fun2call(*args)
+	return res
 
 class DaskOperator(Op.Operator):
 	"""
@@ -145,7 +145,7 @@ class DaskOperator(Op.Operator):
 		if(self.Sprd):
 			self.Sprd.forward(False,model,self.model_tmp)
 			model = self.model_tmp
-		setbkg_ftr = self.client.map(call_set_background,self.dask_ops,model.vecDask,[self.set_background_name]*self.dask_client.getNworkers(),pure=False)
+		setbkg_ftr = self.client.map(call_func_name,self.dask_ops,[self.set_background_name]*self.dask_client.getNworkers(),model.vecDask,pure=False)
 		daskD.wait(setbkg_ftr)
 		return
 
