@@ -61,7 +61,7 @@ class ProblemLinearReg(Problem):
         assert len(self.epsL2) == self.nregsL2, 'The number of L2 regs and related weights mismatch!'
         
         if self.regL2_op is not None:
-            self.dataregsL2 = dataregsL2 if dataregsL2 is not None else self.regL2_op.range.clone()
+            self.dataregsL2 = dataregsL2 if dataregsL2 is not None else self.regL2_op.range.clone().zero()
         else:
             self.dataregsL2 = None
 
@@ -75,6 +75,10 @@ class ProblemLinearReg(Problem):
         # Last settings
         self.obj_terms = [None] * (1 + self.nregsL2 + self.nregsL1)
         self.linear = True
+        self.res_data = self.op.range.clone().zero()
+        self.res_regsL2 = self.regL2_op.range.clone().zero() if self.nregsL2 != 0 else None
+        self.res_regsL1 = self.regL1_op.range.clone().zero() if self.nregsL1 != 0 else None
+        self.res = pyVector.superVector(self.res_data, self.res_regsL2, self.res_regsL1)
 
     def __del__(self):
         """Default destructor"""
@@ -82,13 +86,41 @@ class ProblemLinearReg(Problem):
 
     def objf(self, res):
         """Compute objective function based on the residuals"""
-        self.obj_terms[0] = .5 * res[0].norm() ** 2  # data fidelity
+        self.obj_terms[0] = .5 * res.vecs[0].norm() ** 2  # data fidelity
 
         for idx in range(self.nregsL2):
-            self.obj_terms[1 + idx] = self.epsL2[idx] * res[1 + idx].norm() ** 2
+            self.obj_terms[1 + idx] = self.epsL2[idx] * res.vecs[1 + idx].norm() ** 2
         for idx in range(self.nregsL1):
-            self.obj_terms[1 + self.nregsL2 + idx] = self.epsL1[idx] * res[1 + self.nregsL2 + idx].norm(1)
+            self.obj_terms[1 + self.nregsL2 + idx] = self.epsL1[idx] * res.vecs[1 + self.nregsL2 + idx].norm(1)
         return sum(self.obj_terms)
+    
+    def resf(self, model):
+        # compute data residual: Op * m - d
+        if model.norm() != 0:
+            self.op.forward(False, self.model, self.res_data)
+        else:
+            self.res.vecs[0].zero()
+        self.res_data.scaleAdd(self.data, 1., -1.)
+        self.res_data.scale(self.dfw)
+        
+        # compute L2 reg residuals
+        if self.res_regsL2 is not None:
+            if model.norm() != 0 and self.regL2_op is not None:
+                self.regL2_op.forward(False, self.model, self.res_regsL2)
+            
+            if self.dataregsL2 is not None and self.dataregsL2.norm() != 0.:
+                self.res_regsL2.scaleAdd(self.dataregsL2, 1., -1.)
+            self.res_regsL2.scale(self.epsL2)
+        
+        # compute L1 reg residuals
+        if self.res_regsL1 is not None:
+            if model.norm() != 0. and self.regL1_op is not None:
+                self.regL1_op.forward(False, self.model, self.res_regsL1)
+                self.res_regsL1.scale(self.epsL1)
+            else:
+                self.res_regsL1.zero()
+        
+        return self.res
 
 
 def _shrinkage(x, thresh, eps=1e-10):
@@ -189,14 +221,14 @@ class SplitBregmanSolver(Solver):
         else:
             solution = initial_guess.clone() if initial_guess is not None else problem.model.clone().zero()
             outer_iter = 0
-            msg = 'SPLIT-BREGMAN ALGORITHM log file\n\n'
-            msg += 90 * '#' + '\n'
+            msg = 90 * '#' + '\n'
+            msg += (90-23)//2*" " + 'SPLIT-BREGMAN ALGORITHM log file\n\n'
             msg += "\tRestart folder: %s\n" % self.restart.restart_folder
-            msg += "\tData Fidelity weight: %.2e\n" % problem.dfw
-            msg += "\tL2 Regularizer weights: " + str(['%.2e' % n for n in problem.epsL2]) + "\n"
-            msg += "\tL1 Regularizer weights: " + str(['%.2e' % n for n in problem.epsL1]) + "\n"
+            msg += "\tData Fidelity weight:\t%.2e\n" % problem.dfw
+            msg += "\tL2 Regularizer weights:\t" + ", ".join(["{:.2e}".format(i) for i in problem.epsL2]) + "\n"
+            msg += "\tL1 Regularizer weights:\t" + ", ".join(["{:.2e}".format(i) for i in problem.epsL1]) + "\n"
+            msg += "\tBregman update weight:\t%.2e\n" % self.breg_weight
             msg += 90 * '#' + '\n'
-            msg = msg.replace("'","")
             if verbose:
                 print(msg.replace("log file", ""))
             if self.logger:
@@ -215,7 +247,6 @@ class SplitBregmanSolver(Solver):
                 if self.use_prev_sol:
                     inner_problem.model = solution
                 inner_problem.setDefaults()
-                inner_problem.linear = True
                 self.inner_solver.run(inner_problem)
                 solution = inner_problem.model
 
@@ -390,7 +421,7 @@ def main():
     
     problem = ProblemLinearReg(model=x, data=y, op=S,
                                regsL1=pyOperator.IdentityOp(x), epsL1=.1)
-    print('Problem built!')
+    
     SplitBregman = SplitBregmanSolver(BasicStopper(niter=10))
     SplitBregman.setDefaults()
     SplitBregman.run(problem, verbose=True)
