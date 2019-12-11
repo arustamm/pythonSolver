@@ -90,7 +90,10 @@ class BasicStopper(Stopper):
         msg = "Elapsed time: %d hours, %d minutes, %d seconds\n" % (hours, mins, secs) + \
               "Current date & time: %s" % time.strftime("%c")
         res_norm = problem.get_rnorm(problem.model)
-        grad_norm = problem.get_gnorm(problem.model)
+        try:
+            grad_norm = problem.get_gnorm(problem.model)
+        except NotImplementedError:
+            grad_norm = None
         obj = problem.get_obj(problem.model)
         if self.logger:
             self.logger.addToLog(msg)
@@ -127,7 +130,7 @@ class BasicStopper(Stopper):
             if self.logger:
                 self.logger.addToLog(msg)
             return stop
-        if grad_norm < self.tolg:
+        if grad_norm is not None and grad_norm < self.tolg:
             stop = True
             msg = "Terminate: minimum gradient tolerance reached %s\n" % grad_norm
             if verbose:
