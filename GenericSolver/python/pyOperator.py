@@ -64,6 +64,12 @@ class Operator:
 			return _prodOperator(self, other)
 		elif type(other) in [int, float]:  # A * c | # TODO I want to call also c * A (but in the latter __mul__ is of scalar)
 			return _scaledOperator(self, other)
+		elif isinstance(other, list) and isinstance(self, Vstack):
+			assert len(other) == self.n, "Other lenght and self lenght mismatch"
+			return Vstack([_scaledOperator(self.ops[i], other[i]) for i in range(self.n)])
+		elif isinstance(other, list) and isinstance(self, Hstack):
+			assert len(other) == self.n, "Other lenght and self lenght mismatch"
+			return Hstack([_scaledOperator(self.ops[i], other[i]) for i in range(self.n)])
 		elif isinstance(other, vector) or isinstance(other, superVector):  # A * x
 			temp = self.range.clone()
 			self.forward(False, other, temp)
