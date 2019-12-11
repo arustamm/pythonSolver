@@ -459,9 +459,9 @@ class ADMMsolver(Solver):
         
         self.AHr = self.A.domain.clone()
         
-        # linear problem: dfw/2 |Op x - y|_2^2 + \sum_i epsL2_i |R2_i x - yr|_2^2 + rho/2 |Ax - z + u|_2^2
-        # this means to solve: 1/2 | Op x - y| + eps   | R x - yr   |
-        #                                        rho/2 | A x - (z-u)|
+        # linear problem: dfw/2 |Op x - d|_2^2 + \sum_i epsL2_i |R2_i x - dr|_2^2 + rho/2 |Ax - y + u|_2^2
+        # this means to solve: 1/2 | Op x - d| + eps   | R x - dr   |
+        #                                        rho/2 | A x - (y-u)|
         problem_linear = ProblemL2LinearReg(
             model=self.x,
             data=problem.data,
@@ -474,15 +474,16 @@ class ADMMsolver(Solver):
             boundProj=problem.boundProj
         )
 
-        # lasso problem: rho/2 | A x - z + u|_2^2 + gamma | z |_1
+        # lasso problem: rho/2 | A x - z + u|_2^2 + gamma | y |_1
+        # this means to solve: 1/2 | I y - (Ax + u)| + gamma/rho | y |_1
         self.Ax = self.A.range.clone()
         self.compute_Ax_plus_u()
         problem_lasso = ProblemL1Lasso(
             model=self.y,
             data=self.Ax_plus_u,
-            op=-pyOperator.IdentityOp(self.y),
+            op=pyOperator.IdentityOp(self.y),
             op_norm=None,
-            lambda_value=gamma,
+            lambda_value=gamma/self.rho,  # TODO rho is changing, does the problem update automatically?
             minBound=problem.minBound,
             maxBound=problem.maxBound,
             boundProj=problem.boundProj
@@ -522,7 +523,7 @@ class ADMMsolver(Solver):
 
         # Main iteration loop
         while True:
-            obj0 = problem.get_obj(self.x)
+            obj0 = problem.get_obj(self.x)  # TODO objective data fidelity is 0!
 
             if outer_iter == 0:
                 initial_obj_value = obj0
