@@ -60,6 +60,8 @@ class DaskOperator(Op.Operator):
 		   chunks = [no default] - list; List defininig how many operators wants to instantiated. Note, the list must contain the same number of elements as the number of Dask workers present in the DaskClient.
 		   setbackground_func_name = [None] - string; Name of the function to set the model point on which the Jacobian is computed. See NonLinearOperator in pyOperator module.
 		   spread_op = [None] - DaskSpreadOp; Spreading operator to distribute a model vector to the set_background functions
+		   set_aux_name = [None] - string; Name of the function to set the auxiliary vector. Useful for VpOperator.
+		   spread_op_aux = [None] - DaskSpreadOp; Spreading operator to distribute a auxiliary vector to the set_aux functions
 		"""
 		#Client to submit tasks
 		if not isinstance(dask_client,DaskClient):
@@ -109,6 +111,15 @@ class DaskOperator(Op.Operator):
 				if not isinstance(self.Sprd,DaskSpreadOp):
 					raise TypeError("Provided spread_op not a DaskSpreadOp class!")
 				self.model_tmp = self.Sprd.getRange().clone()
+		#Set aux function name "necessary for VP operator"
+		self.set_aux_name = kwargs.get("set_aux_name",None)
+		if self.set_aux_name:
+			#Creating a spreading operator useful
+			self.SprdAux = kwargs.get("spread_op_aux",None)
+			if self.SprdAux:
+				if not isinstance(self.SprdAux,DaskSpreadOp):
+					raise TypeError("Provided spread_op_aux not a DaskSpreadOp class!")
+				self.tmp_aux = self.SprdAux.getRange().clone()
 		return
 
 
@@ -147,6 +158,17 @@ class DaskOperator(Op.Operator):
 			model = self.model_tmp
 		setbkg_ftr = self.client.map(call_func_name,self.dask_ops,[self.set_background_name]*self.dask_client.getNworkers(),model.vecDask,pure=False)
 		daskD.wait(setbkg_ftr)
+		return
+
+	def set_aux(self,aux_vec):
+		"""Function to call set_nl or set_lin_jac functions of each dask operator"""
+		if self.set_aux_name == None:
+			raise NameError("set_aux_name was not defined when constructing the operator!")
+		if(self.SprdAux):
+			self.SprdAux.forward(False,aux_vec,self.tmp_aux)
+			aux_vec = self.tmp_aux
+		setaux_ftr = self.client.map(call_func_name,self.dask_ops,[self.set_aux_name]*self.dask_client.getNworkers(),aux_vec.vecDask,pure=False)
+		daskD.wait(setaux_ftr)
 		return
 
 class DaskSpreadOp(Op.Operator):
