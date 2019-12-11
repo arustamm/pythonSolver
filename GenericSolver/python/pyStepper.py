@@ -590,7 +590,7 @@ class ParabolicStep(Stepper):
             # Test values of objective function for two scaled versions of the step length
             # Testing c1 scale
             if logger:
-                logger.addToLog("Testing point (c1=%.2e): m_current+c1*alpha*dm" % self.c1)
+                logger.addToLog("\tTesting point (c1=%.2e): m_current+c1*alpha*dm" % self.c1)
             model_step.copy(modl)
             model_step.scaleAdd(dmodl, sc2=self.c1 * alpha)
             # Checking if model parameters hit the bounds
@@ -600,7 +600,7 @@ class ParabolicStep(Stepper):
                 problem.bounds.apply(model_step)
             if prblm_mdl.isDifferent(model_step):
                 # Model hit bounds
-                msg = "	Model hit provided bounds. Projecting it onto them."
+                msg = "\tModel hit provided bounds. Projecting it onto them."
                 if logger:
                     logger.addToLog(msg)
             obj1 = problem.get_obj(model_step)
@@ -608,7 +608,7 @@ class ParabolicStep(Stepper):
             res_prblm = problem.get_res(model_step)
             res1 = res_prblm.clone()
             if logger:
-                logger.addToLog("Objective function value of %.2e" % obj1)
+                logger.addToLog("\tObjective function value of %.2e" % obj1)
             # Checking if a NaN is encountered in any of the two tested points
             if isnan(obj1):
                 if logger:
@@ -627,7 +627,7 @@ class ParabolicStep(Stepper):
                     itry = self.ntry  # To not repeat computation of linear guess
                     continue
             # Testing c2 scale
-            msg = "	Testing point (c2=%.2e): m_current+c2*alpha*dm" % self.c2
+            msg = "\tTesting point (c2=%.2e): m_current+c2*alpha*dm" % self.c2
             if logger:
                 logger.addToLog(msg)
             model_step.copy(modl)
@@ -639,7 +639,7 @@ class ParabolicStep(Stepper):
                 problem.bounds.apply(model_step)
             if prblm_mdl.isDifferent(model_step):
                 # Model hit bounds
-                msg = "	Model hit provided bounds. Projecting it onto them."
+                msg = "\tModel hit provided bounds. Projecting it onto them."
                 if logger:
                     logger.addToLog(msg)
             obj2 = problem.get_obj(model_step)
@@ -647,7 +647,7 @@ class ParabolicStep(Stepper):
             res_prblm = problem.get_res(model_step)
             res2 = res_prblm.clone()
             if logger:
-                logger.addToLog("Objective function value of %.2e" % obj2)
+                logger.addToLog("\tObjective function value of %.2e" % obj2)
             # Checking for NaN
             if isnan(obj2):
                 if logger:
@@ -670,7 +670,7 @@ class ParabolicStep(Stepper):
                 # Setting third point to infinity
                 obj3 = np.inf
                 # Check which one is the best step length
-                msg = "\n	As requested, parabola minimum was not evaluated!"
+                msg = "\n\tAs requested, parabola minimum was not evaluated!"
                 if obj1 < obj0 and obj1 < obj2 and obj1 < obj3:
                     success = True
                     alpha *= self.c1
@@ -694,7 +694,7 @@ class ParabolicStep(Stepper):
                 step_scale = 0.5 * (self.c2 * self.c2 * (obj1 - obj0) + self.c1 * self.c1 * (obj0 - obj2)) / (
                         self.c2 * (obj1 - obj0) + self.c1 * (obj0 - obj2))
                 if logger:
-                    logger.addToLog("Testing point (c_opt=%.2e): m_current+c_opt*alpha*dm (parabola minimum)" % step_scale)
+                    logger.addToLog("\tTesting point (c_opt=%.2e): m_current+c_opt*alpha*dm (parabola minimum)" % step_scale)
             # If step length negative, re-evaluate points
             if step_scale * alpha < 0.:
                 if logger:
@@ -727,12 +727,12 @@ class ParabolicStep(Stepper):
                 problem.bounds.apply(model_step)
             if prblm_mdl.isDifferent(model_step):
                 # Model hit bounds
-                msg = "	Model hit provided bounds. Projecting it onto them."
+                msg = "\tModel hit provided bounds. Projecting it onto them."
                 if logger:
                     logger.addToLog(msg)
             obj3 = problem.get_obj(model_step)
             if logger:
-                logger.addToLog("Objective function value of %.2e" % obj3)
+                logger.addToLog("\tObjective function value of %.2e" % obj3)
 
             # Writing info to log file
             if logger:
@@ -860,7 +860,7 @@ class ParabolicStepConst(Stepper):
             # Test values of objective function for two scaled versions of the step length
             # Testing c1 scale
             if logger:
-                logger.addToLog("Testing point (c1=%.2e): m_current+c1*alpha*dm" % self.c1)
+                logger.addToLog("\tTesting point (c1=%.2e): m_current+c1*alpha*dm" % self.c1)
             model_step.copy(modl)
             model_step.scaleAdd(dmodl, sc2=self.c1 * alpha)
             # Checking if model parameters hit the bounds
@@ -870,7 +870,7 @@ class ParabolicStepConst(Stepper):
                 problem.bounds.apply(model_step)
             if prblm_mdl.isDifferent(model_step):
                 # Model hit bounds
-                msg = "	Model hit provided bounds. Projecting it onto them."
+                msg = "\tModel hit provided bounds. Projecting it onto them."
                 if logger:
                     logger.addToLog(msg)
                 # Computing true scaled search direction dm = m_new_clipped - m_current
@@ -883,7 +883,7 @@ class ParabolicStepConst(Stepper):
             res_prblm = problem.get_res(model_step)
             res1 = res_prblm.clone()
             if logger:
-                logger.addToLog("Objective function value of %.2e" % obj1)
+                logger.addToLog("\tObjective function value of %.2e" % obj1)
             # Checking if a NaN is encountered in any of the two tested points
             if isnan(obj1):
                 if logger:
@@ -916,7 +916,7 @@ class ParabolicStepConst(Stepper):
             alpha_parab = - phi_der / c
             step_scale = alpha_parab / alpha
             if logger:
-                logger.addToLog("Testing point (c_opt=%.2e): m_current+c_opt*alpha*dm (parabola minimum)" % step_scale)
+                logger.addToLog("\tTesting point (c_opt=%.2e): m_current+c_opt*alpha*dm (parabola minimum)" % step_scale)
             # If step length negative, re-evaluate points
             if alpha_parab < 0.:
                 if logger:
@@ -949,10 +949,10 @@ class ParabolicStepConst(Stepper):
             if prblm_mdl.isDifferent(model_step):
                 # Model hit bounds
                 if logger:
-                    logger.addToLog("Model hit provided bounds. Projecting it onto them.")
+                    logger.addToLog("\tModel hit provided bounds. Projecting it onto them.")
             obj2 = problem.get_obj(model_step)
             if logger:
-                logger.addToLog("Objective function value of %.2e" % obj2)
+                logger.addToLog("\tObjective function value of %.2e" % obj2)
 
             # Writing info to log file
             if logger:
