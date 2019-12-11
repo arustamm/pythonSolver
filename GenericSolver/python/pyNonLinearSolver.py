@@ -163,10 +163,7 @@ class NLCGsolver(Solver):
 		#Defining stopper object
 		self.stoppr=stoppr
 		#Defining stepper object
-		if(stepper != None):
-			self.stepper=stepper
-		else:
-			self.stepper=pyStepperParabolic.ParabolicStep()
+		self.stepper = stepper if stepper is not None else ParabolicStep()
 		#Beta function to use during the inversion
 		self.beta_type=beta_type
 		#Logger object to write on log file
@@ -185,23 +182,23 @@ class NLCGsolver(Solver):
 		"""Beta function interface"""
 		beta_type = self.beta_type
 		if(beta_type == "FR"):
-			beta = betaFR(grad,grad0,dir,self.logger)
+			beta = _betaFR(grad,grad0,dir,self.logger)
 		elif(beta_type == "PRP"):
-			beta = betaPRP(grad,grad0,dir,self.logger)
+			beta = _betaPRP(grad,grad0,dir,self.logger)
 		elif(beta_type == "HS"):
-			beta = betaHS(grad,grad0,dir,self.logger)
+			beta = _betaHS(grad,grad0,dir,self.logger)
 		elif(beta_type == "CD"):
-			beta = betaCD(grad,grad0,dir,self.logger)
+			beta = _betaCD(grad,grad0,dir,self.logger)
 		elif(beta_type == "LS"):
-			beta = betaLS(grad,grad0,dir,self.logger)
+			beta = _betaLS(grad,grad0,dir,self.logger)
 		elif(beta_type == "DY"):
-			beta = betaDY(grad,grad0,dir,self.logger)
+			beta = _betaDY(grad,grad0,dir,self.logger)
 		elif(beta_type == "BAN"):
-			beta = betaBAN(grad,grad0,dir,self.logger)
+			beta = _betaBAN(grad,grad0,dir,self.logger)
 		elif(beta_type == "HZ"):
-			beta = betaHZ(grad,grad0,dir,self.logger)
+			beta = _betaHZ(grad,grad0,dir,self.logger)
 		elif(beta_type == "SD"):
-			beta = betaSD(grad,grad0,dir,self.logger)
+			beta = _betaSD(grad,grad0,dir,self.logger)
 		else:
 			raise ValueError("ERROR! Requested Beta function type not existing")
 		return beta
@@ -262,12 +259,12 @@ class NLCGsolver(Solver):
 				#Saving objective function value
 				self.restart.save_parameter("obj_initial",initial_obj_value)
 				# iteration info
-				msg = self.iter_msg % (str(iter).zfill(self.stopper.zfill),
+				msg = self.iter_msg % (str(iter).zfill(self.stoppr.zfill),
 									   obj0,
-									   problem.get_rnorm(cg_mdl),
-									   problem.get_gnorm(cg_mdl),
-									   problem.get_fevals(),
-									   problem.get_gevals())
+									   prblm.get_rnorm(cg_mdl),
+									   prblm.get_gnorm(cg_mdl),
+									   prblm.get_fevals(),
+									   prblm.get_gevals())
 				if(verbose): print(msg)
 				#Writing on log file
 				if(self.logger): self.logger.addToLog(msg)
@@ -324,12 +321,12 @@ class NLCGsolver(Solver):
 			#Saving data space vectors
 			self.restart.save_vector("prblm_res",prblm_res)
 			# iteration info
-			msg = self.iter_msg % (str(iter).zfill(self.stopper.zfill),
+			msg = self.iter_msg % (str(iter).zfill(self.stoppr.zfill),
 								   obj1,
-								   problem.get_rnorm(cg_mdl),
-								   problem.get_gnorm(cg_mdl),
-								   problem.get_fevals(),
-								   problem.get_gevals())
+								   prblm.get_rnorm(cg_mdl),
+								   prblm.get_gnorm(cg_mdl),
+								   prblm.get_fevals(),
+								   prblm.get_gevals())
 			if(verbose): print(msg)
 			#Writing on log file
 			if(self.logger): self.logger.addToLog("\n"+msg)
