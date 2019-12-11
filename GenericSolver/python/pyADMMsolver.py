@@ -7,6 +7,7 @@ from pySolver import Solver
 from pySparseSolver import ISTAsolver
 from pyStopper import BasicStopper
 from math import isnan
+import numpy as np
 
 
 class ProblemLinearReg(Problem):
@@ -86,15 +87,24 @@ class ProblemLinearReg(Problem):
         """Default destructor"""
         return
     
-    # TODO implement other methods in order to handle all kinds of regularizations
     def objf(self, res):
         """Compute objective function based on the residuals"""
-        self.obj_terms[0] = .5 * res.vecs[0].norm() ** 2  # data fidelity
-
-        for idx in range(self.nregsL2):
-            self.obj_terms[1 + idx] = self.epsL2[idx] * res.vecs[1 + idx].norm() ** 2
-        for idx in range(self.nregsL1):
-            self.obj_terms[1 + self.nregsL2 + idx] = self.epsL1[idx] * res.vecs[1 + self.nregsL2 + idx].norm(1)
+        res_data = res.vecs[0]
+        res_regsL2 = res.vecs[1] if self.res_regsL2 is not None else None
+        if self.res_regsL1 is not None:
+            res_regsL1 = res.vecs[2] if self.res_regsL2 is not None else res.vecs[1]
+        else:
+            res_regsL1 = None
+        
+        self.obj_terms[0] = self.dfw * .5 * res_data.norm() ** 2  # data fidelity
+        
+        if res_regsL2 is not None:
+            for idx in range(self.nregsL2):
+                self.obj_terms[1 + idx] = self.epsL2[idx] * res_regsL2.vecs[idx].norm()**2
+        if res_regsL1 is not None:
+            for idx in range(self.nregsL1):
+                self.obj_terms[1 + self.nregsL2 + idx] = self.epsL1[idx] * res_regsL1.vecs[idx].norm(1)
+        
         return sum(self.obj_terms)
     
     def resf(self, model):
@@ -104,7 +114,7 @@ class ProblemLinearReg(Problem):
         else:
             self.res.vecs[0].zero()
         self.res_data.scaleAdd(self.data, 1., -1.)
-        self.res_data.scale(self.dfw)
+        # self.res_data.scale(self.dfw)
         
         # compute L2 reg residuals
         if self.res_regsL2 is not None:
@@ -113,26 +123,18 @@ class ProblemLinearReg(Problem):
             
             if self.dataregsL2 is not None and self.dataregsL2.norm() != 0.:
                 self.res_regsL2.scaleAdd(self.dataregsL2, 1., -1.)
-            self.res_regsL2.scale(self.epsL2)
+            # self.res_regsL2.scale(self.epsL2)
         
         # compute L1 reg residuals
         if self.res_regsL1 is not None:
             if model.norm() != 0. and self.regL1_op is not None:
                 self.regL1_op.forward(False, self.model, self.res_regsL1)
-                self.res_regsL1.scale(self.epsL1)
+                # self.res_regsL1.scale(self.epsL1)
             else:
                 self.res_regsL1.zero()
         
         return self.res
     
-    # TODO finish implmementing gradf
-    def gradf(self, model, res):
-        """
-        Method to return gradient vector. It skips the L1 regularizers!
-            g = Op'res_data +
-            \sum_i epsL2_i R2_i'res_regL2
-        """
-    return 0
 
 def _shrinkage(x, thresh, eps=1e-10):
     """
@@ -180,9 +182,10 @@ class SplitBregmanSolver(Solver):
         self.breg_b = None
         self.breg_a = None
         self.dataregsL1 = None
+        self.solution = None
         
         # print formatting
-        self.iter_msg = "outer_iter = %s, obj = %.2e, df_obj = %.2e, reg_obj = %.2e, resnorm = %.2e"
+        self.iter_msg = "iter = %s, obj = %.2e, df_obj = %.2e, reg_obj = %.2e, resnorm = %.2e"
 
     def __del__(self):
         print('Destructor called, Split-Bregman deleted')
@@ -204,13 +207,14 @@ class SplitBregmanSolver(Solver):
         self.breg_a = self.breg_b.clone()
         dataregsL1 = self.breg_b.clone()
         RL1x = problem.regL1_op.range.clone()  # store RegL1 * solution
+        self.solution = initial_guess.clone() if initial_guess is not None else problem.model.clone().zero()
         
         # reweight the eps according to dfw
         eps = [(e / problem.dfw)**.5 for e in problem.epsL2 + problem.epsL1]
         
         # inner L2 reg problem
         inner_problem = ProblemL2LinearReg(
-            model=problem.model,
+            model=self.solution,
             data=problem.data,
             op=problem.op,
             epsilon=eps,
@@ -226,7 +230,7 @@ class SplitBregmanSolver(Solver):
             self.restart.read_restart()
             outer_iter = self.restart.retrieve_parameter("iter")
             initial_obj_value = self.restart.retrieve_parameter("obj_initial")
-            solution = self.restart.retrieve_vector("solution")
+            self.solution = self.restart.retrieve_vector("solution")
             
             msg = "Restarting previous solver run from: %s" % self.restart.restart_folder
             if verbose:
@@ -235,15 +239,18 @@ class SplitBregmanSolver(Solver):
                 self.logger.addToLog(msg)
 
         else:
-            solution = initial_guess.clone() if initial_guess is not None else problem.model.clone().zero()
             outer_iter = 0
             
             msg = 90 * '#' + '\n'
-            msg += (90-23)//2*" " + 'SPLIT-BREGMAN ALGORITHM log file\n\n'
+            msg += "\t\t\t\t\tSPLIT-BREGMAN ALGORITHM log file\n\n"
             msg += "\tRestart folder: %s\n" % self.restart.restart_folder
+            msg += "\tModeling Operator:\t\t%s\n" % problem.op
             msg += "\tData Fidelity weight:\t%.2e\n" % problem.dfw
-            msg += "\tL2 Regularizer weights:\t" + ", ".join(["{:.2e}".format(i) for i in problem.epsL2]) + "\n"
-            msg += "\tL1 Regularizer weights:\t" + ", ".join(["{:.2e}".format(i) for i in problem.epsL1]) + "\n"
+            if problem.nregsL2 != 0:
+                msg += "\tL2 Regularizer ops:\t\t" + ", ".join(["%s" % op for op in problem.regL2_op.ops]) + "\n"
+                msg += "\tL2 Regularizer weights:\t" + ", ".join(["{:.2e}".format(e) for e in problem.epsL2]) + "\n"
+            msg += "\tL1 Regularizer ops:\t\t" + ", ".join(["%s" % op for op in problem.regL1_op.ops]) + "\n"
+            msg += "\tL1 Regularizer weights:\t" + ", ".join(["{:.2e}".format(e) for e in problem.epsL1]) + "\n"
             msg += "\tBregman update weight:\t%.2e\n" % self.breg_weight
             msg += 90 * '#' + '\n'
             if verbose:
@@ -253,7 +260,7 @@ class SplitBregmanSolver(Solver):
             
         # Main iteration loop
         while True:
-            obj0 = problem.get_obj(solution)
+            obj0 = problem.get_obj(self.solution)
             
             if outer_iter == 0:
                 initial_obj_value = obj0
@@ -262,7 +269,7 @@ class SplitBregmanSolver(Solver):
                                        obj0,
                                        problem.obj_terms[0],
                                        obj0 - problem.obj_terms[0],
-                                       problem.get_rnorm(solution))
+                                       problem.get_rnorm(self.solution))
                 if verbose:
                     print(msg)
                 if self.logger:
@@ -283,14 +290,12 @@ class SplitBregmanSolver(Solver):
                 self._update_dataregsL1()
                 
                 # solve inner problem
-                if self.use_prev_sol:
-                    inner_problem.model = solution
                 inner_problem.setDefaults()
                 self.inner_solver.run(inner_problem)
-                solution = inner_problem.model
+                self.solution = inner_problem.model
 
                 # compute RL1*x
-                problem.regL1_op.forward(False, solution, RL1x)
+                problem.regL1_op.forward(False, self.solution, RL1x)
 
                 # update breg_a
                 self.breg_a = _shrinkage(RL1x.clone() + self.breg_b, thresh=eps[-problem.nregsL1:])
@@ -300,7 +305,7 @@ class SplitBregmanSolver(Solver):
             
             outer_iter += 1
             # check objective function
-            obj1 = problem.get_obj(solution)
+            obj1 = problem.get_obj(self.solution)
             if obj1 >= obj0:
                 msg = "Objective function didn't reduce, will terminate solver:\n\t" \
                       "obj_new=%.2e obj_current=%.2e" % (obj1, obj0)
@@ -316,7 +321,7 @@ class SplitBregmanSolver(Solver):
                                    obj1,
                                    problem.obj_terms[0],
                                    obj1 - problem.obj_terms[0],
-                                   problem.get_rnorm(solution))
+                                   problem.get_rnorm(self.solution))
             if verbose:
                 print(msg)
             if self.logger:
@@ -324,7 +329,7 @@ class SplitBregmanSolver(Solver):
             
             # saving in case of restart
             self.restart.save_parameter("iter", outer_iter)
-            self.restart.save_vector("solution", solution)
+            self.restart.save_vector("solution", self.solution)
             
             if self.stopper.run(problem, outer_iter, initial_obj_value, verbose):
                 break
@@ -334,7 +339,7 @@ class SplitBregmanSolver(Solver):
         
         # ending message and log file
         msg = 90 * '#' + '\n'
-        msg += (90 - 23) // 2 * " " + 'SPLIT-BREGMAN ALGORITHM log file end\n'
+        msg += "\t\t\t\t\tSPLIT-BREGMAN ALGORITHM log file end\n"
         msg += 90 * '#'
         if verbose:
             print(msg.replace(" log file", ""))
@@ -349,23 +354,22 @@ class ADMMsolver(Solver):
     """Alternate Directions of Multipliers Method (ADMM)"""
 
     # Default class methods/functions
-    def __init__(self, stopper, logger=None, niter_LCG=5, niter_ISTA=5, rho=None, auto_rho=True, mu=10., tau=2.,
-                 use_previous_solution=False):
+    def __init__(self, stopper, logger=None, niter_LCG=5, niter_ISTA=15,
+                 rho=None, auto_rho=True, mu=10., tau=2.):
         """
         Constructor for ADMM Solver
         .. math ::
-            dfw/2 |Op x - y|_2^2 + \sum_i epsL2_i |R2_i x - yr|_2^2 + \gamma |z|_1
-                subject to z = Ax
-        TODO B=-I, c=0
-        :param stopper              : stopper object
-        :param logger               : logger object
-        :param niter_LCG            : int; number of iterations for solving the linear problem [5]
-        :param niter_ISTA           : int; number of iterations for solving the lasso problem [5]
-        :param rho                  : float; penalty parameter rho (if None it is initialized as 2*gamma+.1)
-        :param auto_rho             : bool; update rho automatically
-        :param mu                   : float; norm ratio between residuals for updating rho [10]
-        :param tau                  : float; scaling factor for updating rho [2]
-        :param use_previous_solution: bool; use the previous solution [False]
+            dfw/2 |Op x - d|_2^2 + \sum_i epsL2_i |R2_i x - dr|_2^2 + \gamma |y|_1
+                subject to Ax + By = c
+        Note: for now B=-I, c=0 (i.e., y=Ax)
+        :param stopper      : stopper object
+        :param logger       : logger object
+        :param niter_LCG    : int; number of iterations for solving the linear problem [5]
+        :param niter_ISTA   : int; number of iterations for solving the lasso problem [5]
+        :param rho          : float; penalty parameter rho (if None it is initialized as 2*gamma+.1)
+        :param auto_rho     : bool; update rho automatically
+        :param mu           : float; norm ratio between residuals for updating rho [10]
+        :param tau          : float; scaling factor for updating rho [2]
         """
         # Calling parent construction
         super(ADMMsolver, self).__init__()
@@ -373,38 +377,53 @@ class ADMMsolver(Solver):
         self.stopper = stopper
         self.logger = logger
         self.stopper.logger = self.logger
-
-        self.niter_LCG = niter_LCG  # number of iterations for the model solver
-        self.niter_ISTA = niter_ISTA  # number of iterations for the lagrangian problem
-
-        self.solver_LCG = LCGsolver(BasicStopper(niter=self.niter_LCG), steepest=False, logger=None)
+        
+        self.solver_LCG = LCGsolver(BasicStopper(niter=niter_LCG), steepest=False, logger=None)
         self.solver_LCG.setDefaults(iter_sampling=1, flush_memory=True)
-        self.solver_ISTA = ISTAsolver(BasicStopper(niter=self.niter_ISTA), fast=True, logger=None)
+        self.solver_ISTA = ISTAsolver(BasicStopper(niter=niter_ISTA), fast=True, logger=None)
         self.solver_ISTA.setDefaults(iter_sampling=1, flush_memory=True)
 
         self.rho = rho      # ADMM penalty parameter
         self.mu = mu
         self.tau = tau
         self.auto_rho = auto_rho
-        self.primal = None  # aka r (in the complete formulation is A x + B z - c)
-        self.dual = None    # aka s (in the complete formulation is rho A.H B r)
-        self.x = None       # solution vector
-        self.z = None       # lagrangian vector
-        self.u = None       # scaled dual variable
-        self.Ax = None      # store A*x
-        self.AHr = None     # store A.H*r
+        self.primal = None      # aka r (in the complete formulation is A x + B z - c)
+        self.dual = None        # aka s (in the complete formulation is rho A.H B r)
+        self.x = None           # solution vector
+        self.y = None           # lagrangian vector
+        self.u = None           # scaled dual variable
+        self.y_minus_u = None   # store y-u
+        self.A = None           # constraint matrix A
+        self.Ax = None          # store A*x
+        self.Ax_plus_u = None   # storee A*x+u for ISTA data
+        self.AHr = None         # store A.H*r
+
+        # print formatting
+        self.iter_msg = "iter = %s, obj = %.2e, df_obj = %.2e, reg_obj = %.2e, resnorm = %.2e"
 
     def __del__(self):
         print('Destructor called, ADMM deleted')
 
     def compute_primal(self):
-        """r = Ax - z"""
-        self.primal.copy(self.Ax) - self.z
+        """r = Ax - y"""
+        self.primal = self.Ax.clone() - self.y
 
     def compute_dual(self):
         """s = -rho A.H r"""
-        self.dual.copy(self.AHr).scale(-self.rho)
-
+        self.dual = self.AHr.clone() * -self.rho
+    
+    def compute_y_minus_u(self):
+        self.y_minus_u = self.y.clone() - self.u
+        
+    def compute_Ax(self):
+        self.A.forward(False, self.x, self.Ax)
+        
+    def compute_Ax_plus_u(self):
+        self.Ax_plus_u = self.Ax.clone() + self.u
+    
+    def compute_AHr(self):
+        self.A.adjoint(False, self.AHr, self.primal)
+    
     def update_rho(self):
         """update penalty parameter rho as suggested in boyd2010distributed (3.13)"""
         if self.primal.norm(2) > self.mu * self.dual.norm(2):
@@ -420,99 +439,267 @@ class ADMMsolver(Solver):
     def run(self, problem, verbose=False, restart=False, initial_guess=None):
 
         assert type(problem) == ProblemLinearReg, 'problem has to be a ProblemLinearReg'
-
+        if problem.nregsL1 == 0:
+            raise ValueError('ERROR! Provide at least one L1 regularizer!')
         # I want to set dfw=1, so:
-        epsL2 = problem.epsL2 / problem.dfw
-        epsL1 = problem.epsL1 / problem.dfw
+        epsL2 = [e / problem.dfw for e in problem.epsL2]
+        epsL1 = [e / problem.dfw for e in problem.epsL1]
         gamma = max(epsL1)
 
         # A is the Vstack of the L1 reg operators, scaled by their respective eps
-        A = pyOperator.Vstack(*[problem.regsL1[idx]*epsL1[idx]/gamma for idx in range(problem.nregsL1)])
-
+        self.A = problem.regL1_op * [e / gamma for e in epsL1]
+        
         # initialize all others variables
         if self.rho is None:
             self.init_rho(gamma)
-        self.x = problem.model
-        self.z = A.range.clone().zero()
-        self.u = A.range.clone().zero()
-
+        self.x = problem.model.clone()
+        self.y = self.A.range.clone().zero()
+        self.u = self.y.clone()
+        self.compute_y_minus_u()
+        
+        self.AHr = self.A.domain.clone()
+        
         # linear problem: dfw/2 |Op x - y|_2^2 + \sum_i epsL2_i |R2_i x - yr|_2^2 + rho/2 |Ax - z + u|_2^2
         # this means to solve: 1/2 | Op x - y| + eps   | R x - yr   |
         #                                        rho/2 | A x - (z-u)|
-        zu = self.z.copy() - self.u
         problem_linear = ProblemL2LinearReg(
             model=self.x,
             data=problem.data,
             op=problem.op,
-            epsilon=epsL2 + [self.rho/2]*A.n,
-            reg_op=pyOperator.Vstack(problem.regsL2, A),
-            prior_model=pyVector.superVector(problem.dataregsL2, zu),
+            epsilon=epsL2 + [self.rho/2]*self.A.n,
+            reg_op=pyOperator.Vstack(problem.regL2_op, self.A),
+            prior_model=pyVector.superVector(problem.dataregsL2, self.y_minus_u),
             minBound=problem.minBound,
             maxBound=problem.maxBound,
             boundProj=problem.boundProj
         )
 
         # lasso problem: rho/2 | A x - z + u|_2^2 + gamma | z |_1
-        self.Ax = A.range.clone()
+        self.Ax = self.A.range.clone()
+        self.compute_Ax_plus_u()
         problem_lasso = ProblemL1Lasso(
-            model=self.z,
-            data=self.Ax.clone()+self.u,
-            op=-pyOperator.IdentityOp(self.z),
+            model=self.y,
+            data=self.Ax_plus_u,
+            op=-pyOperator.IdentityOp(self.y),
             op_norm=None,
             lambda_value=gamma,
             minBound=problem.minBound,
             maxBound=problem.maxBound,
             boundProj=problem.boundProj
         )
+        
+        if restart:
+            self.restart.read_restart()
+            outer_iter = self.restart.retrieve_parameter("iter")
+            initial_obj_value = self.restart.retrieve_parameter("obj_initial")
+            self.x = self.restart.retrieve_vector("solution")
+    
+            msg = "Restarting previous solver run from: %s" % self.restart.restart_folder
+            if verbose:
+                print(msg)
+            if self.logger:
+                self.logger.addToLog(msg)
 
-        # reset stopper before running the inversion
-        self.stopper.reset()
-
-        # TODO add restart
+        else:
+            outer_iter = 0
+    
+            msg = 90 * '#' + '\n'
+            msg += "\t\t\t\t\tADMM ALGORITHM log file\n\n"
+            msg += "\tRestart folder: %s\n" % self.restart.restart_folder
+            msg += "\tModeling Operator:\t\t%s\n" % problem.op
+            msg += "\tData Fidelity weight:\t%.2e\n" % problem.dfw
+            if problem.nregsL2 != 0:
+                msg += "\tL2 Regularizer ops:\t\t" + ", ".join(["%s" % op for op in problem.regL2_op.ops]) + "\n"
+                msg += "\tL2 Regularizer weights:\t" + ", ".join(["{:.2e}".format(e) for e in problem.epsL2]) + "\n"
+            msg += "\tL1 Regularizer ops:\t\t" + ", ".join(["%s" % op for op in problem.regL1_op.ops]) + "\n"
+            msg += "\tL1 Regularizer weights:\t" + ", ".join(["{:.2e}".format(e) for e in problem.epsL1]) + "\n"
+            msg += "\tPenalty parameter:\t\t%.2e\n" % self.rho
+            msg += 90 * '#' + '\n'
+            if verbose:
+                print(msg.replace(" log file", ""))
+            if self.logger:
+                self.logger.addToLog(msg)
 
         # Main iteration loop
         while True:
+            obj0 = problem.get_obj(self.x)
+
+            if outer_iter == 0:
+                initial_obj_value = obj0
+                self.restart.save_parameter("obj_initial", initial_obj_value)
+                msg = self.iter_msg % (str(outer_iter).zfill(self.stopper.zfill),
+                                       obj0,
+                                       problem.obj_terms[0],
+                                       obj0 - problem.obj_terms[0],
+                                       problem.get_rnorm(self.x))
+                if verbose:
+                    print(msg)
+                if self.logger:
+                    self.logger.addToLog("\n" + msg)
+    
+                if isnan(obj0):
+                    raise ValueError("Objective function values NaN!")
+
+            if obj0 == 0:
+                print("Objective function is 0!")
+                break
+
+            self.save_results(outer_iter, problem, force_save=False)
+            
             # update x
+            self.solver_LCG.setDefaults()
             self.solver_LCG.run(problem_linear)
-
-            # update z
-            A.forward(False, self.x, self.Ax)
+            self.x = problem_linear.model
+            
+            # update y
+            self.compute_Ax()
+            self.compute_Ax_plus_u()
+            self.solver_ISTA.setDefaults()
             self.solver_ISTA.run(problem_lasso)
-
+            self.y = problem_lasso.model
+            
             # update u = (u + r) / rho
-            self.compute_primal()
-            self.u.add(self.primal).scale(1/self.rho)
-            A.adjoint(False, self.AHr, self.primal)
-            self.compute_dual()
+            self.compute_primal()  # r = Ax - y
+            self.compute_AHr()
+            self.compute_dual()    # s = rho A.H r
             self.update_rho()
+            self.u.__add__(self.primal).scale(1/self.rho)  # u = (u + r)/rho
 
-            # TODO save cost data, logger and all the stuff
-            self.save_results(self.stopper.iter, problem, model=None, force_save=False, force_write=False)
+            outer_iter += 1
+            # check objective function
+            obj1 = problem.get_obj(self.x)
+            if obj1 >= obj0:
+                msg = "Objective function didn't reduce, will terminate solver:\n\t" \
+                      "obj_new=%.2e obj_current=%.2e" % (obj1, obj0)
+                if verbose:
+                    print(msg)
+                if self.logger:
+                    self.logger.addToLog(msg)
+                break
+            
+            # iteration info
+            msg = self.iter_msg % (str(outer_iter).zfill(self.stopper.zfill),
+                                   obj1,
+                                   problem.obj_terms[0],
+                                   obj1 - problem.obj_terms[0],
+                                   problem.get_rnorm(self.x))
+            if verbose:
+                print(msg)
+            if self.logger:
+                self.logger.addToLog("\n" + msg)
+
+            # saving in case of restart
+            self.restart.save_parameter("iter", outer_iter)
+            self.restart.save_vector("solution", self.x)
+
+            if self.stopper.run(problem, outer_iter, initial_obj_value, verbose):
+                break
+
+        # writing last inverted model
+        self.save_results(outer_iter, problem, model=None, force_save=False, force_write=False)
+    
+        # ending message and log file
+        msg = 90 * '#' + '\n'
+        msg += "\t\t\t\t\tADMM ALGORITHM log file end\n"
+        msg += 90 * '#'
+        if verbose:
+            print(msg.replace(" log file", ""))
+        if self.logger:
+            self.logger.addToLog("\n" + msg)
+
+        # Clear restart object
+        self.restart.clear_restart()
 
 
 def main():
     from sys import path
     path.insert(0, '.')
     import numpy as np
+    from scipy.ndimage.filters import gaussian_filter
     import pyVector
     import pyOperator
+    import matplotlib.pyplot as plt
+    from pyProblem import ProblemL2Linear
+
+    class Gauss_smooth_scipy(pyOperator.Operator):
+        def __init__(self, model, sigmax, sigmaz):
+            """
+            Gaussian 2D smoothing operator using scipy smoothing:
+            model    = [no default] - vector class; domain vector
+            sigmax   = [no default] - float; standard deviation along the x direction
+            sigmaz   = [no default] - float; standard deviation along the z direction
+            """
+            self.setDomainRange(model, model)
+            self.sigmax = sigmax
+            self.sigmaz = sigmaz
+            self.scaling = 2.0 * np.pi * sigmax * sigmaz
+            return
     
-    x = pyVector.vectorIC(np.empty((100))).set(1)
-    y = x.clone() * 10
-    S = pyOperator.scalingOp(x, 10)
+        def __str__(self):
+            return "GauSmoot"
     
-    # # Run CG
-    # problem_noreg = ProblemLinearReg(x,y,S)
+        def forward(self, add, model, data):
+            """Forward operator"""
+            self.checkDomainRange(model, data)
+            if not add:
+                data.zero()
+            # Getting Ndarrays
+            model_arr = model.getNdArray()
+            data_arr = data.getNdArray()
+            data_arr[:] = self.scaling * gaussian_filter(model_arr,
+                                                         sigma=[self.sigmax, self.sigmaz])
+            return
+    
+        def adjoint(self, add, model, data):
+            """Self-adjoint operator"""
+            self.forward(add, data, model)
+            return
+
+    model = pyVector.vectorIC(np.empty((301, 601))).set(0)
+    model_arr = model.getNdArray()
+    model_arr[150, 300] = 10.0
+    model_arr[100, 200] = -5.0
+    model_arr[280, 400] = 1.0
+    # plt.imshow(model_arr), plt.colorbar(), plt.title('Model')
+    # plt.show()
+    
+    G = Gauss_smooth_scipy(model, 5., 4.)
+    data = G * model
+    # plt.imshow(data.getNdArray()), plt.colorbar(), plt.title('Data')
+    # plt.show()
+    
+    # # CG solver
+    # problemLS = ProblemL2Linear(model, data, G)
     # CG = LCGsolver(BasicStopper(niter=100))
     # CG.setDefaults()
-    # CG.run(problem_noreg, verbose=True)
-    
-    problem = ProblemLinearReg(model=x, data=y, op=S,
-                               regsL1=pyOperator.IdentityOp(x), epsL1=.1)
-    
-    SplitBregman = SplitBregmanSolver(BasicStopper(niter=2))
-    SplitBregman.setDefaults()
-    SplitBregman.run(problem, verbose=True)
+    # CG.run(problemLS, verbose=False)
+    # plt.imshow(problemLS.model.getNdArray()), plt.colorbar(), plt.title('CG Solution')
+    # plt.show()
+    #
+    # # FISTA
+    # problemFISTA = ProblemL1Lasso(model, data, G, lambda_value=.1)
+    # FISTA = ISTAsolver(BasicStopper(niter=100), fast=True)
+    # FISTA.setDefaults()
+    # FISTA.run(problemFISTA, verbose=True)
+    # plt.imshow(problemFISTA.model.getNdArray()), plt.colorbar(), plt.title('FISTA Solution')
+    # plt.show()
+    #
+    # problemSB = ProblemLinearReg(model=model, data=data, op=G,
+    #                            regsL1=pyOperator.IdentityOp(model), epsL1=.1)
+    #
+    # SplitBregman = SplitBregmanSolver(BasicStopper(niter=100), niter_inner=3, niter_solver=5)
+    # SplitBregman.setDefaults()
+    # SplitBregman.run(problemSB, verbose=True)
+    # plt.imshow(problemSB.model.getNdArray()), plt.colorbar(), plt.title('SB Solution')
+    # plt.show()
+    # mse_sb = (model.clone() - problemSB.model).norm()**2
+    # print("Split-Bregman solution MSE = %.2e" % mse_sb)
+
+    problemADMM = ProblemLinearReg(model=model, data=data, op=G,
+                                   regsL1=pyOperator.IdentityOp(model), epsL1=.1)
+    ADMM = ADMMsolver(BasicStopper(niter=100))
+    ADMM.setDefaults()
+    ADMM.run(problemADMM, verbose=True)
     
     return 0
 
