@@ -495,7 +495,7 @@ class Hstack(Operator):
 
 	def __init__(self, *args):
 		"""Constructor for the stacked operator"""
-		
+
 		self.ops = []
 		for _, arg in enumerate(args):
 			if arg is None:
@@ -635,7 +635,7 @@ def dummy_set_background(dummy_arg):
 	return
 
 
-class NLOperator(Operator):
+class NonLinearOperator(Operator):
 	"""
 	Non-linear operator class
 	"""
@@ -661,7 +661,7 @@ class NLOperator(Operator):
 			raise ValueError("ERROR! The two provided operators have different domains")
 		if not self.nl_op.range.checkSame(self.lin_op.range):
 			raise ValueError("ERROR! The two provided operators have different ranges")
-		super(NLOperator, self).__init__(self.nl_op.domain, self.nl_op.range)
+		super(NonLinearOperator, self).__init__(self.nl_op.domain, self.nl_op.range)
 
 	def dotTest(self):
 		"""
@@ -670,7 +670,7 @@ class NLOperator(Operator):
 		raise NotImplementedError("ERROR! Perform dot-product test directly on the linear operator.")
 
 
-class _combNLOperator(NLOperator):
+class _combNonLinearOperator(NonLinearOperator):
 	"""
 	Combination of non-linear opeartors: f(g(m))
 	"""
@@ -680,7 +680,7 @@ class _combNLOperator(NLOperator):
 		Constructor for non-linear operator class
 		"""
 		# Checking if non-linear operators were provided
-		if not (isinstance(A, NLOperator) and isinstance(B, NLOperator)):
+		if not (isinstance(A, NonLinearOperator) and isinstance(B, NonLinearOperator)):
 			raise TypeError("ERROR! Provided operators must be NonLinearOperator instances")
 		# Defining f(g(m))
 		self.nl_op = _prodOperator(A.nl_op, B.nl_op)
@@ -692,7 +692,7 @@ class _combNLOperator(NLOperator):
 		# Defining non_linear operator g(m) for Jacobian definition
 		self.g_nl_op = A.nl_op
 		self.g_range_tmp = A.nl_op.range.clone()
-		super(_combNLOperator, self).__init__(self.nl_op, self.lin_op)
+		super(_combNonLinearOperator, self).__init__(self.nl_op, self.lin_op)
 
 	def set_background(self, model):
 		"""
@@ -705,7 +705,7 @@ class _combNLOperator(NLOperator):
 		self.set_background2(self.g_range_tmp)
 
 
-class VstackNLOperator(NLOperator):
+class VstackNonLinearOperator(NonLinearOperator):
 	"""
 	Stack of operators class
 			| d1 |   | f(m) |
@@ -716,7 +716,7 @@ class VstackNLOperator(NLOperator):
 	def __init__(self, nl_op1, nl_op2):
 		"""Constructor for the stacked operator"""
 		# Checking if domain of the operators is the same
-		if not (isinstance(nl_op1, NLOperator) and isinstance(nl_op2, NLOperator)):
+		if not (isinstance(nl_op1, NonLinearOperator) and isinstance(nl_op2, NonLinearOperator)):
 			raise TypeError("Provided operators must be NonLinearOperator instances")
 		self.nl_op1 = nl_op1  # f(m)
 		self.nl_op2 = nl_op2  # g(m)
@@ -727,7 +727,7 @@ class VstackNLOperator(NLOperator):
 		# Defining internal set_background functions
 		self.set_background1 = nl_op1.set_background
 		self.set_background2 = nl_op2.set_background
-		super(VstackNLOperator, self).__init__(self.nl_op, self.lin_op)
+		super(VstackNonLinearOperator, self).__init__(self.nl_op, self.lin_op)
 
 	def set_background(self, model):
 		"""
