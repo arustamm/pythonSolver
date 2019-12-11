@@ -86,7 +86,10 @@ class Gauss_smooth_scipy(pyOperator.Operator):
 		self.sigmaz=sigmaz
 		self.scaling=2.0*np.pi*sigmax*sigmaz
 		return
-
+	
+	def __str__(self):
+		return "GauSmoot"
+	
 	def forward(self,add,model,data):
 		"""Forward operator"""
 		self.checkDomainRange(model,data)
