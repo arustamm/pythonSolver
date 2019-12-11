@@ -6,10 +6,12 @@ from pyProblem import Problem, ProblemL1Lasso, ProblemL2LinearReg
 from pySolver import Solver
 from pySparseSolver import ISTAsolver
 from pyStopper import BasicStopper
+from math import isnan
 
 
 class ProblemLinearReg(Problem):
-    def __init__(self, model, data, op, dfw=1., epsL1=None, regsL1=None, epsL2=None, regsL2=None, dataregsL2=None,
+    def __init__(self, model, data, op, dfw=1.,
+                 epsL1=None, regsL1=None, epsL2=None, regsL2=None, dataregsL2=None,
                  minBound=None, maxBound=None, boundProj=None):
         """
         Linear Problem with both L1 and L2 regularizers:
@@ -23,11 +25,11 @@ class ProblemLinearReg(Problem):
         :param data         : vector; data
         :param op           : LinearOperator; data fidelity operator
         :param dfw          : float; weight of the data fidelity term
-        :param epsL1        : list; weights of L1 regularizers [.1]
-        :param regsL1       : list; L1 regularizers of class LinearOperator [Identity]
+        :param epsL1        : list; weights of L1 regularizers [None]
+        :param regsL1       : list; L1 regularizers of class LinearOperator [None]
         :param epsL2        : list; weights of L2 regularizers [None]
         :param regsL2       : list; L2 regularizers of class LinearOperator [None]
-        :param dataregsL2   : vector; prior model for L2 regularization term [zeros]
+        :param dataregsL2   : vector; prior model for L2 regularization term [None]
         :param minBound     : vector; minimum value bounds
         :param maxBound     : vector; maximum value bounds
         :param boundProj    : Bounds; object with a method "apply(x)" to project x onto some convex set
@@ -83,7 +85,8 @@ class ProblemLinearReg(Problem):
     def __del__(self):
         """Default destructor"""
         return
-
+    
+    # TODO implement other methods in order to handle all kinds of regularizations
     def objf(self, res):
         """Compute objective function based on the residuals"""
         self.obj_terms[0] = .5 * res.vecs[0].norm() ** 2  # data fidelity
@@ -121,7 +124,15 @@ class ProblemLinearReg(Problem):
                 self.res_regsL1.zero()
         
         return self.res
-
+    
+    # TODO finish implmementing gradf
+    def gradf(self, model, res):
+        """
+        Method to return gradient vector. It skips the L1 regularizers!
+            g = Op'res_data +
+            \sum_i epsL2_i R2_i'res_regL2
+        """
+    return 0
 
 def _shrinkage(x, thresh, eps=1e-10):
     """
@@ -170,6 +181,9 @@ class SplitBregmanSolver(Solver):
         self.breg_a = None
         self.dataregsL1 = None
         
+        # print formatting
+        self.iter_msg = "outer_iter = %s, obj = %.2e, df_obj = %.2e, reg_obj = %.2e, resnorm = %.2e"
+
     def __del__(self):
         print('Destructor called, Split-Bregman deleted')
     
@@ -209,19 +223,21 @@ class SplitBregmanSolver(Solver):
 
         # TODO add restart and merge with initial guess
         if restart:
+            self.restart.read_restart()
+            outer_iter = self.restart.retrieve_parameter("iter")
+            initial_obj_value = self.restart.retrieve_parameter("obj_initial")
+            solution = self.restart.retrieve_vector("solution")
+            
             msg = "Restarting previous solver run from: %s" % self.restart.restart_folder
             if verbose:
                 print(msg)
             if self.logger:
                 self.logger.addToLog(msg)
-            self.restart.read_restart()
-            outer_iter = self.restart.retrieve_parameter("iter")
-            initial_obj_value = self.restart.retrieve_parameter("obj_initial")
-            solution = self.restart.retrieve_vector("solution")
-        
+
         else:
             solution = initial_guess.clone() if initial_guess is not None else problem.model.clone().zero()
             outer_iter = 0
+            
             msg = 90 * '#' + '\n'
             msg += (90-23)//2*" " + 'SPLIT-BREGMAN ALGORITHM log file\n\n'
             msg += "\tRestart folder: %s\n" % self.restart.restart_folder
@@ -234,10 +250,32 @@ class SplitBregmanSolver(Solver):
                 print(msg.replace(" log file", ""))
             if self.logger:
                 self.logger.addToLog(msg)
-                
+            
         # Main iteration loop
         while True:
             obj0 = problem.get_obj(solution)
+            
+            if outer_iter == 0:
+                initial_obj_value = obj0
+                self.restart.save_parameter("obj_initial", initial_obj_value)
+                msg = self.iter_msg % (str(outer_iter).zfill(self.stopper.zfill),
+                                       obj0,
+                                       problem.obj_terms[0],
+                                       obj0 - problem.obj_terms[0],
+                                       problem.get_rnorm(solution))
+                if verbose:
+                    print(msg)
+                if self.logger:
+                    self.logger.addToLog("\n" + msg)
+                
+                if isnan(obj0):
+                    raise ValueError("Objective function values NaN!")
+            
+            if obj0 == 0:
+                print("Objective function is 0!")
+                break
+            
+            self.save_results(outer_iter, problem, force_save=False)
             
             for _ in range(self.niter_inner):
                 
@@ -259,10 +297,53 @@ class SplitBregmanSolver(Solver):
 
             # update breg_b
             self.breg_b.scaleAdd(RL1x.clone() - self.breg_a, 1., self.breg_weight)
-
+            
+            outer_iter += 1
+            # check objective function
+            obj1 = problem.get_obj(solution)
+            if obj1 >= obj0:
+                msg = "Objective function didn't reduce, will terminate solver:\n\t" \
+                      "obj_new=%.2e obj_current=%.2e" % (obj1, obj0)
+                if verbose:
+                    print(msg)
+                if self.logger:
+                    self.logger.addToLog(msg)
+                break
+            
             # TODO save cost data, logger and all the stuff
-            self.save_results(self.stopper.iter, problem, model=None, force_save=False, force_write=False)
-
+            # iteration info
+            msg = self.iter_msg % (str(outer_iter).zfill(self.stopper.zfill),
+                                   obj1,
+                                   problem.obj_terms[0],
+                                   obj1 - problem.obj_terms[0],
+                                   problem.get_rnorm(solution))
+            if verbose:
+                print(msg)
+            if self.logger:
+                self.logger.addToLog("\n" + msg)
+            
+            # saving in case of restart
+            self.restart.save_parameter("iter", outer_iter)
+            self.restart.save_vector("solution", solution)
+            
+            if self.stopper.run(problem, outer_iter, initial_obj_value, verbose):
+                break
+            
+        # writing last inverted model
+        self.save_results(outer_iter, problem, model=None, force_save=False, force_write=False)
+        
+        # ending message and log file
+        msg = 90 * '#' + '\n'
+        msg += (90 - 23) // 2 * " " + 'SPLIT-BREGMAN ALGORITHM log file end\n'
+        msg += 90 * '#'
+        if verbose:
+            print(msg.replace(" log file", ""))
+        if self.logger:
+            self.logger.addToLog("\n" + msg)
+        
+        # Clear restart object
+        self.restart.clear_restart()
+        
 
 class ADMMsolver(Solver):
     """Alternate Directions of Multipliers Method (ADMM)"""
@@ -420,10 +501,16 @@ def main():
     y = x.clone() * 10
     S = pyOperator.scalingOp(x, 10)
     
+    # # Run CG
+    # problem_noreg = ProblemLinearReg(x,y,S)
+    # CG = LCGsolver(BasicStopper(niter=100))
+    # CG.setDefaults()
+    # CG.run(problem_noreg, verbose=True)
+    
     problem = ProblemLinearReg(model=x, data=y, op=S,
                                regsL1=pyOperator.IdentityOp(x), epsL1=.1)
     
-    SplitBregman = SplitBregmanSolver(BasicStopper(niter=10))
+    SplitBregman = SplitBregmanSolver(BasicStopper(niter=2))
     SplitBregman.setDefaults()
     SplitBregman.run(problem, verbose=True)
     
