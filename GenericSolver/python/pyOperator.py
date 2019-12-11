@@ -539,8 +539,8 @@ class scalingOp(Operator):
 
 	def __init__(self, domain, scalar):
 		super(scalingOp, self).__init__(domain, domain)
-		if not type(scalar) in [int, float]:
-			raise ValueError('Scalar has to be (indeed) a scalar')
+		if not np.isscalar(scalar):
+			raise ValueError('scalar has to be (indeed) a scalar variable')
 		self.scalar = scalar
 
 	def forward(self, add, model, data):
