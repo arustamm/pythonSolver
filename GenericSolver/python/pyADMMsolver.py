@@ -7,12 +7,10 @@ from pySolver import Solver
 from pySparseSolver import ISTAsolver
 from pyStopper import BasicStopper
 from math import isnan
-import numpy as np
 
 
 class ProblemLinearReg(Problem):
-    def __init__(self, model, data, op, dfw=1.,
-                 epsL1=None, regsL1=None, epsL2=None, regsL2=None, dataregsL2=None,
+    def __init__(self, model, data, op, dfw=1., epsL1=None, regsL1=None, epsL2=None, regsL2=None, dataregsL2=None,
                  minBound=None, maxBound=None, boundProj=None):
         """
         Linear Problem with both L1 and L2 regularizers:
@@ -150,8 +148,7 @@ class SplitBregmanSolver(Solver):
     """Split-Bregman solver for L1 and L2 regularized problems"""
 
     # Default class methods/functions
-    def __init__(self, stopper, logger=None, niter_inner=3, niter_solver=5,
-                 breg_weight=1., use_prev_sol=False):
+    def __init__(self, stopper, logger=None, niter_inner=3, niter_solver=5, breg_weight=1.):
         """
         Constructor for Split-Bregman Solver
         :param stopper      : stopper object
@@ -159,7 +156,6 @@ class SplitBregmanSolver(Solver):
         :param niter_inner  : int; number of iterations for the shrinkage loop [default 3]
         :param niter_solver : int; number of iterations for the internal CG solver [default 5]
         :param breg_weight  : float; coefficient for the Bregman update b += beta * (R*x - d) [1.]
-        :param use_prev_sol : bool; use the previous solution [False]
         """
         # Calling parent construction
         super(SplitBregmanSolver, self).__init__()
@@ -173,7 +169,6 @@ class SplitBregmanSolver(Solver):
         self.niter_inner = niter_inner  # number of iterations for the shrinkage
         self.niter_solver = niter_solver  # number of iterations for the internal problem
         self.breg_weight = breg_weight
-        self.use_prev_sol = use_prev_sol  # as initial guess for the inner problem
 
         self.inner_solver = LCGsolver(BasicStopper(niter=self.niter_solver),
                                       steepest=False, logger=self.logger)
@@ -354,8 +349,7 @@ class ADMMsolver(Solver):
     """Alternate Directions of Multipliers Method (ADMM)"""
 
     # Default class methods/functions
-    def __init__(self, stopper, logger=None, niter_LCG=5, niter_ISTA=15,
-                 rho=None, auto_rho=True, mu=10., tau=2.):
+    def __init__(self, stopper, logger=None, niter_LCG=5, niter_ISTA=15, rho=None, auto_rho=True, mu=10., tau=2.):
         """
         Constructor for ADMM Solver
         .. math ::
@@ -452,16 +446,15 @@ class ADMMsolver(Solver):
         # initialize all others variables
         if self.rho is None:
             self.init_rho(gamma)
-        self.x = problem.model.clone()
+        self.x = initial_guess.clone() if initial_guess is not None else problem.model.clone().zero()
         self.y = self.A.range.clone().zero()
         self.u = self.y.clone()
         self.compute_y_minus_u()
         
         self.AHr = self.A.domain.clone()
-        
-        # linear problem: dfw/2 |Op x - d|_2^2 + \sum_i epsL2_i |R2_i x - dr|_2^2 + rho/2 |Ax - y + u|_2^2
-        # this means to solve: 1/2 | Op x - d| + eps   | R x - dr   |
-        #                                        rho/2 | A x - (y-u)|
+
+        # Linear Problem:       1/2 | Op x - d| + epsL2   | R2 x - dr   |
+        #                                         rho/2   | A x  - (y-u)|
         problem_linear = ProblemL2LinearReg(
             model=self.x,
             data=problem.data,
@@ -702,6 +695,8 @@ def main():
     ADMM.setDefaults()
     ADMM.run(problemADMM, verbose=True)
     
+    plt.imshow(problemADMM.model.getNdArray()), plt.colorbar(), plt.title('ADMM Solution')
+    plt.show()
     return 0
 
 
