@@ -26,7 +26,7 @@ class Operator:
 	def __del__(self):
 		"""Default destructor"""
 		return
-	
+
 	# unary operators
 	def __add__(self, other):  # self + other
 		if isinstance(other, Operator):
@@ -358,7 +358,7 @@ class _CustomOperator(Operator):
 		super(_CustomOperator, self).__init__(domain, range)
 		self.forward_function = forward_function
 		self.adjoint_function = adjoint_function
-	
+
 	def forward(self, add, model, data):
 		return self.forward_function(add, model, data)
 
@@ -382,10 +382,10 @@ class _sumOperator(Operator):
 
 		super(_sumOperator, self).__init__(A.domain, A.range)
 		self.args = (A, B)
-	
+
 	def __str__(self):
 		return self.args[0].__str__()[:3]+"+"+self.args[0].__str__()[:4]
-	
+
 	def forward(self, add, model, data):
 		self.checkDomainRange(model, data)
 		self.args[0].forward(add, model, data)
@@ -412,10 +412,10 @@ class _prodOperator(Operator):
 		super(_prodOperator, self).__init__(B.domain, A.range)
 		self.args = (A, B)
 		self.temp = B.getRange().clone()
-	
+
 	def __str__(self):
 		return self.args[0].__str__()[:3]+"*"+self.args[0].__str__()[:4]
-	
+
 	def forward(self, add, model, data):
 		self.checkDomainRange(model, data)
 		self.args[1].forward(False, model, self.temp)
@@ -440,7 +440,7 @@ class _scaledOperator(Operator):
 		super(_scaledOperator, self).__init__(A.domain, A.range)
 		self.const = const
 		self.op = A
-	
+
 	def __str__(self):
 		op_name = self.op.__str__().replace(" ","")
 		l = len(op_name)
@@ -449,7 +449,7 @@ class _scaledOperator(Operator):
 		else:
 			name = "sc"+op_name[:6]
 		return name
-		
+
 	def forward(self, add, model, data):
 		self.op.forward(add, model.clone().scale(self.const), data)
 
@@ -492,10 +492,10 @@ class Vstack(Operator):
 			op_range += [self.ops[idx].range]
 
 		super(Vstack, self).__init__(domain=self.ops[0].domain, range=superVector(op_range))
-	
+
 	def __str__(self):
 		return " VStack "
-	
+
 	def forward(self, add, model, data):
 		"""Forward operator Cm"""
 		self.checkDomainRange(model, data)
@@ -544,10 +544,10 @@ class Hstack(Operator):
 					raise ValueError('Range incompatibility between Op %d and Op %d' % (idx, idx + 1))
 			domain += [self.ops[0].domain]
 		super(Hstack, self).__init__(domain=superVector(domain), range=self.ops[0].range)
-	
+
 	def __str__(self):
 		return " HStack "
-	
+
 	def forward(self, add, model, data):
 		self.checkDomainRange(model, data)
 		self.ops[0].forward(add, model.vecs[0], data)
@@ -569,10 +569,10 @@ class scalingOp(Operator):
 		if not np.isscalar(scalar):
 			raise ValueError('scalar has to be (indeed) a scalar variable')
 		self.scalar = scalar
-	
+
 	def __str__(self):
 		return "Scaling "
-	
+
 	def forward(self, add, model, data):
 		self.checkDomainRange(model, data)
 		data.scaleAdd(model, 1. if add else 0., self.scalar)
@@ -587,10 +587,10 @@ class ZeroOp(Operator):
 
 	def __init__(self, domain, range):
 		super(ZeroOp, self).__init__(domain, range)
-	
+
 	def __str__(self):
 		return "  Zero  "
-	
+
 	def forward(self, add, model, data):
 		self.checkDomainRange(model, data)
 		if not add:
@@ -607,10 +607,10 @@ class IdentityOp(Operator):
 
 	def __init__(self, domain):
 		super(IdentityOp, self).__init__(domain, domain)
-	
+
 	def __str__(self):
 		return "Identity"
-	
+
 	def forward(self, add, model, data):
 		self.checkDomainRange(model, data)
 		if add:
@@ -634,7 +634,7 @@ class DiagonalOp(Operator):
 		#     raise TypeError('diag has to be a vector')
 		super(DiagonalOp, self).__init__(diag, diag)
 		self.diag = diag
-		
+
 	def __str__(self):
 		return "Diagonal"
 
@@ -703,7 +703,7 @@ class NonLinearOperator(Operator):
 		if not self.nl_op.range.checkSame(self.lin_op.range):
 			raise ValueError("ERROR! The two provided operators have different ranges")
 		super(NonLinearOperator, self).__init__(self.nl_op.domain, self.nl_op.range)
-	
+
 	def dotTest(self):
 		"""
 		Raising an exception, dot-product test must be performed directly onto linear operator.
@@ -745,6 +745,11 @@ class _combNonLinearOperator(NonLinearOperator):
 		self.g_nl_op.forward(False, model, self.g_range_tmp)
 		self.set_background2(self.g_range_tmp)
 
+#Necessary for backward compatibility
+def CombNonlinearOp(g,f):
+	"""Combination of non-linear opeartors: f(g(m))"""
+	return _combNonLinearOperator(f,g)
+
 
 class VstackNonLinearOperator(NonLinearOperator):
 	"""
@@ -769,10 +774,10 @@ class VstackNonLinearOperator(NonLinearOperator):
 		self.set_background1 = nl_op1.set_background
 		self.set_background2 = nl_op2.set_background
 		super(VstackNonLinearOperator, self).__init__(self.nl_op, self.lin_op)
-	
+
 	def __str__(self):
 		return "NLVstack"
-	
+
 	def set_background(self, model):
 		"""
 		Set background function for the stack of Jacobian matrices

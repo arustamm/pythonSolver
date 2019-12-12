@@ -6,11 +6,10 @@ import pyVector as  Vec
 import numpy as np
 
 
-# hostnames = ["192.168.66.166","192.168.66.66","192.168.66.67"]
-hostnames = ["192.168.66.67","192.168.66.166","192.168.66.66"]
+hostnames = ["192.168.66.67","192.168.66.66","192.168.66.166","192.168.66.167"]
 client = DaskClient(hostnames)
 vec = Vec.vectorIC((100,10))
-chunks = (1,1,1)
+chunks = (1,1,1,1)
 vecD = pyDaskVector.DaskVector(client,vector_template=vec,chunks=chunks)
 
 client.getClient().who_has(vecD.vecDask[0])
