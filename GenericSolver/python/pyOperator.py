@@ -42,6 +42,8 @@ class Operator:
 
 	def __mul__(self, other):  # self * other
 		return self.dot(other)
+	
+	__rmul__ = __mul__	# other * self
 
 	def __truediv__(self, other, niter=2000):
 		"""x = A / y through CG"""
@@ -62,7 +64,7 @@ class Operator:
 		"""Matrix-matrix or matrix-vector or matrix-scalar multiplication."""
 		if isinstance(other, Operator):  # A * B
 			return _prodOperator(self, other)
-		elif type(other) in [int, float]:  # A * c | # TODO I want to call also c * A (but in the latter __mul__ is of scalar)
+		elif type(other) in [int, float]:  # A * c or c * A
 			return _scaledOperator(self, other)
 		elif isinstance(other, list) and isinstance(self, Vstack):
 			assert len(other) == self.n, "Other lenght and self lenght mismatch"
