@@ -94,7 +94,7 @@ class ProblemLinearReg(Problem):
         else:
             res_regsL1 = None
         
-        self.obj_terms[0] = self.dfw * .5 * res_data.norm() ** 2  # data fidelity
+        self.obj_terms[0] = self.dfw*.5 * res_data.norm()**2  # data fidelity
         
         if res_regsL2 is not None:
             for idx in range(self.nregsL2):
@@ -112,7 +112,6 @@ class ProblemLinearReg(Problem):
         else:
             self.res.vecs[0].zero()
         self.res_data.scaleAdd(self.data, 1., -1.)
-        # self.res_data.scale(self.dfw)
         
         # compute L2 reg residuals
         if self.res_regsL2 is not None:
@@ -121,13 +120,11 @@ class ProblemLinearReg(Problem):
             
             if self.dataregsL2 is not None and self.dataregsL2.norm() != 0.:
                 self.res_regsL2.scaleAdd(self.dataregsL2, 1., -1.)
-            # self.res_regsL2.scale(self.epsL2)
         
         # compute L1 reg residuals
         if self.res_regsL1 is not None:
             if model.norm() != 0. and self.regL1_op is not None:
                 self.regL1_op.forward(False, self.model, self.res_regsL1)
-                # self.res_regsL1.scale(self.epsL1)
             else:
                 self.res_regsL1.zero()
         
@@ -302,8 +299,8 @@ class SplitBregmanSolver(Solver):
             # check objective function
             obj1 = problem.get_obj(self.solution)
             if obj1 >= obj0:
-                msg = "Objective function didn't reduce, will terminate solver:\n\t" \
-                      "obj_new=%.2e obj_current=%.2e" % (obj1, obj0)
+                msg = "Objective function didn't reduce, will terminate solver:\n\t"\
+                      "obj_new = %.2e\tobj_cur = %.2e" % (obj1, obj0)
                 if verbose:
                     print(msg)
                 if self.logger:
@@ -390,7 +387,6 @@ class ADMMsolver(Solver):
         self.A = None           # constraint matrix A
         self.Ax = None          # store A*x
         self.Ax_plus_u = None   # storee A*x+u for ISTA data
-        self.AHr = None         # store A.H*r
 
         # print formatting
         self.iter_msg = "iter = %s, obj = %.2e, df_obj = %.2e, reg_obj = %.2e, resnorm = %.2e"
@@ -404,7 +400,8 @@ class ADMMsolver(Solver):
 
     def compute_dual(self):
         """s = -rho A.H r"""
-        self.dual = self.AHr.clone() * -self.rho
+        self.A.adjoint(False, self.dual, self.primal)
+        self.dual.scale(-self.rho)
     
     def compute_y_minus_u(self):
         self.y_minus_u = self.y.clone() - self.u
@@ -414,9 +411,6 @@ class ADMMsolver(Solver):
         
     def compute_Ax_plus_u(self):
         self.Ax_plus_u = self.Ax.clone() + self.u
-    
-    def compute_AHr(self):
-        self.A.adjoint(False, self.AHr, self.primal)
     
     def update_rho(self):
         """update penalty parameter rho as suggested in boyd2010distributed (3.13)"""
@@ -450,9 +444,8 @@ class ADMMsolver(Solver):
         self.y = self.A.range.clone().zero()
         self.u = self.y.clone()
         self.compute_y_minus_u()
+        self.dual = self.A.domain.clone()
         
-        self.AHr = self.A.domain.clone()
-
         # Linear Problem:       1/2 | Op x - d| + epsL2   | R2 x - dr   |
         #                                         rho/2   | A x  - (y-u)|
         problem_linear = ProblemL2LinearReg(
@@ -476,7 +469,7 @@ class ADMMsolver(Solver):
             data=self.Ax_plus_u,
             op=pyOperator.IdentityOp(self.y),
             op_norm=None,
-            lambda_value=gamma/self.rho,  # TODO rho is changing, does the problem update automatically?
+            lambda_value=gamma/self.rho,
             minBound=problem.minBound,
             maxBound=problem.maxBound,
             boundProj=problem.boundProj
@@ -493,7 +486,6 @@ class ADMMsolver(Solver):
                 print(msg)
             if self.logger:
                 self.logger.addToLog(msg)
-
         else:
             outer_iter = 0
     
@@ -516,7 +508,7 @@ class ADMMsolver(Solver):
 
         # Main iteration loop
         while True:
-            obj0 = problem.get_obj(self.x)  # TODO objective data fidelity is 0!
+            obj0 = problem.get_obj(self.x)
 
             if outer_iter == 0:
                 initial_obj_value = obj0
@@ -545,16 +537,16 @@ class ADMMsolver(Solver):
             self.solver_LCG.run(problem_linear)
             self.x = problem_linear.model
             
-            # update y
+            # update y TODO FISTA Gradient vanishes identically: why?
             self.compute_Ax()
             self.compute_Ax_plus_u()
             self.solver_ISTA.setDefaults()
+            problem_lasso.set_lambda(gamma/self.rho)
             self.solver_ISTA.run(problem_lasso)
             self.y = problem_lasso.model
             
-            # update u = (u + r) / rho
+            # update penalty parameter and scaled dual variable
             self.compute_primal()  # r = Ax - y
-            self.compute_AHr()
             self.compute_dual()    # s = rho A.H r
             self.update_rho()
             self.u.__add__(self.primal).scale(1/self.rho)  # u = (u + r)/rho
@@ -564,7 +556,7 @@ class ADMMsolver(Solver):
             obj1 = problem.get_obj(self.x)
             if obj1 >= obj0:
                 msg = "Objective function didn't reduce, will terminate solver:\n\t" \
-                      "obj_new=%.2e obj_current=%.2e" % (obj1, obj0)
+                      "obj_new = %.2e\tobj_cur = %.2e" % (obj1, obj0)
                 if verbose:
                     print(msg)
                 if self.logger:
@@ -661,12 +653,12 @@ def main():
     data = G * model
     # plt.imshow(data.getNdArray()), plt.colorbar(), plt.title('Data')
     # plt.show()
-    
+    #
     # # CG solver
     # problemLS = ProblemL2Linear(model, data, G)
     # CG = LCGsolver(BasicStopper(niter=100))
     # CG.setDefaults()
-    # CG.run(problemLS, verbose=False)
+    # CG.run(problemLS, verbose=True)
     # plt.imshow(problemLS.model.getNdArray()), plt.colorbar(), plt.title('CG Solution')
     # plt.show()
     #
@@ -678,8 +670,9 @@ def main():
     # plt.imshow(problemFISTA.model.getNdArray()), plt.colorbar(), plt.title('FISTA Solution')
     # plt.show()
     #
+    # # SplitBregman
     # problemSB = ProblemLinearReg(model=model, data=data, op=G,
-    #                            regsL1=pyOperator.IdentityOp(model), epsL1=.1)
+    #                            regsL1=pyOperator.IdentityOp(model), epsL1=.01)
     #
     # SplitBregman = SplitBregmanSolver(BasicStopper(niter=100), niter_inner=3, niter_solver=5)
     # SplitBregman.setDefaults()
@@ -688,10 +681,11 @@ def main():
     # plt.show()
     # mse_sb = (model.clone() - problemSB.model).norm()**2
     # print("Split-Bregman solution MSE = %.2e" % mse_sb)
-
+    
+    # ADMM
     problemADMM = ProblemLinearReg(model=model, data=data, op=G,
-                                   regsL1=pyOperator.IdentityOp(model), epsL1=.1)
-    ADMM = ADMMsolver(BasicStopper(niter=100))
+                                   regsL1=pyOperator.IdentityOp(model), epsL1=.01)
+    ADMM = ADMMsolver(BasicStopper(niter=350))
     ADMM.setDefaults()
     ADMM.run(problemADMM, verbose=True)
     
