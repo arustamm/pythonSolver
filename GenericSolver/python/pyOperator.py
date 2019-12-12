@@ -26,7 +26,10 @@ class Operator:
 	def __del__(self):
 		"""Default destructor"""
 		return
-
+	
+	def __str__(self):
+		return "ParentOp"
+	
 	# unary operators
 	def __add__(self, other):  # self + other
 		if isinstance(other, Operator):
@@ -316,7 +319,7 @@ class Operator:
 							   forward_function=self.adjoint, adjoint_function=self.forward)
 
 	H = property(hermitian)
-	T = H  # TODO delete property
+	T = H  # misleading (H is the conjugate transpose), probably we can delete it
 
 	def eigs(self, neigs=None, niter=10):
 		"""
@@ -331,13 +334,12 @@ class Operator:
 		from functools import partial
 		Op = ssl.LinearOperator(np.float, (self.range.getNdarray().size, self.domain.getNdarray().size))
 
-		# TODO how to transform the (model, data) paradigm to y = A*x ?
-		def forward2matvec(self, x):
+		def forward2matvec(x):
 			data = self.range.clone().zero()
 			self.forward(False, x, data)
 			return data.getNdArray()
 
-		def adjoint2rmatvec(self, x):
+		def adjoint2rmatvec(x):
 			model = self.domain.clone().zero()
 			self.adjoint(False, model, x)
 			return model.getNdArray()
@@ -867,13 +869,9 @@ def main():
 	H.forward(False, x, y)          # y = 3
 	x_hat = x.clone()
 	H.adjoint(False, x_hat, y)      # x_hat = 3, 6
-	x_inv = H / y  # TODO not working but probably it is correct:
-				   #  we have a number of solutions that is twice the number of equations!
-				   #  add a dimensionality check to the inversion (or better, a "onto" attribute to the operator
+	x_inv = H / y
 	if x.isDifferent(x_inv):
 		print('Hstack not working')
-	#
-	# H.dotTest(True)
 
 	# test inversion on superVector
 	x = pyVector.vectorIC(np.empty((100, 200)))
