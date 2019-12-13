@@ -20,13 +20,13 @@ re_dpr = re.compile("DOT RESULT(.*)")
 # Vector class and derived classes
 class vector:
     """Abstract python vector class"""
-    
+
     def __init__(self):
         """Default constructor"""
-    
+
     def __del__(self):
         """Default destructor"""
-    
+
     def __add__(self, other):  # self + other
         if type(other) in [int, float]:
             self.addbias(other)
@@ -36,15 +36,15 @@ class vector:
             return self
         else:
             raise TypeError('Argument has to be either scalar or vector, got %r instead' % other)
-    
+
     def __sub__(self, other):  # self - other
         self.__add__(-other)
         return self
-    
+
     def __neg__(self):  # -self
         self.scale(-1)
         return self
-    
+
     def __mul__(self, other):  # self * other
         if type(other) in [int, float]:
             self.scale(other)
@@ -54,7 +54,7 @@ class vector:
             return self
         else:
             raise NotImplementedError
-    
+
     def __rmul__(self, other):
         if type(other) in [int, float]:
             self.scale(other)
@@ -64,16 +64,16 @@ class vector:
             return self
         else:
             raise NotImplementedError
-    
+
     def __pow__(self, power, modulo=None):
         if type(power) in [int, float]:
             self.pow(power)
         else:
             raise TypeError('power has to be a scalar')
-    
+
     def __abs__(self):
         self.abs()
-    
+
     def __truediv__(self, other):  # self / other
         if type(other) in [int, float]:
             self.scale(1 / other)
@@ -81,113 +81,113 @@ class vector:
             self.multiply(other.clone().reciprocal())
         else:
             raise TypeError('other has to be either a scalar or a vector')
-    
+
     # Class vector operations
     def getNdArray(self):
         """Function to return Ndarray of the vector"""
         raise NotImplementedError("getNdArray must be overwritten")
-    
+
     def norm(self, N=2):
         """Function to compute vector N-norm"""
         raise NotImplementedError("norm must be overwritten")
-    
+
     def zero(self):
         """Function to zero out a vector"""
         raise NotImplementedError("zero must be overwritten")
-    
+
     def max(self):
         """Function to obtain maximum value within a vector"""
         raise NotImplementedError("max must be overwritten")
-    
+
     def min(self):
         """Function to obtain minimum value within a vector"""
         raise NotImplementedError("min must be overwritten")
-    
+
     def set(self, val):
         """Function to set all values in the vector"""
         raise NotImplementedError("set must be overwritten")
-    
+
     def scale(self, sc):
         """Function to scale a vector"""
         raise NotImplementedError("scale must be overwritten")
-    
+
     def addbias(self, bias):
         """Function to add bias to a vector"""
         raise NotImplementedError("addbias must be overwritten")
-    
+
     def rand(self):
         """Function to randomize a vector"""
         raise NotImplementedError("rand must be overwritten")
-    
+
     def clone(self):
         """Function to clone (deep copy) a vector from a vector or a Space"""
         raise NotImplementedError("clone must be overwritten")
-    
+
     def cloneSpace(self):
         """Function to clone vector space"""
         raise NotImplementedError("cloneSpace must be overwritten")
-    
+
     def checkSame(self):
         """Function to check to make sure the vectors exist in the same space"""
         raise NotImplementedError("checkSame must be overwritten")
-    
+
     def writeVec(self, filename, mode='w'):
         """Function to write vector to file"""
         raise NotImplementedError("writeVec must be overwritten")
-    
+
     # TODO implement on seplib
     def abs(self):
         """Return a vector containing the absolute values"""
         raise NotImplementedError('abs method must be implemented')
-    
+
     # TODO implement on seplib
     def sign(self):
         """Return a vector containing the signs"""
         raise NotImplementedError('sign method have to be implemented')
-    
+
     # TODO implement on seplib
     def reciprocal(self):
         """Return a vector containing the reciprocals of self"""
         raise NotImplementedError('reciprocal method must be implemented')
-    
+
     # TODO implement on seplib
     def maximum(self, vec2):
         """Return a new vector of element-wise maximum of self and vec2"""
         raise NotImplementedError('maximum method must be implemented')
-    
+
     # TODO implement on seplib
     def conj(self):
         """Compute conjugate transpose of the vector"""
         raise NotImplementedError('conj method must be implemented')
-    
+
     # TODO implement on seplib
     def pow(self, power):
         """Compute element-wise power of the vector"""
         raise NotImplementedError('pow method must be implemented')
-    
+
     # Combination of different vectors
-    
+
     def copy(self, vec2):
         """Function to copy vector"""
         raise NotImplementedError("copy must be overwritten")
-    
+
     def scaleAdd(self, vec2, sc1=1.0, sc2=1.0):
         """Function to scale two vectors and add them to the first one"""
         raise NotImplementedError("scaleAdd must be overwritten")
-    
+
     def dot(self, vec2):
         """Function to compute dot product between two vectors"""
         raise NotImplementedError("dot must be overwritten")
-    
+
     def multiply(self, vec2):
         """Function to multiply element-wise two vectors"""
         raise NotImplementedError("multiply must be overwritten")
-    
+
     def isDifferent(self, vec2):
         """Function to check if two vectors are identical"""
-        
+
         raise NotImplementedError("isDifferent must be overwritten")
-    
+
     def clipVector(self, low, high):
         """
            Function to bound vector values based on input vectors min and max
@@ -198,23 +198,23 @@ class vector:
 # Set of vectors (useful to store results and same-Space vectors together)
 class vectorSet:
     """Class to store different vectors that live in the same Space"""
-    
+
     def __init__(self):
         """Default constructor"""
         self.vecSet = []  # List of vectors of the set
-    
+
     def __del__(self):
         """Default destructor"""
-    
+
     def append(self, vec_in, copy=True):
         """Method to add vector to the set"""
         # Checking dimensionality if a vector is present
         if self.vecSet:
             if not self.vecSet[0].checkSame(vec_in):
                 raise ValueError("ERROR! Provided vector not in the same Space of the vector set")
-        
+
         self.vecSet.append(vec_in.clone()) if copy else self.vecSet.append(vec_in)
-    
+
     def writeSet(self, filename, mode="a"):
         """Method to write to SEPlib file (by default it appends vectors to file)"""
         if mode not in "aw":
@@ -225,14 +225,14 @@ class vectorSet:
 
 
 class superVector(vector):
-    
+
     def __init__(self, *args):
         """
         superVector constructor
         :param args: vectors or superVectors or vectors list objects
         """
         super(superVector, self).__init__()
-        
+
         self.vecs = []
         for v in args:
             if v is None:
@@ -247,42 +247,42 @@ class superVector(vector):
                         self.vecs.append(vv)
             else:
                 raise TypeError('Argument must be either a vector or a superVector')
-        
+
         self.n = len(self.vecs)
-    
+
     def __del__(self):
         """superVector destructor"""
         del self.vecs, self.n
-    
+
     def getNdArray(self):
         """Function to return Ndarray of the vector"""
         return [self.vecs[idx].getNdArray() for idx in range(self.n)]
-    
+
     def norm(self, N=2):
         """Function to compute vector N-norm"""
         norm = np.power([self.vecs[idx].norm(N) for idx in range(self.n)], N)
         return np.power(sum(norm), 1. / N)
-    
+
     def set(self, val):
         """Function to set all values in the vector"""
         for idx in range(self.n):
             self.vecs[idx].set(val)
         return self
-    
+
     def zero(self):
         """Function to zero out a vector"""
         for idx in range(self.n):
             self.vecs[idx].zero()
         return self
-    
+
     def max(self):
         """Function to obtain maximum value within a vector"""
         return np.max([self.vecs[idx].max() for idx in range(self.n)])
-    
+
     def min(self):
         """Function to obtain minimum value within a vector"""
         return np.min([self.vecs[idx].min() for idx in range(self.n)])
-    
+
     def scale(self, sc):
         """Function to scale a vector"""
         if type(sc) is not list:
@@ -290,7 +290,7 @@ class superVector(vector):
         for idx in range(self.n):
             self.vecs[idx].scale(sc[idx])
         return self
-    
+
     def addbias(self, bias):
         """Add a constant to the vector"""
         if type(bias) is not list:
@@ -298,22 +298,22 @@ class superVector(vector):
         for idx in range(self.n):
             self.vecs[idx].addbias(bias[idx])
         return self
-    
+
     def rand(self, snr=1.0):
         """Function to randomize a vector"""
         for idx in range(self.n):
             self.vecs[idx].rand()
         return self
-    
+
     def clone(self):
         """Function to clone (deep copy) a vector from a vector or a Space"""
         vecs = [self.vecs[idx].clone() for idx in range(self.n)]
         return superVector(vecs)
-    
+
     def cloneSpace(self):
         """Function to clone vector space"""
         return superVector([self.vecs[idx].cloneSpace() for idx in range(self.n)])
-    
+
     def checkSame(self, other):
         """Function to check to make sure the vectors exist in the same space"""
         # Checking type
@@ -324,7 +324,7 @@ class superVector(vector):
         for v in notsame:
             raise Warning('Component %d not in the same space!' % v)
         return np.all(checkspace == True)
-    
+
     # Combination of different vectors
     def copy(self, vecs_in):
         """Function to copy vector from input vector"""
@@ -337,7 +337,7 @@ class superVector(vector):
         for idx in range(self.n):
             self.vecs[idx].copy(vecs_in.vecs[idx])
         return self
-    
+
     def scaleAdd(self, vecs_in, sc1=1.0, sc2=1.0):
         """Function to scale input vectors and add them to the original ones"""
         # Checking type
@@ -349,7 +349,7 @@ class superVector(vector):
         for idx in range(self.n):
             self.vecs[idx].scaleAdd(vecs_in.vecs[idx], sc1, sc2)
         return self
-    
+
     def dot(self, vecs_in):
         """Function to compute dot product between two vectors"""
         # Checking type
@@ -359,7 +359,7 @@ class superVector(vector):
         if not self.checkSame(vecs_in):
             raise ValueError("ERROR! Dimensionality mismatching between given superVectors")
         return np.sum([self.vecs[idx].dot(vecs_in.vecs[idx]) for idx in range(self.n)])
-    
+
     def multiply(self, vecs_in):
         """Function to multiply element-wise two vectors"""
         # Checking type
@@ -371,34 +371,34 @@ class superVector(vector):
         for idx in range(self.n):
             self.vecs[idx].multiply(vecs_in.vecs[idx])
         return self
-    
+
     def isDifferent(self, vecs_in):
         """Function to check if two vectors are identical"""
         # Checking type
         if type(vecs_in) is not superVector:
             raise TypeError("Input variable is not a superVector")
         return any([self.vecs[idx].isDifferent(vecs_in.vecs[idx]) for idx in range(self.n)])
-    
+
     def clipVector(self, lows, highs):
         for idx in range(self.n):
             self.vecs[idx].clipVector(lows[idx], highs[idx])
         return self
-    
+
     def abs(self):
         for idx in range(self.n):
             self.vecs[idx].abs()
         return self
-    
+
     def sign(self):
         for idx in range(self.n):
             self.vecs[idx].sign()
         return self
-    
+
     def reciprocal(self):
         for idx in range(self.n):
             self.vecs[idx].reciprocal()
         return self
-    
+
     def maximum(self, vecs_in):
         if type(vecs_in) is not superVector:
             raise TypeError("Input variable is not a superVector")
@@ -407,17 +407,17 @@ class superVector(vector):
         for idx in range(self.n):
             self.vecs[idx].maximum(vecs_in.vecs[idx])
         return self
-    
+
     def conj(self):
         for idx in range(self.n):
             self.vecs[idx].conj()
         return self
-    
+
     def pow(self, power):
         for idx in range(self.n):
             self.vecs[idx].pow(power)
         return self
-    
+
     def writeVec(self, filename, mode="w"):
         """Method to write to vector to file within a Vector set"""
         for ii, vec_cmp in enumerate(self.vecs):
@@ -430,7 +430,7 @@ class superVector(vector):
 
 class vectorIC(vector):
     """In-core python vector class"""
-    
+
     def __init__(self, in_vec):
         """
         VectorIC constructor: arr=np.array
@@ -438,7 +438,7 @@ class vectorIC(vector):
         dimension starting from the fastest to the slowest memory wise.
         This class stores array with C memory order (i.e., row-wise sorting)
         """
-        
+
         # Verify that input is a numpy array or header file or vectorOC
         if isinstance(in_vec, vectorOC):  # VectorOC passed to constructor
             self.arr, self.ax_info = sep_util.read_file(in_vec.vecfile)
@@ -454,54 +454,54 @@ class vectorIC(vector):
             self.ax_info = None
         else:  # Not supported type
             raise ValueError("ERROR! Input variable not currently supported!")
-        
+
         # Number of elements per axis (tuple). Checking also the memory order
         self.naxis = self.arr.shape  # If fortran the first axis is the "fastest"
         if not np.isfortran(self.arr):
             self.naxis = tuple(reversed(self.naxis))  # If C last axis is the "fastest"
-        
+
         if len(self.naxis) == 0:  # To fix problem with scalar within a vectorIC
             self.naxis = (1,)
-        
+
         self.ndims = len(self.naxis)  # Number of axes integer
         self.size = self.arr.size  # Total number of elements
         super(vectorIC, self).__init__()
-    
+
     def getNdArray(self):
         """Function to return Ndarray of the vector"""
         return self.arr
-    
+
     def norm(self, N=2):
         """Function to compute vector N-norm using Numpy"""
         return np.linalg.norm(self.getNdArray().flatten(), ord=N)
-    
+
     def zero(self):
         """Function to zero out a vector"""
         self.getNdArray().fill(0)
         return self
-    
+
     def max(self):
         """Function to obtain maximum value in the vector"""
         return self.getNdArray().max()
-    
+
     def min(self):
         """Function to obtain minimum value in the vector"""
         return self.getNdArray().min()
-    
+
     def set(self, val):
         """Function to set all values in the vector"""
         self.getNdArray().fill(val)
         return self
-    
+
     def scale(self, sc):
         """Function to scale a vector"""
         self.getNdArray()[:] *= sc
         return self
-    
+
     def addbias(self, bias):
         self.getNdArray()[:] += bias
         return self
-    
+
     def rand(self, snr=1.):
         """Fill vector with random number (~U[1,-1]) with a given SNR"""
         rms = np.sqrt(np.mean(np.square(self.getNdArray())))
@@ -510,7 +510,7 @@ class vectorIC(vector):
             amp_noise = math.sqrt(3. / snr) * rms  # sqrt(3*Power_signal/SNR)
         self.getNdArray()[:] = amp_noise * (2. * np.random.random(self.getNdArray().shape) - 1.)
         return self
-    
+
     def clone(self):
         """Function to clone (deep copy) a vector from a vector or a Space"""
         vec_clone = deepcopy(self)  # Deep clone of vector
@@ -518,7 +518,7 @@ class vectorIC(vector):
         if vec_clone.getNdArray().size == 0:
             vec_clone.arr = np.zeros(tuple(reversed(vec_clone.naxis)))
         return vec_clone
-    
+
     def cloneSpace(self):
         """Function to clone vector space only (vector without actual vector array by using empty array of size 0)"""
         arr = np.empty(0)
@@ -528,11 +528,11 @@ class vectorIC(vector):
         vec_space.ndims = self.ndims
         vec_space.size = self.size
         return vec_space
-    
+
     def checkSame(self, other):
         """Function to check dimensionality of vectors"""
         return self.naxis == other.naxis
-    
+
     def writeVec(self, filename, mode='w'):
         """Function to write vector to file"""
         # Check writing mode
@@ -594,19 +594,19 @@ class vectorIC(vector):
                 self.getNdArray().astype(format).tofile(fid)
         fid.close()
         return
-    
+
     def abs(self):
         self.getNdArray()[:] = np.abs(self.getNdArray())
         return self
-    
+
     def sign(self):
         self.getNdArray()[:] = np.sign(self.getNdArray())
         return self
-    
+
     def reciprocal(self):
         self.getNdArray()[:] = 1. / self.getNdArray()
         return self
-    
+
     def maximum(self, vec2):
         if not isinstance(vec2, vectorIC):
             raise TypeError('Provided input have to be a vectorIC')
@@ -614,16 +614,16 @@ class vectorIC(vector):
             raise ValueError('Dimensionality not equal: vec1 = %d; vec2 = %d' % (self.naxis, vec2.naxis))
         self.getNdArray()[:] = np.maximum(self.getNdArray(), vec2.getNdArray())
         return self
-    
+
     def conj(self):
         self.getNdArray()[:] = np.conjugate(self.getNdArray())
         return self
-    
+
     def pow(self, power):
         """Compute element-wise power of the vector"""
         self.getNdArray()[:] = self.getNdArray() ** power
         return self
-    
+
     def copy(self, vec2):
         """Function to copy vector from input vector"""
         # Checking whether the input is a vector or not
@@ -635,7 +635,7 @@ class vectorIC(vector):
         # Element-wise copy of the input array
         self.getNdArray()[:] = vec2.getNdArray()
         return self
-    
+
     def scaleAdd(self, vec2, sc1=1.0, sc2=1.0):
         """Function to scale a vector"""
         # Checking whether the input is a vector or not
@@ -647,7 +647,7 @@ class vectorIC(vector):
         # Performing scaling and addition
         self.getNdArray()[:] = sc1 * self.getNdArray() + sc2 * vec2.getNdArray()
         return self
-    
+
     def dot(self, vec2):
         """Function to compute dot product between two vectors"""
         # Checking whether the input is a vector or not
@@ -660,7 +660,7 @@ class vectorIC(vector):
         if not self.checkSame(vec2):
             raise ValueError("Dimensionality not equal: vec1 = %d; vec2 = %d" % (self.naxis, vec2.naxis))
         return np.dot(self.getNdArray().flatten(), vec2.getNdArray().flatten())
-    
+
     def multiply(self, vec2):
         """Function to multiply element-wise two vectors"""
         # Checking whether the input is a vector or not
@@ -675,7 +675,7 @@ class vectorIC(vector):
         # Performing element-wise multiplication
         self.getNdArray()[:] = np.multiply(self.getNdArray(), vec2.getNdArray())
         return self
-    
+
     def isDifferent(self, vec2):
         """Function to check if two vectors are identical using built-in hash function"""
         # Checking whether the input is a vector or not
@@ -686,8 +686,8 @@ class vectorIC(vector):
             # First make both array buffers read-only
             self.arr.flags.writeable = False
             vec2.arr.flags.writeable = False
-            chcksum1 = hash(self.arr.data)
-            chcksum2 = hash(vec2.arr.data)
+            chcksum1 = hash(self.getNdArray().data)
+            chcksum2 = hash(vec2.getNdArray().data)
             # Remake array buffers writable
             self.arr.flags.writeable = True
             vec2.arr.flags.writeable = True
@@ -695,7 +695,7 @@ class vectorIC(vector):
         else:
             isDiff = (not np.array_equal(self.getNdArray(), vec2.getNdArray()))
         return isDiff
-    
+
     def clipVector(self, low, high):
         """Function to bound vector values based on input vectors low and high"""
         if not isinstance(low, vectorIC):
@@ -709,7 +709,7 @@ class vectorIC(vector):
 # TODO add methods
 class vectorOC(vector):
     """Out-of-core python vector class"""
-    
+
     def __init__(self, input):
         """VectorOC constructor: input= numpy array, header file, vectorIC"""
         # Verify that input is a numpy array or header file or vectorOC
@@ -746,19 +746,19 @@ class vectorOC(vector):
         self.naxis = axis_elements
         self.size = np.product(self.naxis)
         return
-    
+
     def __del__(self):
         """VectorOC destructor"""
         if self.remove_file:
             # Removing both header and binary files (using os.system to make module compatible with python3.5)
             os.system("rm -f %s %s" % (self.vecfile, self.binfile))
         return
-    
+
     def getNdArray(self):
         """Function to return Ndarray of the vector"""
         ndarray, _ = sep_util.read_file(self.vecfile)
         return ndarray
-    
+
     def norm(self, N=2):
         """Function to compute vector N-norm"""
         if N != 2:
@@ -770,21 +770,21 @@ class vectorOC(vector):
         else:
             raise ValueError("ERROR! Trouble parsing dot product!")
         return
-    
+
     def zero(self):
         """Function to zero out a vector"""
         sys_util.RunShellCmd("head -c %s </dev/zero > %s" % (self.size * 4, self.binfile), get_stat=False,
                              get_output=False)
         # sys_util.RunShellCmd("Solver_ops file1=%s op=zero"%(self.vecfile),get_stat=False,get_output=False)
         return
-    
+
     def scale(self, sc):
         """Function to scale a vector"""
         import sys_util
         sys_util.RunShellCmd("Solver_ops file1=%s scale1_r=%s op=scale" % (self.vecfile, sc), get_stat=False,
                              get_output=False)
         return
-    
+
     def rand(self, snr=1.0):
         """Fill vector with random number (~U[1,-1]) with a given SNR"""
         # Computing RMS amplitude of the vector
@@ -797,7 +797,7 @@ class vectorOC(vector):
         sys_util.RunShellCmd("Noise file=%s rep=1 type=0 var=0.3333333333; Solver_ops file1=%s scale1_r=%s op=scale" % (
             self.vecfile, self.vecfile, amp_noise), get_stat=False, get_output=False)
         return
-    
+
     def clone(self):
         """Function to clone (deep copy) a vector or from a space and creating a copy of the associated header file"""
         # First performing a deep copy of the vector
@@ -831,7 +831,7 @@ class vectorOC(vector):
         # By default the clone file is going to be removed once the vector is deleted
         vec_clone.remove_file = True
         return vec_clone
-    
+
     def cloneSpace(self):
         """Function to clone vector space only (vector without actual vector binary file by using None values)"""
         vec_space = vectorOC(self.vecfile)
@@ -840,11 +840,11 @@ class vectorOC(vector):
         vec_space.binfile = None
         vec_space.remove_file = False
         return vec_space
-    
+
     def checkSame(self, vec2):
         """Function to check dimensionality of vectors"""
         return self.naxis == vec2.naxis
-    
+
     def writeVec(self, filename, mode='w'):
         """Function to write vector to file"""
         # Check writing mode
@@ -887,7 +887,7 @@ class vectorOC(vector):
             fid.close()
             fid_toread.close()
         return
-    
+
     def copy(self, vec2):
         """Function to copy vector from input vector"""
         # Checking whether the input is a vector or not
@@ -899,7 +899,7 @@ class vectorOC(vector):
         # Copy binary file of input vector
         copyfile(vec2.binfile, self.binfile)  # Copying binary
         return
-    
+
     def scaleAdd(self, vec2, sc1=1.0, sc2=1.0):
         """Function to scale a vector"""
         # Checking whether the input is a vector or not
@@ -913,7 +913,7 @@ class vectorOC(vector):
             self.vecfile, sc1, vec2.vecfile, sc2)
         sys_util.RunShellCmd(cmd, get_stat=False, get_output=False)
         return
-    
+
     def dot(self, vec2):
         """Function to compute dot product between two vectors"""
         # Checking whether the input is a vector or not
@@ -933,7 +933,7 @@ class vectorOC(vector):
         else:
             raise ValueError("ERROR! Trouble parsing dot product!")
         return float(out_dot)
-    
+
     def multiply(self, vec2):
         """Function to multiply element-wise two vectors"""
         # Checking whether the input is a vector or not
@@ -949,7 +949,7 @@ class vectorOC(vector):
         cmd = "Solver_ops file1=%s file2=%s op=multiply" % (self.vecfile, vec2.vecfile)
         sys_util.RunShellCmd(cmd, get_stat=False, get_output=False)
         return
-    
+
     def isDifferent(self, vec2):
         """Function to check if two vectors are identical using M5 hash scheme"""
         # Checking whether the input is a vector or not

@@ -3,21 +3,20 @@ import sys,os
 sys.path.insert(0, "../../python")
 import pyVector as Vec
 import pyOperator as Op
-import pyLCGsolver as LCG
-import pySymLCGsolver as SymLCGsolver
+from pyLinearSolver import LCGsolver as LCG
+from pyLinearSolver import SymLCGsolver as SymLCGsolver
 import pyProblem as Prblm
-import pyStopperBase as Stopper
+from pyStopper import BasicStopper as Stopper
 from sys_util import logger
 import sep_util as sep
 import numpy as np
 
 #Testing the NLCG to solver a regularized linear problem treated as if it was non linear
-import pyNLCGsolver as NLCG
-import pyLBFGSsolver as BFGS
+from pyNonLinearSolver import NLCGsolver as NLCG
+from pyNonLinearSolver import LBFGSsolver as BFGS
 
 class MatMult_incore(Op.Operator):
 	"""Operator class to perform matrix-vector multiplication"""
-
 	def __init__(self,A,domain,range):
 		"""Constructor for the class: A = matrix to use; domain = domain vector; range = range vector"""
 		if(not isinstance(domain,Vec.vector)): raise TypeError("ERROR! Domain vector not a vector object")
@@ -26,7 +25,6 @@ class MatMult_incore(Op.Operator):
 		self.setDomainRange(domain,range)
 		self.A = np.matrix(A)
 		return
-
 	def forward(self,add,model,data):
 		"""Method to compute d = A m"""
 		self.checkDomainRange(model,data)
@@ -37,7 +35,6 @@ class MatMult_incore(Op.Operator):
 		data_arr = data.getNdArray()
 		data_arr+=np.matmul(self.A,model_arr)
 		return
-
 	def adjoint(self,add,model,data):
 		"""Method to compute m = A d"""
 		self.checkDomainRange(model,data)
@@ -51,7 +48,6 @@ class MatMult_incore(Op.Operator):
 
 class MatMult_outcore(Op.Operator):
 	"""Operator class to perform matrix-vector multiplication"""
-
 	def __init__(self,A,domain,range):
 		"""Constructor for the class: A = matrix to use; domain = domain vector; range = range vector"""
 		if(not isinstance(domain,Vec.vector)): raise TypeError("ERROR! Domain vector not a vector object")
@@ -60,7 +56,6 @@ class MatMult_outcore(Op.Operator):
 		self.setDomainRange(domain,range)
 		self.A = np.matrix(A)
 		return
-
 	def forward(self,add,model,data):
 		"""Method to compute d = A m"""
 		self.checkDomainRange(model,data)
@@ -74,7 +69,6 @@ class MatMult_outcore(Op.Operator):
 		#writing data vector file
 		sep.write_file(data.vecfile,data_arr,data_axis)
 		return
-
 	def adjoint(self,add,model,data):
 		"""Method to compute m = A d"""
 		self.checkDomainRange(model,data)
@@ -106,9 +100,9 @@ if __name__ == '__main__':
 	L2Prob = Prblm.ProblemL2Linear(model_vec,data_vec,MatMult)
 	#Create stopper
 	niter = 2000
-	Stop  = Stopper.BasicStopper(niter=niter)#,tolobjchng=1e-15)
+	Stop  = Stopper(niter=niter)#,tolobjchng=1e-15)
 	#Create solver
-	LCGsolver = LCG.LCGsolver(Stop)
+	LCGsolver = LCG(Stop)
 	LCGsolver.setDefaults(iter_sampling=10)
 	#Running the solver
 	# LCGsolver.run(L2Prob,verbose=True)
@@ -141,7 +135,7 @@ if __name__ == '__main__':
 	#Inverse of A as preconditioning
 	Prec = MatMult_incore(np.linalg.inv(A),model_vec_sym,data_vec_sym)
 	#Computing max and min eigenvalues using power method
-	# eg,vec=MatMultSym.powerMethod(verbose=False,square=True,eval_min=True,return_vec=True,tol=1e-18)
+	# eg,vec=MatMultSym.powerMethod(verbose=False,eval_min=True,return_vec=True,tol=1e-18)
 	# print("power",eg)
 	# eigenValues, eigenVectors = np.linalg.eig(A)
 	# idx = eigenValues.argsort()[::-1]
@@ -177,7 +171,7 @@ if __name__ == '__main__':
 	low_bound = model_vec_sym.clone()
 	# low_bound.set(-2000.)
 	SymProb = Prblm.ProblemLinearSymmetric(model_vec_sym,data_vec_sym,MatMultSym)#,minBound=low_bound)
-	SLCG = SymLCGsolver.SymLCGsolver(Stop)
+	SLCG = SymLCGsolver(Stop)
 	# SLCG.setDefaults(iter_sampling=5,save_obj=True,save_res=True,save_grad=True,save_model=True,prefix="test")
 	SLCG.run(SymProb,verbose=True)
 	# print(SymProb.model.arr)
@@ -188,7 +182,7 @@ if __name__ == '__main__':
 
 	#Testing Linear steepest-descent algorithm for symmetric systems
 	SymProb1 = Prblm.ProblemLinearSymmetric(model_vec_sym,data_vec_sym,MatMultSym)
-	SLSD = SymLCGsolver.SymLCGsolver(Stop,steepest=True)
+	SLSD = SymLCGsolver(Stop,steepest=True)
 	SLSD.setDefaults(iter_sampling=100)
 	# SLSD.run(SymProb1)
 
@@ -203,13 +197,13 @@ if __name__ == '__main__':
 
 	#Testing non-linear bounded problem with NLCG
 	L2NLProb = Prblm.ProblemL2NonLinear(model_vec_sym,data_vec_sym,non_lin_op,minBound=low_bound)
-	NLCGsolver = NLCG.NLCGsolver(Stop)
+	NLCGsolver = NLCG(Stop)
 	# NLCGsolver.run(L2NLProb,verbose=False)
 	# print(L2NLProb.model.arr)
 
 	#Testing non-linear bounded problem with BFGS
 	L2NLProb = Prblm.ProblemL2NonLinear(model_vec_sym,data_vec_sym,non_lin_op,minBound=low_bound)
-	BFGSsolver = BFGS.LBFGSsolver(Stop)
+	BFGSsolver = BFGS(Stop)
 	# BFGSsolver.run(L2NLProb,verbose=True)
 	# print(L2NLProb.model.arr)
 
