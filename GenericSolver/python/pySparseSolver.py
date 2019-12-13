@@ -24,11 +24,11 @@ class ISTAsolver(Solver):
 
     def __init__(self, stopper, fast=False, logger=None):
         """
-		Constructor for ISTA Solver:
-		:param stopper: Stopper, object to terminate inversion
-		:param fast: bool, apply the Fast-ISTA [False]
-		:param logger: Logger, object to write inversion log file
-		"""
+        Constructor for ISTA Solver:
+        :param stopper: Stopper, object to terminate inversion
+        :param fast: bool, apply the Fast-ISTA [False]
+        :param logger: Logger, object to write inversion log file
+        """
         # Calling parent construction
         super(ISTAsolver, self).__init__()
         # Defining stopper object
@@ -134,9 +134,11 @@ class ISTAsolver(Solver):
                 fista_mdl.scaleAdd(prblm_grad, 1.0, -1.0 / problem.op_norm)
                 #########################################
                 # SOFT-THRESHOLDING STEP
-                ista_mdl.copy(fista_mdl)
-                modl_arr = ista_mdl.getNdArray()
-                modl_arr[:] = _soft_thresh(modl_arr, problem.lambda_value / problem.op_norm)
+                # ista_mdl.copy(fista_mdl)
+                # modl_arr = ista_mdl.getNdArray()
+                # modl_arr[:] = _soft_thresh(modl_arr, problem.lambda_value / problem.op_norm)
+                ista_mdl = _soft_thresh(fista_mdl, problem.lambda_value/problem.op_norm)
+                
                 #########################################
                 # Projecting model onto the bounds (if any)
                 if "bounds" in dir(problem):
@@ -150,12 +152,12 @@ class ISTAsolver(Solver):
                 fista_mdl.scaleAdd(ista_mdl0, 1.0 + scale, -scale)
             else:
                 # Running ISTA
-                ista_mdl.scaleAdd(prblm_grad, 1.0,
-                                  -1.0 / problem.op_norm)  # Update model x = x + scale_precond * A' [y - Ax]
+                ista_mdl.scaleAdd(prblm_grad, 1.0, -1.0 / problem.op_norm)  # Update model x = x + scale_precond * A' [y - Ax]
                 #########################################
                 # SOFT-THRESHOLDING STEP
-                modl_arr = ista_mdl.getNdArray()
-                modl_arr[:] = _soft_thresh(modl_arr, problem.lambda_value / problem.op_norm)
+                # modl_arr = ista_mdl.getNdArray()
+                # modl_arr[:] = _soft_thresh(modl_arr, problem.lambda_value / problem.op_norm)
+                ista_mdl = _soft_thresh(ista_mdl, problem.lambda_value / problem.op_norm)
                 #########################################
                 # Projecting model onto the bounds (if any)
                 if "bounds" in dir(problem):
@@ -215,13 +217,13 @@ class ISTCsolver(Solver):
     
     def __init__(self, stopper, inner_it, cooling_start, cooling_end, logger=None):
         """
-		Constructor for ISTC Solver
-		:param stopper      : Stopper, object to terminate inversion
-		:param inner_it     : int, Number of inner iterations
-		:param logger       : Logger, object to write inversion log file
-		:param cooling_start: float, Start of cooling continuation as fraction of size of sorted array |A'y|
-		:param cooling_end  : float; End of cooling continuation as fraction of size of sorted array |A'y|
-		"""
+        Constructor for ISTC Solver
+        :param stopper      : Stopper, object to terminate inversion
+        :param inner_it     : int, Number of inner iterations
+        :param logger       : Logger, object to write inversion log file
+        :param cooling_start: float, Start of cooling continuation as fraction of size of sorted array |A'y|
+        :param cooling_end  : float; End of cooling continuation as fraction of size of sorted array |A'y|
+        """
         # Calling parent construction
         super(ISTCsolver, self).__init__()
         # Defining stopper object
@@ -368,8 +370,7 @@ class ISTCsolver(Solver):
                 istc_mdl.scaleAdd(prblm_grad, 1.0, -scale_precond)  # Update model x = x + scale_precond * A' [y - Ax]
                 #########################################
                 # SOFT-THRESHOLDING STEP
-                modl_arr = istc_mdl.getNdArray()
-                modl_arr[:] = _soft_thresh(modl_arr, problem.lambda_value)
+                istc_mdl = _soft_thresh(istc_mdl, problem.lambda_value)
                 #########################################
                 # Projecting model onto the bounds (if any)
                 if "bounds" in dir(problem):
