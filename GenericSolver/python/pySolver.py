@@ -52,6 +52,7 @@ class Solver:
 
         # Set Restart object
         self.restart = Restart()
+        self.create_msg = False
         return
 
     def __del__(self):

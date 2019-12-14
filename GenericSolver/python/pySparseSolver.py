@@ -49,6 +49,7 @@ class ISTAsolver(Solver):
     def run(self, problem, verbose=False, restart=False):
         """Running ISTA solver"""
         
+        self.create_msg = verbose or self.logger
         # Resetting stopper before running the inversion
         self.stopper.reset()
         # Checking if the provided problem is L1-LASSO
@@ -58,16 +59,17 @@ class ISTAsolver(Solver):
         if problem.lambda_value is None:
             raise ValueError("Regularization weight (lambda_value) is not set!")
         if not restart:
-            msg = "ITERATIVE SHRINKAGE-THRESHOLDING ALGORITHM log file\n"
-            if self.fast:
-                msg = "FAST " + msg
-            # Printing restart folder
-            msg += "Restart folder: %s\n" % self.restart.restart_folder
-            msg += "Regularization weight: %s\n" % problem.lambda_value
-            if verbose:
-                print(msg.replace("log file", ""))
-            if self.logger:
-                self.logger.addToLog(msg)
+            if self.create_msg:
+                msg = "ITERATIVE SHRINKAGE-THRESHOLDING ALGORITHM log file\n"
+                if self.fast:
+                    msg = "FAST " + msg
+                # Printing restart folder
+                msg += "Restart folder: %s\n" % self.restart.restart_folder
+                msg += "Regularization weight: %s\n" % problem.lambda_value
+                if verbose:
+                    print(msg.replace("log file", ""))
+                if self.logger:
+                    self.logger.addToLog(msg)
             
             # Setting internal vectors (model, search direction, and previous gradient vectors)
             prblm_mdl = problem.get_model()
@@ -81,11 +83,12 @@ class ISTAsolver(Solver):
             iiter = 0
         else:
             # Retrieving parameters and vectors to restart the solver
-            msg = "Restarting previous solver run from: %s" % self.restart.restart_folder
-            if verbose:
-                print(msg)
-            if self.logger:
-                self.logger.addToLog(msg)
+            if self.create_msg:
+                msg = "Restarting previous solver run from: %s" % self.restart.restart_folder
+                if verbose:
+                    print(msg)
+                if self.logger:
+                    self.logger.addToLog(msg)
             self.restart.read_restart()
             # Retrieving inversion parameters
             iiter = self.restart.retrieve_parameter("iter")
@@ -108,16 +111,17 @@ class ISTAsolver(Solver):
                 # Saving initial objective function value
                 initial_obj_value = obj0
                 self.restart.save_parameter("obj_initial", initial_obj_value)
-                msg = self.iter_msg % (str(iiter).zfill(self.stopper.zfill),
-                                       obj0,
-                                       problem.get_rnorm(ista_mdl),
-                                       problem.get_gnorm(ista_mdl),
-                                       problem.get_fevals())
-                # Writing on log file
-                if verbose:
-                    print(msg)
-                if self.logger:
-                    self.logger.addToLog(msg)
+                if self.create_msg:
+                    msg = self.iter_msg % (str(iiter).zfill(self.stopper.zfill),
+                                           obj0,
+                                           problem.get_rnorm(ista_mdl),
+                                           problem.get_gnorm(ista_mdl),
+                                           problem.get_fevals())
+                    # Writing on log file
+                    if verbose:
+                        print(msg)
+                    if self.logger:
+                        self.logger.addToLog(msg)
                 # Check if either objective function value or gradient norm is NaN
                 if isnan(obj0) or isnan(prblm_grad.norm()):
                     raise ValueError("Either gradient norm or objective function value NaN!")
@@ -165,13 +169,14 @@ class ISTAsolver(Solver):
             
             obj1 = problem.get_obj(ista_mdl)
             if obj1 >= obj0:
-                msg = "Objective function didn't reduce, will terminate solver: obj_new=%.2e obj_current=%.2e" % (
-                    obj1, obj0)
-                if verbose:
-                    print(msg)
-                # Writing on log file
-                if self.logger:
-                    self.logger.addToLog(msg)
+                if self.create_msg:
+                    msg = "Objective function didn't reduce, will terminate solver: obj_new=%.2e obj_current=%.2e" % (
+                        obj1, obj0)
+                    if verbose:
+                        print(msg)
+                    # Writing on log file
+                    if self.logger:
+                        self.logger.addToLog(msg)
                 # Copying back to the previous solution
                 ista_mdl.copy(ista_mdl0)
                 break
@@ -185,16 +190,17 @@ class ISTAsolver(Solver):
             
             # iteration info
             iiter = iiter + 1
-            msg = self.iter_msg % (str(iiter).zfill(self.stopper.zfill),
-                                   obj1,
-                                   problem.get_rnorm(ista_mdl),
-                                   problem.get_gnorm(ista_mdl),
-                                   problem.get_fevals())
-            if verbose:
-                print(msg)
-            # Writing on log file
-            if self.logger:
-                self.logger.addToLog("\n" + msg)
+            if self.create_msg:
+                msg = self.iter_msg % (str(iiter).zfill(self.stopper.zfill),
+                                       obj1,
+                                       problem.get_rnorm(ista_mdl),
+                                       problem.get_gnorm(ista_mdl),
+                                       problem.get_fevals())
+                if verbose:
+                    print(msg)
+                # Writing on log file
+                if self.logger:
+                    self.logger.addToLog("\n" + msg)
             # Check if either objective function value or gradient norm is NaN
             if isnan(obj1) or isnan(prblm_grad.norm()):
                 raise ValueError("Either gradient norm or objective function value NaN!")
@@ -203,11 +209,12 @@ class ISTAsolver(Solver):
         
         # Writing last inverted model
         self.save_results(iiter, problem, force_save=True, force_write=True)
-        endmsg = "ITERATIVE SHRINKAGE-THRESHOLDING ALGORITHM log file end"
-        if self.fast:
-            endmsg = "FAST " + endmsg
-        if self.logger:
-            self.logger.addToLog(endmsg)
+        if self.create_msg:
+            endmsg = "ITERATIVE SHRINKAGE-THRESHOLDING ALGORITHM log file end"
+            if self.fast:
+                endmsg = "FAST " + endmsg
+            if self.logger:
+                self.logger.addToLog(endmsg)
         # Clear restart object
         self.restart.clear_restart()
 
@@ -250,6 +257,9 @@ class ISTCsolver(Solver):
     
     def run(self, problem, verbose=False, restart=False):
         """Running ISTC solver"""
+        
+        self.create_msg = verbose or self.logger
+
         # Resetting stopper before running the inversion
         self.stopper.reset()
         # Checking if the provided problem is L1-LASSO
@@ -258,13 +268,14 @@ class ISTCsolver(Solver):
         # Computing preconditioning
         scale_precond = 0.99 * np.sqrt(2) / problem.op_norm  # scaling factor applied to operator A for preconditioning
         if not restart:
-            msg = "ITERATIVE SOFT-THRESHOLDING WITH COOLING SOLVER log file\n"
-            # Printing restart folder
-            msg += "Restart folder: %s\n" % self.restart.restart_folder
-            if verbose:
-                print(msg.replace("log file", ""))
-            if self.logger:
-                self.logger.addToLog(msg)
+            if self.create_msg:
+                msg = "ITERATIVE SOFT-THRESHOLDING WITH COOLING SOLVER log file\n"
+                # Printing restart folder
+                msg += "Restart folder: %s\n" % self.restart.restart_folder
+                if verbose:
+                    print(msg.replace("log file", ""))
+                if self.logger:
+                    self.logger.addToLog(msg)
             
             # Setting internal vectors (model, search direction, and previous gradient vectors)
             prblm_mdl = problem.get_model()
@@ -298,11 +309,12 @@ class ISTCsolver(Solver):
             self.restart.save_parameter("lambda_values", lambda_values)
         else:
             # Retrieving parameters and vectors to restart the solver
-            msg = "Restarting previous solver run from: %s" % self.restart.restart_folder
-            if verbose:
-                print(msg)
-            if self.logger:
-                self.logger.addToLog(msg)
+            if self.create_msg:
+                msg = "Restarting previous solver run from: %s" % self.restart.restart_folder
+                if verbose:
+                    print(msg)
+                if self.logger:
+                    self.logger.addToLog(msg)
             self.restart.read_restart()
             # Retrieving lambda values and other parameters
             lambda_values = self.restart.retrieve_parameter("lambda_values")
@@ -320,11 +332,12 @@ class ISTCsolver(Solver):
             # Setting lambda value for a given outer loop iteration
             problem.set_lambda(lambda_values[iiter])
             problem.obj_updated = False  # Lambda has been changed so objective function will change as well
-            msg = "Outer_iter = %s lambda_value = %.2e" % (str(iiter).zfill(self.stopper.zfill), lambda_values[iiter])
-            if verbose:
-                print(msg)
-            if self.logger:
-                self.logger.addToLog(msg)
+            if self.create_msg:
+                msg = "Outer_iter = %s lambda_value = %.2e" % (str(iiter).zfill(self.stopper.zfill), lambda_values[iiter])
+                if verbose:
+                    print(msg)
+                if self.logger:
+                    self.logger.addToLog(msg)
             if not restart:
                 inner_iter = 0
             else:
@@ -342,16 +355,17 @@ class ISTCsolver(Solver):
                 obj0 = problem.get_obj(istc_mdl)  # Compute objective function value
                 prblm_grad = problem.get_grad(istc_mdl)  # Compute the gradient g = - A' [y - Ax]
                 if inner_iter == 0:
-                    msg = self.iter_msg % (str(inner_iter).zfill(self.stopper.zfill),
-                                           obj0,
-                                           problem.get_rnorm(istc_mdl),
-                                           problem.get_gnorm(istc_mdl),
-                                           problem.get_fevals())
-                    # Writing on log file
-                    if verbose:
-                        print(msg)
-                    if self.logger:
-                        self.logger.addToLog(msg)
+                    if self.create_msg:
+                        msg = self.iter_msg % (str(inner_iter).zfill(self.stopper.zfill),
+                                               obj0,
+                                               problem.get_rnorm(istc_mdl),
+                                               problem.get_gnorm(istc_mdl),
+                                               problem.get_fevals())
+                        # Writing on log file
+                        if verbose:
+                            print(msg)
+                        if self.logger:
+                            self.logger.addToLog(msg)
                     # Check if either objective function value or gradient norm is NaN
                     if isnan(obj0) or isnan(prblm_grad.norm()):
                         raise ValueError("Either gradient norm or objective function value NaN!")
@@ -380,13 +394,14 @@ class ISTCsolver(Solver):
                 problem.get_model().writeVec("problem_model.H")
                 istc_mdl.writeVec("solver_model.H")
                 if obj1 >= obj0:
-                    msg = "Objective function didn't reduce, will terminate solver: obj_new=%.2e obj_current=%.2e" % (
-                        obj1, obj0)
-                    if verbose:
-                        print(msg)
-                    # Writing on log file
-                    if self.logger:
-                        self.logger.addToLog(msg)
+                    if self.create_msg:
+                        msg = "Objective function didn't reduce, will terminate solver: obj_new=%.2e obj_current=%.2e" % (
+                            obj1, obj0)
+                        if verbose:
+                            print(msg)
+                        # Writing on log file
+                        if self.logger:
+                            self.logger.addToLog(msg)
                     # Copying back to the previous solution
                     istc_mdl.copy(istc_mdl0)
                     break
@@ -398,16 +413,17 @@ class ISTCsolver(Solver):
                 
                 # iteration info
                 inner_iter += 1
-                msg = self.iter_msg % (str(inner_iter).zfill(self.stopper.zfill),
-                                       obj1,
-                                       problem.get_rnorm(istc_mdl),
-                                       problem.get_gnorm(istc_mdl),
-                                       problem.get_fevals())
-                if verbose:
-                    print(msg)
-                # Writing on log file
-                if self.logger:
-                    self.logger.addToLog(msg)
+                if self.create_msg:
+                    msg = self.iter_msg % (str(inner_iter).zfill(self.stopper.zfill),
+                                           obj1,
+                                           problem.get_rnorm(istc_mdl),
+                                           problem.get_gnorm(istc_mdl),
+                                           problem.get_fevals())
+                    if verbose:
+                        print(msg)
+                    # Writing on log file
+                    if self.logger:
+                        self.logger.addToLog(msg)
                 # Check if either objective function value or gradient norm is NaN
                 if isnan(obj1) or isnan(prblm_grad.norm()):
                     raise ValueError("Either gradient norm or objective function value NaN!")
