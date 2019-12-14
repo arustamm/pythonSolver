@@ -220,7 +220,7 @@ class Operator:
             eigen_min = deepcopy(eigen + eigen_max)
             eigen = [eigen_max, eigen_min]
             x = [x_max, x_min]
-        return eigen, x if return_vec else eigen
+        return (eigen, x) if return_vec else eigen
     
     def dotTest(self, verbose=False, tol=1e-4):
         """
