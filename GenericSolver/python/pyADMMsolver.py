@@ -80,6 +80,11 @@ class ProblemLinearReg(Problem):
         self.res_regsL2 = self.regL2_op.range.clone().zero() if self.nregsL2 != 0 else None
         self.res_regsL1 = self.regL1_op.range.clone().zero() if self.nregsL1 != 0 else None
         self.res = pyVector.superVector(self.res_data, self.res_regsL2, self.res_regsL1)
+        
+        # flags for avoiding extra computations
+        self.res_data_already_computed = False
+        self.res_regsL1_already_computed = False
+        self.res_regsL2_already_computed = False
 
     def __del__(self):
         """Default destructor"""
@@ -107,26 +112,30 @@ class ProblemLinearReg(Problem):
     
     def resf(self, model):
         # compute data residual: Op * m - d
-        if model.norm() != 0:
-            self.op.forward(False, self.model, self.res_data)
-        else:
-            self.res.vecs[0].zero()
-        self.res_data.scaleAdd(self.data, 1., -1.)
+        if not self.res_data_already_computed:
+            if model.norm() != 0:
+                self.op.forward(False, self.model, self.res_data)
+            else:
+                self.res.vecs[0].zero()
+            self.res_data.scaleAdd(self.data, 1., -1.)
+            self.res_data_already_computed = True
         
         # compute L2 reg residuals
-        if self.res_regsL2 is not None:
+        if not self.res_regsL2_already_computed and self.res_regsL2 is not None:
             if model.norm() != 0 and self.regL2_op is not None:
                 self.regL2_op.forward(False, self.model, self.res_regsL2)
             
             if self.dataregsL2 is not None and self.dataregsL2.norm() != 0.:
                 self.res_regsL2.scaleAdd(self.dataregsL2, 1., -1.)
+            self.res_regsL2_already_computed = True
         
         # compute L1 reg residuals
-        if self.res_regsL1 is not None:
+        if not self.res_regsL1_already_computed and self.res_regsL1 is not None:
             if model.norm() != 0. and self.regL1_op is not None:
                 self.regL1_op.forward(False, self.model, self.res_regsL1)
             else:
                 self.res_regsL1.zero()
+            self.res_regsL1_already_computed = True
         
         return self.res
     
@@ -145,14 +154,15 @@ class SplitBregmanSolver(Solver):
     """Split-Bregman solver for L1 and L2 regularized problems"""
 
     # Default class methods/functions
-    def __init__(self, stopper, logger=None, niter_inner=3, niter_solver=5, breg_weight=1.):
+    def __init__(self, stopper, logger=None, niter_inner=3, niter_solver=5, breg_weight=1., steepest=False):
         """
         Constructor for Split-Bregman Solver
         :param stopper      : stopper object
         :param logger       : logger object
         :param niter_inner  : int; number of iterations for the shrinkage loop [default 3]
-        :param niter_solver : int; number of iterations for the internal CG solver [default 5]
+        :param niter_solver : int; number of iterations for the internal linear solver [default 5]
         :param breg_weight  : float; coefficient for the Bregman update b += beta * (R*x - d) [1.]
+        :param steepest     : bool; use Steepest Descent instead of Conjugate Gradient [False]
         """
         # Calling parent construction
         super(SplitBregmanSolver, self).__init__()
@@ -167,9 +177,8 @@ class SplitBregmanSolver(Solver):
         self.niter_solver = niter_solver  # number of iterations for the internal problem
         self.breg_weight = breg_weight
 
-        self.inner_solver = LCGsolver(BasicStopper(niter=self.niter_solver),
-                                      steepest=False, logger=self.logger)
-        self.inner_solver.setDefaults(iter_sampling=1, flush_memory=True)
+        self.linear_solver = LCGsolver(BasicStopper(niter=self.niter_solver), steepest=steepest, logger=self.logger)
+        self.linear_solver.setDefaults(iter_sampling=1, flush_memory=True)
 
         self.breg_b = None
         self.breg_a = None
@@ -183,9 +192,10 @@ class SplitBregmanSolver(Solver):
         print('Destructor called, Split-Bregman deleted')
     
     def _update_dataregsL1(self):
-        self.dataregsL1 = self.breg_a.clone() - self.breg_b
+        # self.dataregsL1 = self.breg_a.clone() - self.breg_b
+        self.dataregsL1.copy(self.breg_a.clone() - self.breg_b)
         
-    def run(self, problem, verbose=False, restart=False, initial_guess=None):
+    def run(self, problem, verbose=False, inner_verbose=False, restart=False, initial_guess=None):
         """Running SplitBregman solver"""
         assert type(problem) == ProblemLinearReg, 'problem has to be a ProblemLinearReg'
         if problem.nregsL1 == 0:
@@ -197,32 +207,33 @@ class SplitBregmanSolver(Solver):
         # initialize all the vectors and operators for Split-Bregman
         self.breg_b = problem.regL1_op.range.clone()
         self.breg_a = self.breg_b.clone()
-        dataregsL1 = self.breg_b.clone()
+        self.dataregsL1 = self.breg_b.clone()
         RL1x = problem.regL1_op.range.clone()  # store RegL1 * solution
-        self.solution = initial_guess.clone() if initial_guess is not None else problem.model.clone().zero()
+        
+        sb_mdl = problem.model.clone().zero() if initial_guess is None else initial_guess.clone()
         
         # reweight the eps according to dfw
         eps = [(e / problem.dfw)**.5 for e in problem.epsL2 + problem.epsL1]
         
-        # inner L2 reg problem
-        inner_problem = ProblemL2LinearReg(
-            model=self.solution,
-            data=problem.data,
-            op=problem.op,
-            epsilon=eps,
-            reg_op=pyOperator.Vstack(problem.regL2_op, problem.regL1_op),
-            prior_model=pyVector.superVector(problem.dataregsL2, dataregsL1),
-            minBound=problem.minBound,
-            maxBound=problem.maxBound,
-            boundProj=problem.boundProj
-        )
+        # # inner L2 reg problem
+        # linear_problem = ProblemL2LinearReg(
+        #     model=sb_mdl,
+        #     data=problem.data,
+        #     op=problem.op,
+        #     epsilon=eps,
+        #     reg_op=pyOperator.Vstack(problem.regL2_op, problem.regL1_op),
+        #     prior_model=pyVector.superVector(problem.dataregsL2, self.dataregsL1),
+        #     minBound=problem.minBound,
+        #     maxBound=problem.maxBound,
+        #     boundProj=problem.boundProj
+        # )
 
         # TODO add restart and merge with initial guess
         if restart:
             self.restart.read_restart()
             outer_iter = self.restart.retrieve_parameter("iter")
             initial_obj_value = self.restart.retrieve_parameter("obj_initial")
-            self.solution = self.restart.retrieve_vector("solution")
+            sb_mdl = self.restart.retrieve_vector("sb_mdl")
             
             msg = "Restarting previous solver run from: %s" % self.restart.restart_folder
             if verbose:
@@ -252,7 +263,7 @@ class SplitBregmanSolver(Solver):
             
         # Main iteration loop
         while True:
-            obj0 = problem.get_obj(self.solution)
+            obj0 = problem.get_obj(sb_mdl)
             
             if outer_iter == 0:
                 initial_obj_value = obj0
@@ -261,7 +272,7 @@ class SplitBregmanSolver(Solver):
                                        obj0,
                                        problem.obj_terms[0],
                                        obj0 - problem.obj_terms[0],
-                                       problem.get_rnorm(self.solution))
+                                       problem.get_rnorm(sb_mdl))
                 if verbose:
                     print(msg)
                 if self.logger:
@@ -275,37 +286,65 @@ class SplitBregmanSolver(Solver):
                 break
             
             self.save_results(outer_iter, problem, force_save=False)
-            
-            for _ in range(self.niter_inner):
+            print("\tInitial SB model norm = %.2e" % sb_mdl.norm())
+            print("\tInitial breg_a norm = %.2e" % self.breg_a.norm())
+            print("\tInitial breg_b norm = %.2e" % self.breg_b.norm())
+
+            for iter_inner in range(self.niter_inner):
                 
                 # update L1 regularizer data for the inner problem
-                self._update_dataregsL1()
+                # self._update_dataregsL1()
                 
                 # solve inner problem
-                inner_problem.setDefaults()
-                self.inner_solver.run(inner_problem)
-                self.solution = inner_problem.model
-
+                # inner L2 reg problem
+                linear_problem = ProblemL2LinearReg(
+                    model=sb_mdl,
+                    data=problem.data,
+                    op=problem.op,
+                    epsilon=eps,
+                    reg_op=pyOperator.Vstack(problem.regL2_op, problem.regL1_op),
+                    prior_model=pyVector.superVector(problem.dataregsL2, self.breg_a.clone() - self.breg_b),
+                    minBound=problem.minBound,
+                    maxBound=problem.maxBound,
+                    boundProj=problem.boundProj
+                )
+                linear_problem.setDefaults()
+                self.linear_solver.run(linear_problem, verbose=inner_verbose)
+                sb_mdl = linear_problem.model
+                
                 # compute RL1*x
-                problem.regL1_op.forward(False, self.solution, RL1x)
-
+                problem.regL1_op.forward(False, sb_mdl, RL1x)
+                
                 # update breg_a
                 self.breg_a = _shrinkage(RL1x.clone() + self.breg_b, thresh=eps[-problem.nregsL1:])
-
-            # update breg_b
-            self.breg_b.scaleAdd(RL1x.clone() - self.breg_a, 1., self.breg_weight)
-            
-            outer_iter += 1
-            # check objective function
-            obj1 = problem.get_obj(self.solution)
-            if obj1 >= obj0:
-                msg = "Objective function didn't reduce, will terminate solver:\n\t"\
-                      "obj_new = %.2e\tobj_cur = %.2e" % (obj1, obj0)
+                
+                msg = "\t\tInner iter %d, mdl = %.2e, breg_a = %.2e" % (iter_inner, sb_mdl.norm(), self.breg_a.norm())
                 if verbose:
                     print(msg)
                 if self.logger:
-                    self.logger.addToLog(msg)
-                break
+                    self.logger.addToLog("\n" + msg)
+                    
+            # update breg_b
+            self.breg_b.scaleAdd(RL1x.clone() - self.breg_a, 1., self.breg_weight)
+            msg = "\t Bregman loop completed, breg_b = %.2e" % self.breg_b.norm()
+            if verbose:
+                print(msg)
+            if self.logger:
+                self.logger.addToLog("\n" + msg)
+                
+            outer_iter += 1
+            # check objective function
+            problem.res_regsL1 = RL1x.clone()
+            problem.res_regsL1_already_computed = True
+            obj1 = problem.get_obj(sb_mdl)
+            # if obj1 >= obj0:
+            #     msg = "Objective function didn't reduce, will terminate solver:\n\t"\
+            #           "obj_new = %.2e\tobj_cur = %.2e" % (obj1, obj0)
+            #     if verbose:
+            #         print(msg)
+            #     if self.logger:
+            #         self.logger.addToLog(msg)
+            #     break
             
             # TODO save cost data, logger and all the stuff
             # iteration info
@@ -313,7 +352,7 @@ class SplitBregmanSolver(Solver):
                                    obj1,
                                    problem.obj_terms[0],
                                    obj1 - problem.obj_terms[0],
-                                   problem.get_rnorm(self.solution))
+                                   problem.get_rnorm(sb_mdl))
             if verbose:
                 print(msg)
             if self.logger:
@@ -321,13 +360,13 @@ class SplitBregmanSolver(Solver):
             
             # saving in case of restart
             self.restart.save_parameter("iter", outer_iter)
-            self.restart.save_vector("solution", self.solution)
+            self.restart.save_vector("sb_mdl", sb_mdl)
             
             if self.stopper.run(problem, outer_iter, initial_obj_value, verbose):
                 break
             
         # writing last inverted model
-        self.save_results(outer_iter, problem, model=None, force_save=False, force_write=False)
+        self.save_results(outer_iter, problem, force_save=True, force_write=True)
         
         # ending message and log file
         msg = 90 * '#' + '\n'
@@ -368,10 +407,11 @@ class ADMMsolver(Solver):
         self.stopper = stopper
         self.logger = logger
         self.stopper.logger = self.logger
-        
-        self.solver_LCG = LCGsolver(BasicStopper(niter=niter_LCG), steepest=False, logger=None)
+        self.niter_LCG = niter_LCG
+        self.niter_ISTA = niter_ISTA
+        self.solver_LCG = LCGsolver(BasicStopper(niter=self.niter_LCG), steepest=False, logger=self.logger)
         self.solver_LCG.setDefaults(iter_sampling=1, flush_memory=True)
-        self.solver_ISTA = ISTAsolver(BasicStopper(niter=niter_ISTA), fast=True, logger=None)
+        self.solver_ISTA = ISTAsolver(BasicStopper(niter=self.niter_ISTA), fast=True, logger=self.logger)
         self.solver_ISTA.setDefaults(iter_sampling=1, flush_memory=True)
 
         self.rho = rho      # ADMM penalty parameter
@@ -424,7 +464,7 @@ class ADMMsolver(Solver):
     def init_rho(self, gamma):
         self.rho = 2*gamma + .1
 
-    def run(self, problem, verbose=False, restart=False, initial_guess=None):
+    def run(self, problem, verbose=False, inner_verbose=False, restart=False, initial_guess=None):
 
         assert type(problem) == ProblemLinearReg, 'problem has to be a ProblemLinearReg'
         if problem.nregsL1 == 0:
@@ -468,7 +508,7 @@ class ADMMsolver(Solver):
             model=self.y,
             data=self.Ax_plus_u,
             op=pyOperator.IdentityOp(self.y),
-            op_norm=None,
+            op_norm=1.,
             lambda_value=gamma/self.rho,
             minBound=problem.minBound,
             maxBound=problem.maxBound,
@@ -534,15 +574,16 @@ class ADMMsolver(Solver):
             
             # update x
             self.solver_LCG.setDefaults()
-            self.solver_LCG.run(problem_linear)
+            self.solver_LCG.run(problem_linear, verbose=inner_verbose)
             self.x = problem_linear.model
             
             # update y TODO FISTA Gradient vanishes identically: why?
             self.compute_Ax()
-            self.compute_Ax_plus_u()
+            self.compute_Ax_plus_u()  # i.e., data for the LASSO problem
+            problem_lasso.data = self.Ax_plus_u  # TODO why the pointer is not working?
             self.solver_ISTA.setDefaults()
             problem_lasso.set_lambda(gamma/self.rho)
-            self.solver_ISTA.run(problem_lasso)
+            self.solver_ISTA.run(problem_lasso, verbose=inner_verbose)  # TODO the iteration is not updating
             self.y = problem_lasso.model
             
             # update penalty parameter and scaled dual variable
@@ -646,13 +687,17 @@ def main():
     model_arr[150, 300] = 10.0
     model_arr[100, 200] = -5.0
     model_arr[280, 400] = 1.0
-    # plt.imshow(model_arr), plt.colorbar(), plt.title('Model')
-    # plt.show()
+    
+    plt.figure(figsize=(7, 3))
+    plt.imshow(model_arr, cmap='gray'), plt.colorbar(), plt.title('Model')
+    plt.show()
     
     G = Gauss_smooth_scipy(model, 5., 4.)
     data = G * model
-    # plt.imshow(data.getNdArray()), plt.colorbar(), plt.title('Data')
-    # plt.show()
+    
+    plt.figure(figsize=(7, 3))
+    plt.imshow(data.getNdArray(), cmap='gray'), plt.colorbar(), plt.title('Data')
+    plt.show()
     #
     # # CG solver
     # problemLS = ProblemL2Linear(model, data, G)
@@ -669,27 +714,35 @@ def main():
     # FISTA.run(problemFISTA, verbose=True)
     # plt.imshow(problemFISTA.model.getNdArray()), plt.colorbar(), plt.title('FISTA Solution')
     # plt.show()
-    #
-    # # SplitBregman
-    # problemSB = ProblemLinearReg(model=model, data=data, op=G,
-    #                            regsL1=pyOperator.IdentityOp(model), epsL1=.01)
-    #
-    # SplitBregman = SplitBregmanSolver(BasicStopper(niter=100), niter_inner=3, niter_solver=5)
-    # SplitBregman.setDefaults()
-    # SplitBregman.run(problemSB, verbose=True)
-    # plt.imshow(problemSB.model.getNdArray()), plt.colorbar(), plt.title('SB Solution')
-    # plt.show()
-    # mse_sb = (model.clone() - problemSB.model).norm()**2
-    # print("Split-Bregman solution MSE = %.2e" % mse_sb)
     
+    # TODO SB and ADMM do not recover the real amplitude. Why?
+    # SplitBregman
+    problemSB = ProblemLinearReg(model=model, data=data, op=G,
+                                 regsL1=pyOperator.IdentityOp(model), epsL1=.01)
+
+    SB = SplitBregmanSolver(BasicStopper(niter=10), niter_inner=10, niter_solver=10, steepest=False, breg_weight=1.)
+    SB.setDefaults()
+    SB.run(problemSB, verbose=True, inner_verbose=False)
+    plt.figure(figsize=(7, 3))
+    plt.imshow(problemSB.model.getNdArray(), cmap='gray'), plt.colorbar()
+    plt.title(r'SplitBregman, $\lambda$=%.1e, iters=%d,%d,%d, $\beta$=%.2f'
+              % (problemSB.epsL1[0],
+                 SB.stopper.niter, SB.niter_inner, SB.niter_solver,
+                 SB.breg_weight))
+    plt.show()
+    mse_sb = (model.clone() - problemSB.model).norm()**2
+    print("Split-Bregman solution MSE = %.2e" % mse_sb)
+
     # ADMM
     problemADMM = ProblemLinearReg(model=model, data=data, op=G,
                                    regsL1=pyOperator.IdentityOp(model), epsL1=.01)
-    ADMM = ADMMsolver(BasicStopper(niter=350))
+    ADMM = ADMMsolver(BasicStopper(niter=1))
     ADMM.setDefaults()
-    ADMM.run(problemADMM, verbose=True)
+    ADMM.run(problemADMM, verbose=True, inner_verbose=True)
     
-    plt.imshow(problemADMM.model.getNdArray()), plt.colorbar(), plt.title('ADMM Solution')
+    plt.figure(figsize=(7, 3))
+    plt.imshow(problemADMM.model.getNdArray(), cmap='gray'), plt.colorbar(),\
+    plt.title('ADMM Solution, iters=%d,%d,%d' % (ADMM.stopper.niter, ADMM.niter_LCG, ADMM.niter_ISTA))
     plt.show()
     return 0
 
