@@ -171,7 +171,7 @@ class NLCGsolver(Solver):
 		#Overwriting logger of the Stopper object
 		self.stoppr.logger=self.logger
 		# print formatting
-		self.iter_msg = "iter = %s, obj = %.2e, resnorm = %.2e, gradnorm = %.2e, feval = %d, geval = %d"
+		self.iter_msg = "iter = %s, obj = %.5e, resnorm = %.2e, gradnorm = %.2e, feval = %d, geval = %d"
 		return
 
 	def __del__(self):
@@ -423,7 +423,7 @@ class LBFGSsolver(Solver):
 		self.save_est = save_est
 		self.tmp_vector = None  # A copy of the model vector will be create when the function run is invoked
 		# print formatting
-		self.iter_msg = "iter = %s, obj = %.2e, resnorm = %.2e, gradnorm = %.2e, feval = %d, geval = %d"
+		self.iter_msg = "iter = %s, obj = %.5e, resnorm = %.2e, gradnorm = %.2e, feval = %d, geval = %d"
 
 	def save_hessian_estimate(self, index, iiter):
 		"""Function to save current vector of estimated Hessian inverse"""

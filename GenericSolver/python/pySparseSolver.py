@@ -8,7 +8,7 @@ def _soft_thresh(x, thresh):
     """
     Soft-thresholding function:
         y = sign(x) * max(abs(x) - thresh, 0)
-    
+
     :param x        : vector, input values
     :param thresh   : float, soft threshold
     :return         : vector, output clipped values
@@ -40,15 +40,15 @@ class ISTAsolver(Solver):
         # Setting the fast flag
         self.fast = fast
         # print formatting
-        self.iter_msg = "iter = %s, obj = %.2e, resnorm = %.2e, gradnorm = %.2e, feval = %d"
-    
+        self.iter_msg = "iter = %s, obj = %.5e, resnorm = %.2e, gradnorm = %.2e, feval = %d"
+
     def __del__(self):
         """Default destructor"""
         return
-    
+
     def run(self, problem, verbose=False, restart=False):
         """Running ISTA solver"""
-        
+
         self.create_msg = verbose or self.logger
         # Resetting stopper before running the inversion
         self.stopper.reset()
@@ -70,7 +70,7 @@ class ISTAsolver(Solver):
                     print(msg.replace("log file", ""))
                 if self.logger:
                     self.logger.addToLog(msg)
-            
+
             # Setting internal vectors (model, search direction, and previous gradient vectors)
             prblm_mdl = problem.get_model()
             ista_mdl = prblm_mdl.clone()
@@ -78,7 +78,7 @@ class ISTAsolver(Solver):
             if self.fast:
                 t = 1.0
                 fista_mdl = prblm_mdl.clone()
-            
+
             # Other internal variables
             iiter = 0
         else:
@@ -98,11 +98,11 @@ class ISTAsolver(Solver):
             if self.fast:
                 t = self.restart.retrieve_parameter("t")
                 fista_mdl = self.restart.retrieve_vector("fista_mdl")
-        
+
         # Common variables unrelated to restart
         success = True
         ista_mdl0 = ista_mdl.clone()  # Previous model in case stepping procedure fails
-        
+
         # Inversion loop
         while True:
             obj0 = problem.get_obj(ista_mdl)  # Compute objective function value
@@ -128,10 +128,10 @@ class ISTAsolver(Solver):
             if problem.get_gnorm(ista_mdl) == 0.:
                 print("Gradient vanishes identically")
                 break
-            
+
             # Saving results
             self.save_results(iiter, problem, force_save=False)
-            
+
             ista_mdl0.copy(ista_mdl)  # Saving model before updating it
             if self.fast:
                 # Running FISTA
@@ -142,7 +142,7 @@ class ISTAsolver(Solver):
                 # modl_arr = ista_mdl.getNdArray()
                 # modl_arr[:] = _soft_thresh(modl_arr, problem.lambda_value / problem.op_norm)
                 ista_mdl = _soft_thresh(fista_mdl, problem.lambda_value/problem.op_norm)
-                
+
                 #########################################
                 # Projecting model onto the bounds (if any)
                 if "bounds" in dir(problem):
@@ -166,7 +166,7 @@ class ISTAsolver(Solver):
                 # Projecting model onto the bounds (if any)
                 if "bounds" in dir(problem):
                     problem.bounds.apply(ista_mdl)
-            
+
             obj1 = problem.get_obj(ista_mdl)
             if obj1 >= obj0:
                 if self.create_msg:
@@ -180,14 +180,14 @@ class ISTAsolver(Solver):
                 # Copying back to the previous solution
                 ista_mdl.copy(ista_mdl0)
                 break
-            
+
             # Saving current model in case of restart and other parameters
             self.restart.save_parameter("iter", iiter)
             self.restart.save_vector("ista_mdl", ista_mdl)
             if self.fast:
                 self.restart.save_parameter("t", t)
                 self.restart.save_vector("fista_mdl", fista_mdl)
-            
+
             # iteration info
             iiter = iiter + 1
             if self.create_msg:
@@ -206,7 +206,7 @@ class ISTAsolver(Solver):
                 raise ValueError("Either gradient norm or objective function value NaN!")
             if self.stopper.run(problem, iiter, initial_obj_value, verbose):
                 break
-        
+
         # Writing last inverted model
         self.save_results(iiter, problem, force_save=True, force_write=True)
         if self.create_msg:
@@ -221,7 +221,7 @@ class ISTAsolver(Solver):
 
 class ISTCsolver(Solver):
     """ISTC solver to solve: convex problem 1/2*| y - Am |_2 + lambda*| m |_1"""
-    
+
     def __init__(self, stopper, inner_it, cooling_start, cooling_end, logger=None):
         """
         Constructor for ISTC Solver
@@ -239,8 +239,8 @@ class ISTCsolver(Solver):
         self.logger = logger
         # Overwriting logger of the Stopper object
         self.stopper.logger = self.logger
-        self.iter_msg = "Inner_iter = %s, obj = %.2e, resnorm = %.2e, gradnorm= %.2e, feval = %d"
-        
+        self.iter_msg = "Inner_iter = %s, obj = %.5e, resnorm = %.2e, gradnorm= %.2e, feval = %d"
+
         # ISTC parameters
         if self.stopper.niter <= 0:
             raise ValueError("niter for stopper object must be positive and greater than 0!")
@@ -250,14 +250,14 @@ class ISTCsolver(Solver):
             raise ValueError("Cooling_start and end must be within [0,1] interval and cooling_start <= cooling_end")
         self.cooling_start = cooling_start  # start of cooling continuation as fraction of size of sorted array |A'y|
         self.cooling_end = cooling_end  # end of cooling continuation as fraction of size of sorted array |A'y|
-    
+
     def __del__(self):
         """Default destructor"""
         return
-    
+
     def run(self, problem, verbose=False, restart=False):
         """Running ISTC solver"""
-        
+
         self.create_msg = verbose or self.logger
 
         # Resetting stopper before running the inversion
@@ -276,11 +276,11 @@ class ISTCsolver(Solver):
                     print(msg.replace("log file", ""))
                 if self.logger:
                     self.logger.addToLog(msg)
-            
+
             # Setting internal vectors (model, search direction, and previous gradient vectors)
             prblm_mdl = problem.get_model()
             istc_mdl = prblm_mdl.clone()
-            
+
             # Inversion always starts from m = 0 (I need to understand if it is possible to start from m different than 0)
             istc_mdl.zero()  # modl = 0
             # Other internal variables
@@ -321,12 +321,12 @@ class ISTCsolver(Solver):
             iiter = self.restart.retrieve_parameter("iter")
             initial_obj_value = self.restart.retrieve_parameter("obj_initial")
             istc_mdl = self.restart.retrieve_vector("istc_mdl")
-        
+
         # Common variables unrelated to restart
         success = True
         istc_mdl0 = istc_mdl.clone()  # Previous model in case stepping procedure fails
         istc_mdl_save = istc_mdl0  # used also to save results
-        
+
         # Outer iteration loop
         while True:
             # Setting lambda value for a given outer loop iteration
@@ -343,7 +343,7 @@ class ISTCsolver(Solver):
             else:
                 self.restart.retrieve_parameter("inner_iter", inner_iter)
                 restart = False
-            
+
             if iiter == 0:
                 # Applying preconditioning
                 istc_mdl.scale(scale_precond)
@@ -372,13 +372,13 @@ class ISTCsolver(Solver):
                 if problem.get_gnorm(istc_mdl) == 0.:
                     print("Gradient vanishes identically")
                     break
-                
+
                 # Removing preconditioning scaling factor from inverted model
                 istc_mdl_save.copy(istc_mdl)
                 istc_mdl_save.scale(scale_precond)
                 # Saving results
                 self.save_results(iiter, problem, istc_mdl_save, force_save=False)
-                
+
                 # Stepping for internal iteration model update
                 istc_mdl0.copy(istc_mdl)  # Saving model before updating it
                 istc_mdl.scaleAdd(prblm_grad, 1.0, -scale_precond)  # Update model x = x + scale_precond * A' [y - Ax]
@@ -389,7 +389,7 @@ class ISTCsolver(Solver):
                 # Projecting model onto the bounds (if any)
                 if "bounds" in dir(problem):
                     problem.bounds.apply(istc_mdl)
-                
+
                 obj1 = problem.get_obj(istc_mdl)
                 problem.get_model().writeVec("problem_model.H")
                 istc_mdl.writeVec("solver_model.H")
@@ -405,12 +405,12 @@ class ISTCsolver(Solver):
                     # Copying back to the previous solution
                     istc_mdl.copy(istc_mdl0)
                     break
-                
+
                 # Saving current model in case of restart and other parameters
                 self.restart.save_parameter("iter", iiter)
                 self.restart.save_parameter("inner_iter", inner_iter)
                 self.restart.save_vector("istc_mdl", istc_mdl)
-                
+
                 # iteration info
                 inner_iter += 1
                 if self.create_msg:
@@ -430,7 +430,7 @@ class ISTCsolver(Solver):
             iiter = iiter + 1
             if self.stopper.run(problem, iiter, initial_obj_value, verbose):
                 break
-        
+
         # Removing preconditioning scaling factor from inverted model
         istc_mdl_save.copy(istc_mdl)
         istc_mdl_save.scale(scale_precond)
