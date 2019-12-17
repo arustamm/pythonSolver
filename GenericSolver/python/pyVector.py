@@ -399,13 +399,17 @@ class superVector(vector):
             self.vecs[idx].reciprocal()
         return self
 
-    def maximum(self, vecs_in):
-        if type(vecs_in) is not superVector:
+    def maximum(self, other):
+        if np.isscalar(other):
+            for idx in range(self.n):
+                self.vecs[idx].maximum(other)
+            return self
+        elif type(other) is not superVector:
             raise TypeError("Input variable is not a superVector")
-        if vecs_in.n != self.n:
+        if other.n != self.n:
             raise ValueError('Input must have the same length of self')
         for idx in range(self.n):
-            self.vecs[idx].maximum(vecs_in.vecs[idx])
+            self.vecs[idx].maximum(other.vecs[idx])
         return self
 
     def conj(self):
@@ -608,12 +612,16 @@ class vectorIC(vector):
         return self
 
     def maximum(self, vec2):
-        if not isinstance(vec2, vectorIC):
-            raise TypeError('Provided input have to be a vectorIC')
-        if not self.checkSame(vec2):
-            raise ValueError('Dimensionality not equal: vec1 = %d; vec2 = %d' % (self.naxis, vec2.naxis))
-        self.getNdArray()[:] = np.maximum(self.getNdArray(), vec2.getNdArray())
-        return self
+        if np.isscalar(vec2):
+            self.getNdArray()[:] = np.maximum(self.getNdArray(), vec2)
+            return self
+        elif isinstance(vec2, vectorIC):
+            if not self.checkSame(vec2):
+                raise ValueError('Dimensionality not equal: self = %d; vec2 = %d' % (self.naxis, vec2.naxis))
+            self.getNdArray()[:] = np.maximum(self.getNdArray(), vec2.getNdArray())
+            return self
+        else:
+            raise TypeError('Provided input has to be either a scalar or a vectorIC')
 
     def conj(self):
         self.getNdArray()[:] = np.conjugate(self.getNdArray())
