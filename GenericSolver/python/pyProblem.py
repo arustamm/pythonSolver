@@ -6,7 +6,7 @@ from math import isnan
 
 class Bounds:
     """Class used to enforce boundary constraints during the inversion"""
-    
+
     def __init__(self, minBound=None, maxBound=None):
         """
         Bounds constructor
@@ -23,7 +23,7 @@ class Bounds:
         if self.minBound is not None and self.maxBound is None:
             self.minBound.scale(-1.0)
         return
-    
+
     def apply(self, input_vec):
         """
         Function for applying the model bounds
@@ -48,7 +48,7 @@ class Bounds:
 
 class Problem:
     """Problem parent object"""
-    
+
     # Default class methods/functions
     def __init__(self, minBound=None, maxBound=None, boundProj=None):
         """Default class constructor for Problem"""
@@ -67,11 +67,11 @@ class Problem:
         self.gevals = 0
         self.counter = 0
         self.linear = False  # By default all problem are non-linear
-    
+
     def __del__(self):
         """Default destructor"""
         return
-    
+
     def setDefaults(self):
         """Default common variables for any inverse problem"""
         self.obj_updated = False
@@ -82,7 +82,7 @@ class Problem:
         self.gevals = 0
         self.counter = 0
         return
-    
+
     def set_model(self, model):
         """Setting internal model vector"""
         if model.isDifferent(self.model):
@@ -91,7 +91,7 @@ class Problem:
             self.res_updated = False
             self.grad_updated = False
             self.dres_updated = False
-    
+
     def set_residual(self, residual):
         """Setting internal residual vector"""
         # Useful for linear inversion (to avoid residual computation)
@@ -99,24 +99,24 @@ class Problem:
             self.res.copy(residual)
         self.res_updated = True
         return
-    
+
     def get_model(self):
         """Accessor for model vector"""
         return self.model
-    
+
     def get_dmodel(self):
         """Accessor for model vector"""
         return self.dmodel
-    
+
     def get_rnorm(self, model):
         """Accessor for residual vector norm"""
         self.get_res(model)
         return self.get_res(model).norm()
-    
+
     def get_gnorm(self, model):
         """Accessor for gradient vector norm"""
         return self.get_grad(model).norm()
-    
+
     def get_obj(self, model):
         """Accessor for objective function"""
         self.set_model(model)
@@ -125,7 +125,7 @@ class Problem:
             self.obj = self.objf(self.res)
             self.obj_updated = True
         return self.obj
-    
+
     def get_res(self, model):
         """Accessor for residual vector"""
         self.set_model(model)
@@ -134,7 +134,7 @@ class Problem:
             self.res = self.resf(self.model)
             self.res_updated = True
         return self.res
-    
+
     def get_grad(self, model):
         """Accessor for gradient vector"""
         self.set_model(model)
@@ -146,7 +146,7 @@ class Problem:
                 self.fevals += 1
             self.grad_updated = True
         return self.grad
-    
+
     def get_dres(self, model, dmodel):
         """Accessor for dresidual vector (i.e., application of the Jacobian to Dmodel vector)"""
         self.set_model(model)
@@ -155,27 +155,27 @@ class Problem:
             self.dres = self.dresf(self.model, self.dmodel)
             self.dres_updated = True
         return self.dres
-    
+
     def get_fevals(self):
         """Accessor for number of objective function evalutions"""
         return self.fevals
-    
+
     def get_gevals(self):
         """Accessor for number of gradient evalutions"""
         return self.gevals
-    
+
     def objf(self, res):
         """Dummy objf running method, must be overridden in the derived class"""
         raise NotImplementedError("Implement objf for problem in the derived class!")
-    
+
     def resf(self, model):
         """Dummy resf running method, must be overridden in the derived class"""
         raise NotImplementedError("Implement resf for problem in the derived class!")
-    
+
     def dresf(self, model, dmodel):
         """Dummy dresf running method, must be overridden in the derived class"""
         raise NotImplementedError("Implement dresf for problem in the derived class!")
-    
+
     def gradf(self, model, residual):
         """Dummy gradf running method, must be overridden in the derived class"""
         raise NotImplementedError("Implement gradf for problem in the derived class!")
@@ -183,7 +183,7 @@ class Problem:
 
 class ProblemL2Linear(Problem):
     """Linear inverse problem of the form 1/2*|Lm-d|_2"""
-    
+
     def __init__(self, model, data, op, prec=None,
                  minBound=None, maxBound=None, boundProj=None):
         """
@@ -219,11 +219,11 @@ class ProblemL2Linear(Problem):
         self.setDefaults()
         self.linear = True
         return
-    
+
     def __del__(self):
         """Default destructor"""
         return
-    
+
     def resf(self, model):
         """Method to return residual vector r = Lm - d"""
         # Computing Lm
@@ -234,19 +234,19 @@ class ProblemL2Linear(Problem):
         # Computing Lm - d
         self.res.scaleAdd(self.data, 1., -1.)
         return self.res
-    
+
     def gradf(self, model, res):
         """Method to return gradient vector g = L'r = L'(Lm - d)"""
         # Computing L'r = g
         self.op.adjoint(False, self.grad, res)
         return self.grad
-    
+
     def dresf(self, model, dmodel):
         """Method to return residual vector dres = Ldm"""
         # Computing Ldm = dres
         self.op.forward(False, dmodel, self.dres)
         return self.dres
-    
+
     def objf(self, res):
         """Method to return objective function value 1/2|Lm-d|_2"""
         val = res.norm()
@@ -256,7 +256,7 @@ class ProblemL2Linear(Problem):
 
 class ProblemLinearSymmetric(Problem):
     """Linear inverse problem of the form 1/2m'Am - m'b"""
-    
+
     def __init__(self, model, data, op, prec=None,
                  minBound=None, maxBound=None, boundProj=None):
         """
@@ -294,11 +294,11 @@ class ProblemLinearSymmetric(Problem):
         # Setting default variables
         self.setDefaults()
         self.linear = True
-    
+
     def __del__(self):
         """Default destructor"""
         return
-    
+
     def resf(self, model):
         """Method to return residual vector r = Am - b"""
         # Computing Lm
@@ -309,19 +309,19 @@ class ProblemLinearSymmetric(Problem):
         # Computing Lm - d
         self.res.scaleAdd(self.data, 1., -1.)
         return self.res
-    
+
     def gradf(self, model, res):
         """Method to return gradient vector equal to residual one"""
         # Assigning g = r
         self.grad = self.res
         return self.grad
-    
+
     def dresf(self, model, dmodel):
         """Method to return residual vector dres = Adm"""
         # Computing Ldm = dres
         self.op.forward(False, dmodel, self.dres)
         return self.dres
-    
+
     def objf(self, res):
         """Method to return objective function value 1/2m'Am - m'b"""
         obj = 0.5 * (self.model.dot(res) - self.model.dot(self.data))
@@ -330,7 +330,7 @@ class ProblemLinearSymmetric(Problem):
 
 class ProblemL2LinearReg(Problem):
     """Linear inverse problem regularized of the form 1/2*|Lm-d|_2 + epsilon^2/2*|Am-m_prior|_2"""
-    
+
     def __init__(self, model, data, op, epsilon, reg_op=None, prior_model=None, prec=None,
                  minBound=None, maxBound=None, boundProj=None):
         """
@@ -381,11 +381,11 @@ class ProblemL2LinearReg(Problem):
         self.prec = prec
         # Objective function terms (useful to analyze each term)
         self.obj_terms = [None, None]
-    
+
     def __del__(self):
         """Default destructor"""
         return
-    
+
     def estimate_epsilon(self, verbose=False, logger=None):
         """
         Method returning epsilon that balances the first gradient in the 'extended-data' space or initial data residuals
@@ -434,7 +434,7 @@ class ProblemL2LinearReg(Problem):
         if logger:
             logger.addToLog(msg + "\nREGULARIZED PROBLEM end log file")
         return epsilon_balance
-    
+
     def resf(self, model):
         """Method to return residual vector r = [r_d; r_m]: r_d = Lm - d; r_m = epsilon * (Am - m_prior) """
         if model.norm() != 0.:
@@ -449,7 +449,7 @@ class ProblemL2LinearReg(Problem):
         # Scaling by epsilon epsilon*r_m
         self.res.vecs[1].scale(self.epsilon)
         return self.res
-    
+
     def gradf(self, model, res):
         """Method to return gradient vector g = L'r_d + epsilon*A'r_m"""
         # Scaling by epsilon the model residual vector (saving temporarily residual regularization)
@@ -459,7 +459,7 @@ class ProblemL2LinearReg(Problem):
         # g = L'r_d + epsilon*A'r_m
         self.op.ops[0].adjoint(True, self.grad, res.vecs[0])
         return self.grad
-    
+
     def dresf(self, model, dmodel):
         """Method to return residual vector dres = (L + epsilon * A)dm"""
         # Computing Ldm = dres_d
@@ -467,17 +467,18 @@ class ProblemL2LinearReg(Problem):
         # Scaling by epsilon
         self.dres.vecs[1].scale(self.epsilon)
         return self.dres
-    
+
     def objf(self, res):
         """Method to return objective function value 1/2|Lm-d|_2 + epsilon^2/2*|Am-m_prior|_2"""
         for idx in range(res.n):
-            self.obj_terms[idx] = 0.5 * res.vecs[idx].norm()**2
+			val = res.vecs[idx].norm()
+            self.obj_terms[idx] = 0.5 * val*val
         return sum(self.obj_terms)
 
 
 class ProblemL1Lasso(Problem):
     """Convex problem 1/2*| y - Am |_2 + lambda*| m |_1"""
-    
+
     def __init__(self, model, data, op, op_norm=None, lambda_value=None,
                  minBound=None, maxBound=None, boundProj=None):
         """
@@ -521,20 +522,21 @@ class ProblemL1Lasso(Problem):
         # Objective function terms (useful to analyze each term)
         self.obj_terms = [None, None]
         return
-    
+
     def set_lambda(self, lambda_in):
         # Set lambda
         self.lambda_value = lambda_in
         return
-    
+
     def objf(self, res):
         """Method to return objective function value 1/2*| y - Am |_2 + lambda*| m |_1"""
         # data term
-        self.obj_terms[0] = 0.5 * res.vecs[0].norm()**2
+		val = res.vecs[0].norm()
+        self.obj_terms[0] = 0.5 * val*val
         # model term
         self.obj_terms[1] = self.lambda_value * res.vecs[1].norm(1)
         return sum(self.obj_terms)
-    
+
     # define function that computes residuals
     def resf(self, model):
         """ y - alpha * A m = rd (self.res[0]) and m = rm (self.res[1]);"""
@@ -547,12 +549,12 @@ class ProblemL1Lasso(Problem):
         # Run regularization part
         self.res.vecs[1].copy(model)
         return self.res
-    
+
     # function that projects search direction into data space (Not necessary for ISTC)
     def dresf(self, model, dmodel):
         """Linear projection of the model perturbation onto the data space. Method not implemented"""
         raise NotImplementedError("dresf is not necessary for ISTC; DO NOT CALL THIS METHOD")
-    
+
     # function to compute gradient (Soft thresholding applied outside in the solver)
     def gradf(self, model, res):
         """- A'r_data (residual[0]) = g"""
@@ -566,7 +568,7 @@ class ProblemL1Lasso(Problem):
 # Non-linear problem classes
 class ProblemL2NonLinear(Problem):
     """Non-linear inverse problem of the form 1/2*|f(m)-d|_2"""
-    
+
     def __init__(self, model, data, op, grad_mask=None,
                  minBound=None, maxBound=None, boundProj=None):
         """
@@ -609,18 +611,18 @@ class ProblemL2NonLinear(Problem):
         self.setDefaults()
         self.linear = False
         return
-    
+
     def __del__(self):
         """Default destructor"""
         return
-    
+
     def resf(self, model):
         """Method to return residual vector r = f(m) - d"""
         self.op.nl_op.forward(False, model, self.res)
         # Computing f(m) - d
         self.res.scaleAdd(self.data, 1., -1.)
         return self.res
-    
+
     def gradf(self, model, res):
         """Method to return gradient vector g = F'r = F'(f(m) - d)"""
         # Setting model point on which the F is evaluated
@@ -631,7 +633,7 @@ class ProblemL2NonLinear(Problem):
         if self.grad_mask is not None:
             self.grad.multiply(self.grad_mask)
         return self.grad
-    
+
     def dresf(self, model, dmodel):
         """Method to return residual vector dres = Fdm"""
         # Setting model point on which the F is evaluated
@@ -639,7 +641,7 @@ class ProblemL2NonLinear(Problem):
         # Computing Fdm = dres
         self.op.lin_op.forward(False, dmodel, self.dres)
         return self.dres
-    
+
     def objf(self, res):
         """Method to return objective function value 1/2|f(m)-d|_2"""
         val = res.norm()
@@ -654,7 +656,7 @@ class ProblemL2NonLinearReg(Problem):
                 or with a non-linear regularization
             1/2*|f(m)-d|_2 + epsilon^2/2*|g(m) - m_prior|_2
     """
-    
+
     def __init__(self, model, data, op, epsilon, grad_mask=None, reg_op=None, prior_model=None,
                  minBound=None, maxBound=None, boundProj=None):
         """
@@ -714,11 +716,11 @@ class ProblemL2NonLinearReg(Problem):
         # Objective function terms (useful to analyze each term)
         self.obj_terms = [None, None]
         return
-    
+
     def __del__(self):
         """Default destructor"""
         return
-    
+
     def estimate_epsilon(self, verbose=False, logger=None):
         """Method returning epsilon that balances the two terms of the objective function"""
         msg = "Epsilon Scale evaluation"
@@ -783,7 +785,7 @@ class ProblemL2NonLinearReg(Problem):
         if logger:
             logger.addToLog(msg + "\nREGULARIZED PROBLEM end log file")
         return epsilon_balance
-    
+
     def resf(self, model):
         """
         Method to return residual vector r = [r_d; r_m]:
@@ -799,7 +801,7 @@ class ProblemL2NonLinearReg(Problem):
         # Scaling by epsilon epsilon*r_m
         self.res.vecs[1].scale(self.epsilon)
         return self.res
-    
+
     def gradf(self, model, res):
         """
         Method to return gradient vector
@@ -816,7 +818,7 @@ class ProblemL2NonLinearReg(Problem):
         if self.grad_mask is not None:
             self.grad.multiply(self.grad_mask)
         return self.grad
-    
+
     def dresf(self, model, dmodel):
         """
         Method to return residual vector
@@ -829,7 +831,7 @@ class ProblemL2NonLinearReg(Problem):
         # Scaling by epsilon
         self.dres.vecs[1].scale(self.epsilon)
         return self.dres
-    
+
     def objf(self, res):
         """
         Method to return objective function value
