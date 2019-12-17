@@ -2,11 +2,12 @@
 import pyOperator
 import pyVector
 from pyLinearSolver import LCGsolver
-from pyProblem import Problem, ProblemL1Lasso, ProblemL2LinearReg
+from pyProblem import Problem, ProblemL1Lasso, ProblemL2LinearReg, ProblemL2Linear
 from pySolver import Solver
 from pySparseSolver import ISTAsolver
 from pyStopper import BasicStopper
 from math import isnan
+import numpy as np
 
 
 class ProblemLinearReg(Problem):
@@ -118,7 +119,7 @@ class ProblemLinearReg(Problem):
             else:
                 self.res.vecs[0].zero()
             self.res_data.scaleAdd(self.data, 1., -1.)
-            self.res_data_already_computed = True
+            # self.res_data_already_computed = True
         
         # compute L2 reg residuals
         if not self.res_regsL2_already_computed and self.res_regsL2 is not None:
@@ -127,7 +128,7 @@ class ProblemLinearReg(Problem):
             
             if self.dataregsL2 is not None and self.dataregsL2.norm() != 0.:
                 self.res_regsL2.scaleAdd(self.dataregsL2, 1., -1.)
-            self.res_regsL2_already_computed = True
+            # self.res_regsL2_already_computed = True
         
         # compute L1 reg residuals
         if not self.res_regsL1_already_computed and self.res_regsL1 is not None:
@@ -135,7 +136,7 @@ class ProblemLinearReg(Problem):
                 self.regL1_op.forward(False, self.model, self.res_regsL1)
             else:
                 self.res_regsL1.zero()
-            self.res_regsL1_already_computed = True
+            # self.res_regsL1_already_computed = True
         
         return self.res
     
@@ -143,11 +144,11 @@ class ProblemLinearReg(Problem):
 def _shrinkage(x, thresh, eps=1e-10):
     """
     Shrinkage function Gamma
-        y = x / (|x| + eps) * maximum(|x| - alpha, 0)
+        y = x / (|x| + eps) * maximum(|x| - thresh, 0)
     """
     y = x.clone()
     y / x.clone().abs().addbias(eps)
-    return y * x.clone().abs().addbias([-t for t in thresh]).maximum(x.clone().zero())
+    return y * x.clone().abs().addbias([-t for t in thresh]).maximum(0.)
 
 
 class SplitBregmanSolver(Solver):
@@ -188,7 +189,7 @@ class SplitBregmanSolver(Solver):
         self.solution = None
         
         # print formatting
-        self.iter_msg = "iter = %s, obj = %.2e, df_obj = %.2e, reg_obj = %.2e, resnorm = %.2e"
+        self.iter_msg = "iter = %s, obj = %.5e, df_obj = %.2e, reg_obj = %.2e, resnorm = %.2e"
         
     def __del__(self):
         print('Destructor called, Split-Bregman deleted')
@@ -253,19 +254,6 @@ class SplitBregmanSolver(Solver):
                 if self.logger:
                     self.logger.addToLog(msg)
         
-        # inner linear problem
-        linear_problem = ProblemL2LinearReg(
-            model=sb_mdl.clone() if self.use_prev_sol else sb_mdl.clone().zero(),
-            data=problem.data,
-            op=problem.op,
-            epsilon=eps,
-            reg_op=pyOperator.Vstack(problem.regL2_op, problem.regL1_op),
-            prior_model=pyVector.superVector(problem.dataregsL2, self.dataregsL1),  # no clone! It needs the pointers!
-            minBound=problem.minBound,
-            maxBound=problem.maxBound,
-            boundProj=problem.boundProj
-        )
-        
         # Main iteration loop
         while True:
             obj0 = problem.get_obj(sb_mdl)
@@ -300,38 +288,65 @@ class SplitBregmanSolver(Solver):
             for iter_inner in range(self.niter_inner):
                 
                 # update L1 regularizer data for the inner problem
+                # TODO questo amico qui fa  C A S I N O
                 self._update_dataregsL1()
 
                 if self.create_msg:
-                    msg = "\t\tInner iter %d, mdl = %.2e, a = %.2e, b = %.2e, dataregL1 = %.2e"\
-                          % (iter_inner, sb_mdl.norm(), self.breg_a.norm(), self.breg_b.norm(), self.dataregsL1.norm())
+                    msg = "\t\tstarting inner iter %d with a = %.2e, b = %.2e"\
+                          % (iter_inner, self.breg_a.norm(), self.breg_b.norm())
                     if verbose:
                         print(msg)
                     if self.logger:
                         self.logger.addToLog("\n" + msg)
                 
-                # update and solve inner problem
-                linear_problem.model = sb_mdl.clone() if self.use_prev_sol else sb_mdl.clone().zero()
-                linear_problem.prior_model = pyVector.superVector(problem.dataregsL2, self.dataregsL1)
-                # print("\t\t\tinit linear problem: mdl = %.2e, prior_mdl = %.2e" %(linear_problem.model.norm(), linear_problem.prior_model.norm()))
+                # solve inner problem
+                linear_problem = ProblemL2LinearReg(
+                    model=sb_mdl.clone().zero() if not self.use_prev_sol else sb_mdl.clone(),
+                    data=problem.data,
+                    op=problem.op,
+                    epsilon=eps,
+                    reg_op=pyOperator.Vstack(problem.regL2_op, problem.regL1_op),
+                    prior_model=pyVector.superVector(problem.dataregsL2, self.breg_a.clone() - self.breg_b),
+                    minBound=problem.minBound, maxBound=problem.maxBound, boundProj=problem.boundProj
+                )
                 self.linear_solver.setDefaults()
-                self.linear_solver.run(linear_problem, verbose=inner_verbose)  # TODO after first iteration it does not update!
+                self.linear_solver.run(linear_problem, verbose=inner_verbose)
+                # if np.isclose(sb_mdl.norm(), linear_problem.model.norm()):
+                #     if self.create_msg:
+                #         msg = "\t\tsolution not improving: mdl_old = %.2e, mdl_new = %.2e" \
+                #               % (sb_mdl.norm(), linear_problem.model.norm())
+                #         if verbose:
+                #             print(msg)
+                #         if self.logger:
+                #             self.logger.addToLog("\n" + msg)
+                #     break
                 sb_mdl = linear_problem.model.clone()
                 
                 # compute RL1*x
                 problem.regL1_op.forward(False, sb_mdl, RL1x)
                 
+                if self.create_msg:
+                    msg = "\t\tfinished inner iter %d with sb_mdl = %.2e, RL1x = %.2e"\
+                          % (iter_inner, sb_mdl.norm(), RL1x.norm())
+                    if verbose:
+                        print(msg)
+                    if self.logger:
+                        self.logger.addToLog("\n" + msg)
+                
                 # update breg_a
                 self.breg_a = _shrinkage(RL1x.clone() + self.breg_b, thresh=eps[-problem.nregsL1:])
-                    
+                # x = (RL1x.clone() + self.breg_b).getNdArray()[0]
+                # breg_a = x / (np.abs(x) + 1e-10) * np.maximum(np.abs(x)-eps[0], 0.)
+                # if not np.isclose(np.linalg.norm(breg_a), self.breg_a.norm()):
+                #     raise ValueError('Breg A implementations are different!')
             # update breg_b
             self.breg_b.scaleAdd(RL1x.clone() - self.breg_a, 1., self.breg_weight)
 
             outer_iter += 1
             # check objective function
             problem.res_regsL1 = RL1x.clone()
-            problem.res_regsL1_already_computed = True
-            problem.res_data_already_computed = False
+            # problem.res_regsL1_already_computed = True
+            # problem.res_data_already_computed = False
             obj1 = problem.get_obj(sb_mdl)
             if obj1 >= obj0:
                 if self.create_msg:
@@ -645,102 +660,137 @@ def main():
     import pyVector
     import pyOperator
     import matplotlib.pyplot as plt
+    plt.style.use('ggplot')
     from pyProblem import ProblemL2Linear
 
-    class Gauss_smooth_scipy(pyOperator.Operator):
-        def __init__(self, model, sigmax, sigmaz):
+    class FirstDerivative(pyOperator.Operator):
+        def __init__(self, model, sampling=1., dir=0):
             """
-            Gaussian 2D smoothing operator using scipy smoothing:
-            model    = [no default] - vector class; domain vector
-            sigmax   = [no default] - float; standard deviation along the x direction
-            sigmaz   = [no default] - float; standard deviation along the z direction
+            Compute 2nd order centered first derivative
+            :param model    : vector class; domain vector
+            :param sampling : scalar; sampling step [1.]
+            :param dir      : int; direction along with to compute the derivative [0]
             """
             self.setDomainRange(model, model)
-            self.sigmax = sigmax
-            self.sigmaz = sigmaz
-            self.scaling = 2.0 * np.pi * sigmax * sigmaz
-            return
-    
-        def __str__(self):
-            return "GauSmoot"
+            self.sampling = sampling
+            self.dir = dir
+            self.data_tmp = model.clone().zero()
+            self.dims = model.getNdArray().shape
     
         def forward(self, add, model, data):
             """Forward operator"""
             self.checkDomainRange(model, data)
-            if not add:
-                data.zero()
+            if add:
+                self.data_tmp.copy(data)
+            data.zero()
             # Getting Ndarrays
-            model_arr = model.getNdArray()
-            data_arr = data.getNdArray()
-            data_arr[:] = self.scaling * gaussian_filter(model_arr,
-                                                         sigma=[self.sigmax, self.sigmaz])
+            x = model.getNdArray().reshape(self.dims)
+            y = data.getNdArray().reshape(self.dims)
+            if self.dir > 0:  #need to bring the dim. to derive to first dim
+                x = np.swapaxes(x, self.dir, 0)
+            y[:-1] = (x[1:] - x[:-1]) / self.sampling
+            y[-1] = 0
+            if self.dir > 0:
+                y = np.swapaxes(y, 0, self.dir)
+            if add:
+                data.scaleAdd(self.data_tmp)
             return
     
         def adjoint(self, add, model, data):
-            """Self-adjoint operator"""
-            self.forward(add, data, model)
+            """Adjoint operator"""
+            self.checkDomainRange(model, data)
+            if add:
+                self.data_tmp.copy(model)
+            model.zero()
+            # Getting Ndarrays
+            x = model.getNdArray().reshape(self.dims)
+            y = data.getNdArray().reshape(self.dims)
+            if self.dir > 0:  # need to bring the dim. to derive to first dim
+                y = np.swapaxes(y, self.dir, 0)
+            x[0] = -y[0] / self.sampling
+            x[1:-1] = (-y[1:-1]+y[:-2]) / self.sampling
+            x[-1] = y[-2] / self.sampling
+            if self.dir > 0:
+                x = np.swapaxes(x, 0, self.dir)
+            if add:
+                model.scaleAdd(self.data_tmp)
             return
-        
-    PLOT = False
+     
+    PLOT = True
+    
+    # data examples
+    np.random.seed(1)
+    nx = 101
+    x = pyVector.vectorIC((nx,)).zero()
+    x.getNdArray()[:nx // 2] = 10
+    x.getNdArray()[nx // 2:3 * nx // 4] = -5
 
-    model = pyVector.vectorIC(np.empty((301, 601))).set(0)
-    model_arr = model.getNdArray()
-    model_arr[150, 300] = 10.0
-    model_arr[100, 200] = -5.0
-    model_arr[280, 400] = 1.0
+    Iop = pyOperator.IdentityOp(x)
+    Dop = FirstDerivative(x)
     
+    n = x.clone()
+    n.getNdArray()[:] = np.random.normal(0,1,nx)
+    y = Iop * (x.clone() + n)
+    
+    derivative = Dop * x
+
     if PLOT:
-        plt.figure(figsize=(7, 3))
-        plt.imshow(model_arr, cmap='gray'), plt.colorbar(), plt.title('Model')
+        plt.figure(figsize=(5, 4))
+        plt.plot(x.getNdArray(), 'k', lw=1, label='x')
+        plt.plot(y.getNdArray(), '.k', label='y=x+n')
+        plt.plot(derivative.getNdArray(), '.b', lw=3, label='dx')
+        plt.legend()
+        plt.title('Model, Data and Derivative')
         plt.show()
-    
-    G = Gauss_smooth_scipy(model, 5., 4.)
-    G_eigen = 125.66266713825917  # G.powerMethod() for FISTA
-    data = G * model
-    
-    if PLOT:
-        plt.figure(figsize=(7, 3))
-        plt.imshow(data.getNdArray(), cmap='gray'), plt.colorbar(), plt.title('Data')
-        plt.show()
-    
+
     # CG solver
-    # problemLS = ProblemL2Linear(model.clone().zero(), data, G)
-    # CG = LCGsolver(BasicStopper(niter=100))
-    # CG.setDefaults()
-    # CG.run(problemLS, verbose=True)
-    # if PLOT:
-    #     plt.figure(figsize=(7, 3))
-    #     plt.imshow(problemLS.model.getNdArray(), cmap="gray"), plt.colorbar()
-    #     plt.title('CG, iter=%d' % CG.stopper.niter)
-    #     plt.show()
+    problemLS = ProblemL2Linear(x.clone().zero(), y, Iop)
+    CG = LCGsolver(BasicStopper(niter=30))
+    CG.setDefaults()
+    CG.run(problemLS, verbose=True)
+    if PLOT:
+        plt.figure(figsize=(5, 4))
+        plt.plot(x.getNdArray(), 'k', lw=1, label='x')
+        plt.plot(y.getNdArray(), '.k', label='y=x+n')
+        plt.plot(problemLS.model.getNdArray(), 'r', lw=1, label='x_inv')
+        plt.legend()
+        plt.title('Least-Squares')
+        plt.show()
     
     # FISTA
-    # problemFISTA = ProblemL1Lasso(model.clone().zero(), data, G, lambda_value=1, op_norm=G_eigen**2)  # G_eigen squared because we are solving Op.H*Op
-    # FISTA = ISTAsolver(BasicStopper(niter=100), fast=True)
-    # FISTA.setDefaults()
-    # FISTA.run(problemFISTA, verbose=True)
-    # if PLOT:
-    #     plt.figure(figsize=(7, 3))
-    #     plt.imshow(problemFISTA.model.getNdArray(), cmap="gray"), plt.colorbar()
-    #     plt.title(r'FISTA, iter=%d, $\lambda$=%.2f' % (FISTA.stopper.niter, problemFISTA.lambda_value))
-    #     plt.show()
+    problemFISTA = ProblemL1Lasso(x.clone().zero(), y, Iop, lambda_value=2, op_norm=1.)
+    FISTA = ISTAsolver(BasicStopper(niter=30), fast=True)
+    FISTA.setDefaults()
+    FISTA.run(problemFISTA, verbose=True)
+    if PLOT:
+        plt.figure(figsize=(5, 4))
+        plt.plot(x.getNdArray(), 'k', lw=1, label='x')
+        plt.plot(y.getNdArray(), '.k', label='y=x+n')
+        plt.plot(problemFISTA.model.getNdArray(), 'r', lw=1, label='x_inv')
+        plt.legend()
+        plt.title('FISTA inversion')
+        plt.show()
 
     # TODO SB and ADMM do not recover the real amplitude. Why?
     # SplitBregman
-    problemSB = ProblemLinearReg(model.clone().zero(), data, G,
-                                 regsL1=pyOperator.IdentityOp(model), epsL1=.01)
+    problemSB = ProblemLinearReg(x.clone().zero(), y, Iop, regsL1=Dop, epsL1=.3, dfw=0.01)
 
-    SB = SplitBregmanSolver(BasicStopper(niter=10), niter_inner=3, niter_solver=5, steepest=False, breg_weight=.99)
+    SB = SplitBregmanSolver(BasicStopper(niter=50), niter_inner=3, niter_solver=30,
+                            steepest=False, breg_weight=1, use_prev_sol=False)
     SB.setDefaults()
     SB.run(problemSB, verbose=True, inner_verbose=False)
     if PLOT:
-        plt.figure(figsize=(7, 3))
-        plt.imshow(problemSB.model.getNdArray(), cmap='gray'), plt.colorbar()
-        plt.title(r'SplitBregman, $\lambda$=%.1e, iters=%d,%d,%d, $\beta$=%.2f'
-                  % (problemSB.epsL1[0], SB.stopper.niter, SB.niter_inner, SB.niter_solver, SB.breg_weight))
+        plt.figure(figsize=(5, 4))
+        plt.plot(x.getNdArray(), 'k', lw=1, label='x')
+        plt.plot(y.getNdArray(), '.k', label='y=x+n')
+        plt.plot(problemSB.model.getNdArray(), 'r', lw=1, label='x_inv')
+        plt.plot(derivative.getNdArray(), '.b', label='dx')
+        plt.plot((Dop * problemSB.model).getNdArray(), 'b', label='dx_inv')
+        plt.legend()
+        plt.title('SB inversion')
         plt.show()
-    mse_sb = (model.clone() - problemSB.model).norm()**2
-    print("Split-Bregman solution MSE = %.2e" % mse_sb)
+    # mse_sb = (model.clone() - problemSB.model).norm()**2
+    # print("Split-Bregman solution MSE = %.2e" % mse_sb)
 
     # ADMM
     problemADMM = ProblemLinearReg(model.clone().zero(), data, G,
