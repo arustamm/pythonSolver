@@ -7,17 +7,6 @@ from pyStopper import BasicStopper
 from pyProblem import ProblemLinearSymmetric
 from pyLinearSolver import SymLCGsolver
 
-# Testing if genericIO and SepVector module is present
-try:
-	from imp import find_module
-	find_module('genericIO')
-	import genericIO
-	SepVector = genericIO.SepVector
-	genIO_found = True
-except ImportError:
-	genIO_found = False
-
-
 # Beta functions
 # grad=new gradient, grad0=old, dir=search direction
 # From A SURVEY OF NONLINEAR CONJUGATE GRADIENT METHODS
@@ -431,12 +420,8 @@ class LBFGSsolver(Solver):
 		if self.prefix is not None and self.save_est:
 			step_filename = self.prefix + "step_vector_%s.H" % iiter
 			grad_diff_filename = self.prefix + "grad_diff_vector_%s.H" % iiter
-			if genIO_found and self.use_SepVector:  # Writing using genericIO and SepVector
-				genericIO.defaultIO.writeVector(step_filename, self.step_vectors[index])
-				genericIO.defaultIO.writeVector(grad_diff_filename, self.grad_diff_vectors[index])
-			else:
-				self.step_vectors[index].writeVec(step_filename)
-				self.grad_diff_vectors[index].writeVec(grad_diff_filename)
+			self.step_vectors[index].writeVec(step_filename)
+			self.grad_diff_vectors[index].writeVec(grad_diff_filename)
 
 	def check_rho(self, denom_dot, step_index, iiter):
 		"""Function to check scaling factor of Hessian inverse estimate"""
@@ -586,8 +571,6 @@ class LBFGSsolver(Solver):
 		success = True
 		self.tmp_vector = bfgs_dmodl.clone()
 		self.tmp_vector.zero()
-		# For saving estimated Hessian vector
-		self.use_SepVector = isinstance(prblm_mdl, SepVector.vector) if genIO_found else False
 
 		# Inversion loop
 		while True:

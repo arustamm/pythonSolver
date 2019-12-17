@@ -27,7 +27,7 @@ class Stepper:
         except NotImplementedError:
             if logger:
                 logger.addToLog(
-                    "	!!!dresf not implemented; stepper will use inverse of search direction norm as initial step length value!!!")
+                    "\t!!!dresf not implemented; stepper will use inverse of search direction norm as initial step length value!!!")
             # Initial step length value of 1.0 / |dm|_2
             alpha_guess = 1.0 / dmodl.norm()
             return alpha_guess
@@ -37,7 +37,7 @@ class Stepper:
         if dres_dres == 0.:
             if logger:
                 logger.addToLog(
-                    "	!!!Gradient in the null space of linear forward operator; using inverse of search direction norm as step length value!!!")
+                    "\t!!!Gradient in the null space of linear forward operator; using inverse of search direction norm as step length value!!!")
             # Initial step length value of 1.0 / |dm|_2
             alpha_guess = 1.0 / dmodl.norm()
         else:
@@ -185,7 +185,7 @@ class CvSrchStep(Stepper):
                 dx * (stp - stx) >= 0.0 or
                 stpmax < stpmin):
             if logger:
-                logger.addToLog("	Function cstep could find step and update interval of uncertainty!")
+                logger.addToLog("\tFunction cstep could find step and update interval of uncertainty!")
             return stx, fx, dx, sty, fy, dy, stp, fp, dp, brackt, success
 
         # Determine if the derivatives have opposite sign.
@@ -350,7 +350,7 @@ class CvSrchStep(Stepper):
         dphi_init = prblm_grad.dot(dmodl)
         if dphi_init > 0.0:
             if logger:
-                logger.addToLog("Warning! Current search direction is not a descent one!")
+                logger.addToLog("\tWarning! Current search direction is not a descent one!")
             return self.alpha, success
         # Model temporary vector
         model_step = modl.clone()
@@ -362,7 +362,7 @@ class CvSrchStep(Stepper):
         if alpha < self.zero:
             alpha = self.estimate_initial_guess(problem, modl, dmodl, logger)
         if logger:
-            logger.addToLog("initial-steplength=%.2e" % alpha)
+            logger.addToLog("\tinitial-steplength=%.2e" % alpha)
 
         # Initializing parameters
         p5 = 0.5
@@ -402,12 +402,12 @@ class CvSrchStep(Stepper):
             if ((brackt and (alpha <= alpha_int_min or alpha >= alpha_int_max)) or fev >= self.maxfev - 1 or (
                     not cstep_success) or (brackt and alpha_int_max - alpha_int_min <= self.xtol * alpha_int_max)):
                 if logger:
-                    logger.addToLog("Unusual termination is to occur. Setting alpha to be the lowest point obtained so far.")
+                    logger.addToLog("\tUnusual termination is to occur. Setting alpha to be the lowest point obtained so far.")
                 alpha = alphax
 
             # Evaluate the function and gradient at alpha and compute the directional derivative.
             if logger:
-                logger.addToLog("Current testing point (alpha=%.2e): m_current+alpha*dm" % alpha)
+                logger.addToLog("\tCurrent testing point (alpha=%.2e): m_current+alpha*dm" % alpha)
             model_step.copy(modl)
             model_step.scaleAdd(dmodl, sc2=alpha)
             # Checking if model parameters hit the bounds
@@ -418,17 +418,17 @@ class CvSrchStep(Stepper):
             if prblm_mdl.isDifferent(model_step):
                 # Model hit bounds
                 if logger:
-                    logger.addToLog("Model hit provided bounds. Projecting it onto them.")
+                    logger.addToLog("\tModel hit provided bounds. Projecting it onto them.")
             phi_alpha = problem.get_obj(model_step)
             fev += 1
             # Checking if a NaN is encountered
             if isnan(phi_alpha):
                 if logger:
-                    logger.addToLog("!!!Objective function is NaN! Stepper unsuccessful!!!")
+                    logger.addToLog("\t!!!Objective function is NaN! Stepper unsuccessful!!!")
                 problem.set_model(modl)
                 break
             if logger:
-                logger.addToLog("Objective function value of %.5e (feval = %d)" % (phi_alpha, problem.get_fevals()))
+                logger.addToLog("\tObjective function value of %.5e (feval = %d)" % (phi_alpha, problem.get_fevals()))
             prblm_grad = problem.get_grad(model_step)
             dphi_alpha = prblm_grad.dot(dmodl)
             phi_test1 = phi_init + alpha * dphi_test
@@ -436,31 +436,31 @@ class CvSrchStep(Stepper):
             # Test for convergence
             if (brackt and (alpha <= alpha_int_min or alpha >= alpha_int_max)) or (not cstep_success):
                 if logger:
-                    logger.addToLog("Rounding errors prevent further progress. There may not be a step which satisfies"
-                                    "the sufficient decrease and curvature conditions. Tolerances may be too small.")
+                    logger.addToLog("\tRounding errors prevent further progress. There may not be a step which satisfies"
+                                    "\tthe sufficient decrease and curvature conditions. Tolerances may be too small.")
                 break
             if alpha == self.alpha_max and phi_alpha <= phi_test1 and dphi_alpha <= dphi_test:
                 if logger:
-                    logger.addToLog("The step-length value is at the upper bound (alpha_max) of %.2e" % self.alpha_max)
+                    logger.addToLog("\tThe step-length value is at the upper bound (alpha_max) of %.2e" % self.alpha_max)
                 break
             if alpha == self.alpha_min and (phi_alpha > phi_test1 or dphi_alpha >= dphi_test):
                 if logger:
-                    logger.addToLog("The step-length value is at the lower bound (alpha_min) of %.2e" % self.alpha_min)
+                    logger.addToLog("\tThe step-length value is at the lower bound (alpha_min) of %.2e" % self.alpha_min)
                 break
             if fev >= self.maxfev:
                 if logger:
-                    logger.addToLog("Number of objective function evaluation reached maxfev of %d" % self.maxfev)
+                    logger.addToLog("\tNumber of objective function evaluation reached maxfev of %d" % self.maxfev)
                 break
             if brackt and alpha_int_max - alpha_int_min <= self.xtol * alpha_int_max:
                 if logger:
-                    logger.addToLog("Relative width of the interval of uncertainty is at most xtol of %.2e" % self.xtol)
+                    logger.addToLog("\tRelative width of the interval of uncertainty is at most xtol of %.2e" % self.xtol)
                 break
             if phi_alpha <= phi_test1 and abs(dphi_test) <= self.gtol * (-dphi_init) and phi_alpha < phi_init:
                 success = True
                 if logger:
-                    logger.addToLog("The sufficient decrease condition and the directional derivative condition hold "
-                                    "(i.e., Strong Wolfe conditions met).\n	Stepper successuful for step length value"
-                                    "of %.2e and objective function of %.2e (feval = %d)"
+                    logger.addToLog("\tThe sufficient decrease condition and the directional derivative condition hold "
+                                    "\t(i.e., Strong Wolfe conditions met).\n	Stepper successuful for step length value"
+                                    "\tof %.2e and objective function of %.2e (feval = %d)"
                                     % (alpha, phi_alpha, problem.get_fevals()))
                 break
 
@@ -570,7 +570,7 @@ class ParabolicStep(Stepper):
         dphi = prblm_grad.dot(dmodl)
         if dphi > 0.0:
             if logger:
-                logger.addToLog("Warning! Current search direction is not a descent one!")
+                logger.addToLog("\tWarning! Current search direction is not a descent one!")
             return alpha, success
         itry = 1
         total_trials = deepcopy(self.ntry)
@@ -580,13 +580,13 @@ class ParabolicStep(Stepper):
         while itry <= total_trials:
             # Writing info to log file
             if logger:
-                logger.addToLog("trial number: %d" % itry)
-                logger.addToLog("initial-steplength=%.2e" % alpha)
+                logger.addToLog("\ttrial number: %d" % itry)
+                logger.addToLog("\tinitial-steplength=%.2e" % alpha)
             # Find the first guess as if the problem was linear (Tangent method)
             if (itry == self.ntry) or (alpha < self.zero):
                 alpha = self.estimate_initial_guess(problem, modl, dmodl, logger)
                 if logger:
-                    logger.addToLog("Guessing step length of: %.2e" % alpha)
+                    logger.addToLog("\tGuessing step length of: %.2e" % alpha)
             # Test values of objective function for two scaled versions of the step length
             # Testing c1 scale
             if logger:
@@ -612,10 +612,10 @@ class ParabolicStep(Stepper):
             # Checking if a NaN is encountered in any of the two tested points
             if isnan(obj1):
                 if logger:
-                    logger.addToLog("!!!Problem with step length and objective function!!!")
+                    logger.addToLog("\t!!!Problem with step length and objective function!!!")
                 if itry >= self.ntry:
                     if logger:
-                        logger.addToLog("!!!Check problem definition or change solver!!!")
+                        logger.addToLog("\t!!!Check problem definition or change solver!!!")
                     # Setting model to current one and resetting initial step length value
                     alpha = 0.0
                     self.alpha = 0.0
@@ -623,7 +623,7 @@ class ParabolicStep(Stepper):
                     break
                 else:
                     if logger:
-                        logger.addToLog("!!!Guessing linear step length to try to solve problem!!!")
+                        logger.addToLog("\t!!!Guessing linear step length to try to solve problem!!!")
                     itry = self.ntry  # To not repeat computation of linear guess
                     continue
             # Testing c2 scale
@@ -651,10 +651,10 @@ class ParabolicStep(Stepper):
             # Checking for NaN
             if isnan(obj2):
                 if logger:
-                    logger.addToLog("!!!Problem with step length and objective function!!!")
+                    logger.addToLog("\t!!!Problem with step length and objective function!!!")
                 if itry >= self.ntry:
                     if logger:
-                        logger.addToLog("!!!Check problem definition or change solver!!!")
+                        logger.addToLog("\t!!!Check problem definition or change solver!!!")
                     # Setting model to current one and resetting initial step length value
                     alpha = 0.0
                     self.alpha = 0.0
@@ -662,7 +662,7 @@ class ParabolicStep(Stepper):
                     break
                 else:
                     if logger:
-                        logger.addToLog("!!!Guessing linear step length to try to solve problem!!!")
+                        logger.addToLog("\t!!!Guessing linear step length to try to solve problem!!!")
                     itry = self.ntry  # To not repeat computation of linear guess
                     continue
             # Checking if parabolic point is necessary or not
@@ -675,19 +675,19 @@ class ParabolicStep(Stepper):
                     success = True
                     alpha *= self.c1
                     if logger:
-                        logger.addToLog("c1 best step-length value of: %.2e (feval = %d)" % (alpha, problem.get_fevals() - 1) + msg)
+                        logger.addToLog("\tc1 best step-length value of: %.2e (feval = %d)" % (alpha, problem.get_fevals() - 1) + msg)
                     break
                 elif obj2 < obj0 and obj2 < obj1 and obj2 < obj3:
                     success = True
                     alpha *= self.c2
                     if logger:
-                        logger.addToLog("c2 best step-length value of: %.2e (feval = %d)" % (alpha, problem.get_fevals()) + msg)
+                        logger.addToLog("\tc2 best step-length value of: %.2e (feval = %d)" % (alpha, problem.get_fevals()) + msg)
                     break
             # If points lay on a horizontal line pick minimum alpha set by user
             if obj0 == obj1 == obj2 or (self.c2 * (obj1 - obj0) + self.c1 * (obj0 - obj2)) == 0.:
                 step_scale = self.alpha_scale_min
                 if logger:
-                    logger.addToLog("Two testing points on a line: cannot fit a parabola, using minimum step-length of %.2e"
+                    logger.addToLog("\tTwo testing points on a line: cannot fit a parabola, using minimum step-length of %.2e"
                                     % (step_scale * alpha))
             else:
                 # Otherwise, find the optimal parabolic step length
@@ -698,7 +698,7 @@ class ParabolicStep(Stepper):
             # If step length negative, re-evaluate points
             if step_scale * alpha < 0.:
                 if logger:
-                    logger.addToLog("Encountered a negative step-length value: %.2e; Shrinking step-length value."
+                    logger.addToLog("\tEncountered a negative step-length value: %.2e; Shrinking step-length value."
                                     % (step_scale * alpha))
                 # Shrink line search
                 alpha *= self.shrink
@@ -707,12 +707,12 @@ class ParabolicStep(Stepper):
             # Clipping the step-length scale
             if step_scale < self.alpha_scale_min:
                 if logger:
-                    logger.addToLog("!!! step-length scale of %.2e smaller than provided lower bound."
+                    logger.addToLog("\t!!! step-length scale of %.2e smaller than provided lower bound."
                                     "Clipping its value to bound value of %.2e !!!" % (step_scale, self.alpha_scale_min))
                 step_scale = self.alpha_scale_min
             elif step_scale > self.alpha_scale_max:
                 if logger:
-                    logger.addToLog("!!! step-length scale of %.2e greater than provided upper bound."
+                    logger.addToLog("\t!!! step-length scale of %.2e greater than provided upper bound."
                                     "Clipping its value to bound value of %.2e !!!" % (step_scale, self.alpha_scale_max))
                 step_scale = self.alpha_scale_max
 
@@ -736,10 +736,10 @@ class ParabolicStep(Stepper):
 
             # Writing info to log file
             if logger:
-                logger.addToLog("Initial objective function value: %.2e,"
-                                "Objective function at c1*alpha*dm: %.2e,"
-                                "Objective function at c2*alpha*dm: %.2e,"
-                                "Objective function at parabola minimum: %.2e"
+                logger.addToLog("\tInitial objective function value: %.2e,"
+                                "\tObjective function at c1*alpha*dm: %.2e,"
+                                "\tObjective function at c2*alpha*dm: %.2e,"
+                                "\tObjective function at parabola minimum: %.2e"
                                 % (obj0, obj1, obj2, obj3))
             itry += 1
 
@@ -748,25 +748,25 @@ class ParabolicStep(Stepper):
                 success = True
                 alpha *= self.c1
                 if logger:
-                    logger.addToLog("c1 best step-length value of: %.2e (feval = %d)" % (alpha, problem.get_fevals() - 2))
+                    logger.addToLog("\tc1 best step-length value of: %.2e (feval = %d)" % (alpha, problem.get_fevals() - 2))
                 break
             elif obj2 < obj0 and obj2 < obj1 and obj2 < obj3:
                 success = True
                 alpha *= self.c2
                 if logger:
-                    logger.addToLog("c2 best step-length value of: %.2e (feval = %d)" % (alpha, problem.get_fevals() - 1))
+                    logger.addToLog("\tc2 best step-length value of: %.2e (feval = %d)" % (alpha, problem.get_fevals() - 1))
                 break
             elif obj3 < obj0 and obj3 <= obj1 and obj3 <= obj2:
                 success = True
                 alpha *= step_scale
                 if logger:
-                    logger.addToLog("parabola minimum best step-length value of: %.2e (feval = %d)" % (alpha, problem.get_fevals()))
+                    logger.addToLog("\tparabola minimum best step-length value of: %.2e (feval = %d)" % (alpha, problem.get_fevals()))
                 break
             else:
                 # Shrink line search
                 alpha *= self.shrink
                 if logger:
-                    logger.addToLog("Shrinking search direction")
+                    logger.addToLog("\tShrinking search direction")
 
         if success:
             # Line search has finished, update model
@@ -840,7 +840,7 @@ class ParabolicStepConst(Stepper):
         dphi = prblm_grad.dot(dmodl)
         if dphi > 0.0:
             if logger:
-                logger.addToLog("Warning! Current search direction is not a descent one!")
+                logger.addToLog("\tWarning! Current search direction is not a descent one!")
             return alpha, success
         itry = 1
         total_trials = deepcopy(self.ntry)
@@ -850,13 +850,13 @@ class ParabolicStepConst(Stepper):
         while itry <= total_trials:
             # Writing info to log file
             if logger:
-                logger.addToLog("trial number: %d" % itry)
-                logger.addToLog("initial-steplength=%.2e" % alpha)
+                logger.addToLog("\ttrial number: %d" % itry)
+                logger.addToLog("\tinitial-steplength=%.2e" % alpha)
             # Find the first guess as if the problem was linear (Tangent method)
             if (itry == self.ntry) or (alpha < self.zero):
                 alpha = self.estimate_initial_guess(problem, modl, dmodl, logger)
                 if logger:
-                    logger.addToLog("Guessing step length of: %.2e" % alpha)
+                    logger.addToLog("\tGuessing step length of: %.2e" % alpha)
             # Test values of objective function for two scaled versions of the step length
             # Testing c1 scale
             if logger:
@@ -887,10 +887,10 @@ class ParabolicStepConst(Stepper):
             # Checking if a NaN is encountered in any of the two tested points
             if isnan(obj1):
                 if logger:
-                    logger.addToLog("!!!Problem with step length and objective function!!!")
+                    logger.addToLog("\t!!!Problem with step length and objective function!!!")
                 if itry >= self.ntry:
                     if logger:
-                        logger.addToLog("!!!Check problem definition or change solver!!!")
+                        logger.addToLog("\t!!!Check problem definition or change solver!!!")
                     # Setting model to current one and resetting initial step length value
                     alpha = 0.0
                     self.alpha = 0.0
@@ -898,7 +898,7 @@ class ParabolicStepConst(Stepper):
                     break
                 else:
                     if logger:
-                        logger.addToLog("!!!Guessing linear step length to try to solve problem!!!")
+                        logger.addToLog("\t!!!Guessing linear step length to try to solve problem!!!")
                     itry = self.ntry  # To not repeat computation of linear guess
                     continue
             # Computing local constant curvature
@@ -909,7 +909,7 @@ class ParabolicStepConst(Stepper):
                 # Shrink line search
                 alpha *= self.shrink
                 if logger:
-                    logger.addToLog("Estimated a negative curvature of %.2e. Shrinking search direction" % c)
+                    logger.addToLog("\tEstimated a negative curvature of %.2e. Shrinking search direction" % c)
                 itry += 1
                 continue
             # Computing objective function at local parabola minimum
@@ -920,7 +920,7 @@ class ParabolicStepConst(Stepper):
             # If step length negative, re-evaluate points
             if alpha_parab < 0.:
                 if logger:
-                    logger.addToLog("Encountered a negative step-length value: %.2e; Shrinking step-length value." % alpha_parab)
+                    logger.addToLog("\tEncountered a negative step-length value: %.2e; Shrinking step-length value." % alpha_parab)
                 # Shrink line search
                 alpha *= self.shrink
                 itry += 1
@@ -928,12 +928,12 @@ class ParabolicStepConst(Stepper):
             # Clipping the step-length scale
             if step_scale < self.alpha_scale_min:
                 if logger:
-                    logger.addToLog("!!! step-length scale of %.2e smaller than provided lower bound."
+                    logger.addToLog("\t!!! step-length scale of %.2e smaller than provided lower bound."
                                     "Clipping its value to bound value of %.2e !!!" % (step_scale, self.alpha_scale_min))
                 step_scale = self.alpha_scale_min
             elif step_scale > self.alpha_scale_max:
                 if logger:
-                    logger.addToLog("!!! step-length scale of %.2e greater than provided upper bound."
+                    logger.addToLog("\t!!! step-length scale of %.2e greater than provided upper bound."
                                     "Clipping its value to bound value of %.2e !!!" % (step_scale, self.alpha_scale_max))
                 step_scale = self.alpha_scale_max
 
@@ -956,9 +956,9 @@ class ParabolicStepConst(Stepper):
 
             # Writing info to log file
             if logger:
-                logger.addToLog("Initial objective function value: %2e,"
-                                "Objective function at c1*alpha*dm: %.2e,"
-                                "Objective function at parabola minimum: %.2e"
+                logger.addToLog("\tInitial objective function value: %2e,"
+                                "\tObjective function at c1*alpha*dm: %.2e,"
+                                "\tObjective function at parabola minimum: %.2e"
                                 % (obj0, obj1, obj2))
             itry += 1
 
@@ -967,19 +967,19 @@ class ParabolicStepConst(Stepper):
                 success = True
                 alpha *= self.c1
                 if logger:
-                    logger.addToLog("c1 best step-length value of: %.2e (feval = %d)" % (alpha, problem.get_fevals() - 1))
+                    logger.addToLog("\tc1 best step-length value of: %.2e (feval = %d)" % (alpha, problem.get_fevals() - 1))
                 break
             elif obj2 < obj0 and obj2 <= obj1:
                 success = True
                 alpha *= step_scale
                 if logger:
-                    logger.addToLog("parabola minimum best step-length value of: %.2e (feval = %d)" % (alpha, problem.get_fevals()))
+                    logger.addToLog("\tparabola minimum best step-length value of: %.2e (feval = %d)" % (alpha, problem.get_fevals()))
                 break
             else:
                 # Shrink line search
                 alpha *= self.shrink
                 if logger:
-                    logger.addToLog("Shrinking search direction")
+                    logger.addToLog("\tShrinking search direction")
 
         if success:
             # Line search has finished, update model
