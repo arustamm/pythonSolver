@@ -13,7 +13,7 @@ def _soft_thresh(x, thresh):
     :param thresh   : float, soft threshold
     :return         : vector, output clipped values
     """
-    return x.clone().sign() * x.clone().abs().addbias(-thresh).maximum(x.clone().zero())
+    return x.clone().sign() * x.clone().abs().addbias(-thresh).maximum(0.)
 
 
 class ISTAsolver(Solver):
