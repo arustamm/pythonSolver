@@ -428,7 +428,7 @@ class CvSrchStep(Stepper):
                 problem.set_model(modl)
                 break
             if logger:
-                logger.addToLog("Objective function value of %.2e (feval = %d)" % (phi_alpha, problem.get_fevals()))
+                logger.addToLog("Objective function value of %.5e (feval = %d)" % (phi_alpha, problem.get_fevals()))
             prblm_grad = problem.get_grad(model_step)
             dphi_alpha = prblm_grad.dot(dmodl)
             phi_test1 = phi_init + alpha * dphi_test
@@ -608,7 +608,7 @@ class ParabolicStep(Stepper):
             res_prblm = problem.get_res(model_step)
             res1 = res_prblm.clone()
             if logger:
-                logger.addToLog("\tObjective function value of %.2e" % obj1)
+                logger.addToLog("\tObjective function value of %.5e" % obj1)
             # Checking if a NaN is encountered in any of the two tested points
             if isnan(obj1):
                 if logger:
@@ -647,7 +647,7 @@ class ParabolicStep(Stepper):
             res_prblm = problem.get_res(model_step)
             res2 = res_prblm.clone()
             if logger:
-                logger.addToLog("\tObjective function value of %.2e" % obj2)
+                logger.addToLog("\tObjective function value of %.5e" % obj2)
             # Checking for NaN
             if isnan(obj2):
                 if logger:
@@ -732,7 +732,7 @@ class ParabolicStep(Stepper):
                     logger.addToLog(msg)
             obj3 = problem.get_obj(model_step)
             if logger:
-                logger.addToLog("\tObjective function value of %.2e" % obj3)
+                logger.addToLog("\tObjective function value of %.5e" % obj3)
 
             # Writing info to log file
             if logger:
@@ -883,7 +883,7 @@ class ParabolicStepConst(Stepper):
             res_prblm = problem.get_res(model_step)
             res1 = res_prblm.clone()
             if logger:
-                logger.addToLog("\tObjective function value of %.2e" % obj1)
+                logger.addToLog("\tObjective function value of %.5e" % obj1)
             # Checking if a NaN is encountered in any of the two tested points
             if isnan(obj1):
                 if logger:
@@ -952,7 +952,7 @@ class ParabolicStepConst(Stepper):
                     logger.addToLog("\tModel hit provided bounds. Projecting it onto them.")
             obj2 = problem.get_obj(model_step)
             if logger:
-                logger.addToLog("\tObjective function value of %.2e" % obj2)
+                logger.addToLog("\tObjective function value of %.5e" % obj2)
 
             # Writing info to log file
             if logger:
