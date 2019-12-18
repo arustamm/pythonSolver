@@ -60,14 +60,15 @@ class ISTAsolver(Solver):
             raise ValueError("Regularization weight (lambda_value) is not set!")
         if not restart:
             if self.create_msg:
-                msg = "ITERATIVE SHRINKAGE-THRESHOLDING ALGORITHM log file\n"
-                if self.fast:
-                    msg = "FAST " + msg
-                # Printing restart folder
-                msg += "Restart folder: %s\n" % self.restart.restart_folder
-                msg += "Regularization weight: %s\n" % problem.lambda_value
+                msg = 90 * "#" + "\n"
+                msg += "\t\t\t\tFAST " if self.fast else "\t\t\t\t\t"
+                msg += "ITERATIVE SHRINKAGE-THRESHOLDING ALGORITHM log file\n"
+                msg += "\tRestart folder: %s\n" % self.restart.restart_folder
+                msg += "\tModeling Operator:\t\t%s\n" % problem.op
+                msg += "\tRegularization weight:\t%.2e\n" % problem.lambda_value
+                msg += 90 * "#" + "\n"
                 if verbose:
-                    print(msg.replace("log file", ""))
+                    print(msg.replace(" log file", ""))
                 if self.logger:
                     self.logger.addToLog(msg)
 
@@ -170,8 +171,8 @@ class ISTAsolver(Solver):
             obj1 = problem.get_obj(ista_mdl)
             if obj1 >= obj0:
                 if self.create_msg:
-                    msg = "Objective function didn't reduce, will terminate solver: obj_new=%.2e obj_current=%.2e" % (
-                        obj1, obj0)
+                    msg = "Objective function didn't reduce, will terminate solver:\n\t" \
+                          "obj_new = %.2e\tobj_cur = %.2e" % (obj1, obj0)
                     if verbose:
                         print(msg)
                     # Writing on log file
@@ -210,11 +211,14 @@ class ISTAsolver(Solver):
         # Writing last inverted model
         self.save_results(iiter, problem, force_save=True, force_write=True)
         if self.create_msg:
-            endmsg = "ITERATIVE SHRINKAGE-THRESHOLDING ALGORITHM log file end"
-            if self.fast:
-                endmsg = "FAST " + endmsg
+            msg = 90 * "#" + "\n"
+            msg += "\t\t\t\tFAST " if self.fast else "\t\t\t\t\t"
+            msg += "ITERATIVE SHRINKAGE-THRESHOLDING ALGORITHM log file end\n"
+            msg += 90 * "#" + "\n"
+            if verbose:
+                print(msg.replace(" log file", ""))
             if self.logger:
-                self.logger.addToLog(endmsg)
+                self.logger.addToLog(msg)
         # Clear restart object
         self.restart.clear_restart()
 
@@ -269,11 +273,14 @@ class ISTCsolver(Solver):
         scale_precond = 0.99 * np.sqrt(2) / problem.op_norm  # scaling factor applied to operator A for preconditioning
         if not restart:
             if self.create_msg:
-                msg = "ITERATIVE SOFT-THRESHOLDING WITH COOLING SOLVER log file\n"
-                # Printing restart folder
-                msg += "Restart folder: %s\n" % self.restart.restart_folder
+                msg = 90 * "#" + "\n"
+                msg += "\t\t\tITERATIVE SOFT-THRESHOLDING WITH COOLING SOLVER log file\n"
+                msg += "\tRestart folder: %s\n" % self.restart.restart_folder
+                msg += "\tModeling Operator:\t\t%s\n" % problem.op
+                msg += "\tRegularization weight:\t%.2e\n" % problem.lambda_value
+                msg += 90 * "#" + "\n"
                 if verbose:
-                    print(msg.replace("log file", ""))
+                    print(msg.replace(" log file", ""))
                 if self.logger:
                     self.logger.addToLog(msg)
 
@@ -333,7 +340,7 @@ class ISTCsolver(Solver):
             problem.set_lambda(lambda_values[iiter])
             problem.obj_updated = False  # Lambda has been changed so objective function will change as well
             if self.create_msg:
-                msg = "Outer_iter = %s lambda_value = %.2e" % (str(iiter).zfill(self.stopper.zfill), lambda_values[iiter])
+                msg = "Outer_iter = %s\tlambda_value = %.2e" % (str(iiter).zfill(self.stopper.zfill), lambda_values[iiter])
                 if verbose:
                     print(msg)
                 if self.logger:
@@ -395,8 +402,8 @@ class ISTCsolver(Solver):
                 istc_mdl.writeVec("solver_model.H")
                 if obj1 >= obj0:
                     if self.create_msg:
-                        msg = "Objective function didn't reduce, will terminate solver: obj_new=%.2e obj_current=%.2e" % (
-                            obj1, obj0)
+                        msg = "Objective function didn't reduce, will terminate solver:\n\t" \
+                              "obj_new = %.2e\tobj_cur = %.2e" % (obj1, obj0)
                         if verbose:
                             print(msg)
                         # Writing on log file
@@ -436,7 +443,13 @@ class ISTCsolver(Solver):
         istc_mdl_save.scale(scale_precond)
         # Writing last inverted model
         self.save_results(iiter, problem, istc_mdl_save, force_save=True, force_write=True)
-        if self.logger:
-            self.logger.addToLog("ITERATIVE SOFT-THRESHOLDING WITH COOLING SOLVER log file end")
+        if self.create_msg:
+            msg = 90 * "#" + "\n"
+            msg += "\t\t\tITERATIVE SOFT-THRESHOLDING WITH COOLING SOLVER log file end\n"
+            msg += 90 * "#" + "\n"
+            if verbose:
+                print(msg.replace(" log file", ""))
+            if self.logger:
+                self.logger.addToLog(msg)
         # Clear restart object
         self.restart.clear_restart()
