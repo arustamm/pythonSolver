@@ -7,7 +7,6 @@ from pySolver import Solver
 from pySparseSolver import ISTAsolver
 from pyStopper import BasicStopper
 from math import isnan
-import numpy as np
 
 
 class ProblemLinearReg(Problem):
@@ -182,20 +181,12 @@ class SplitBregmanSolver(Solver):
         
         self.linear_solver = LCGsolver(BasicStopper(niter=self.niter_solver), steepest=steepest, logger=self.logger)
         self.linear_solver.setDefaults(iter_sampling=1, flush_memory=True)
-
-        self.breg_b = None
-        self.breg_a = None
-        self.dataregsL1 = None
-        self.solution = None
         
         # print formatting
         self.iter_msg = "iter = %s, obj = %.5e, df_obj = %.2e, reg_obj = %.2e, resnorm = %.2e"
         
     def __del__(self):
         print('Destructor called, Split-Bregman deleted')
-    
-    def _update_dataregsL1(self):
-        self.dataregsL1 = self.breg_a.clone() - self.breg_b
         
     def run(self, problem, verbose=False, inner_verbose=False, restart=False, initial_guess=None):
         """Running SplitBregman solver"""
@@ -212,7 +203,6 @@ class SplitBregmanSolver(Solver):
         # initialize all the vectors and operators for Split-Bregman
         self.breg_b = problem.regL1_op.range.clone().zero()
         self.breg_a = self.breg_b.clone()
-        self.dataregsL1 = self.breg_b.clone()  # store breg_a - breg_b
         RL1x = self.breg_b.clone()  # store RegL1 * solution
         
         # TODO it is correct?
@@ -286,10 +276,6 @@ class SplitBregmanSolver(Solver):
             problem.res_regsL1_already_computed = False
             
             for iter_inner in range(self.niter_inner):
-                
-                # update L1 regularizer data for the inner problem
-                # TODO questo amico qui fa  C A S I N O
-                self._update_dataregsL1()
 
                 if self.create_msg:
                     msg = "\t\tstarting inner iter %d with a = %.2e, b = %.2e"\
@@ -309,6 +295,9 @@ class SplitBregmanSolver(Solver):
                     prior_model=pyVector.superVector(problem.dataregsL2, self.breg_a.clone() - self.breg_b),
                     minBound=problem.minBound, maxBound=problem.maxBound, boundProj=problem.boundProj
                 )
+                if outer_iter == 0 and initial_guess is not None:
+                    linear_problem.model = initial_guess.clone()
+                    
                 self.linear_solver.setDefaults()
                 self.linear_solver.run(linear_problem, verbose=inner_verbose)
                 # if np.isclose(sb_mdl.norm(), linear_problem.model.norm()):
@@ -334,11 +323,8 @@ class SplitBregmanSolver(Solver):
                         self.logger.addToLog("\n" + msg)
                 
                 # update breg_a
-                self.breg_a = _shrinkage(RL1x.clone() + self.breg_b, thresh=eps[-problem.nregsL1:])
-                # x = (RL1x.clone() + self.breg_b).getNdArray()[0]
-                # breg_a = x / (np.abs(x) + 1e-10) * np.maximum(np.abs(x)-eps[0], 0.)
-                # if not np.isclose(np.linalg.norm(breg_a), self.breg_a.norm()):
-                #     raise ValueError('Breg A implementations are different!')
+                self.breg_a.copy(_shrinkage(RL1x.clone() + self.breg_b, thresh=eps[-problem.nregsL1:]))
+                
             # update breg_b
             self.breg_b.scaleAdd(RL1x.clone() - self.breg_a, 1., self.breg_weight)
 
@@ -428,7 +414,7 @@ class ADMMsolver(Solver):
         self.solver_ISTA = ISTAsolver(BasicStopper(niter=self.niter_ISTA), fast=True, logger=self.logger)
         self.solver_ISTA.setDefaults(iter_sampling=1, flush_memory=True)
 
-        self.rho = rho      # ADMM penalty parameter
+        self.rho = rho          # ADMM penalty parameter
         self.mu = mu
         self.tau = tau
         self.auto_rho = auto_rho
@@ -483,12 +469,14 @@ class ADMMsolver(Solver):
         assert type(problem) == ProblemLinearReg, 'problem has to be a ProblemLinearReg'
         if problem.nregsL1 == 0:
             raise ValueError('ERROR! Provide at least one L1 regularizer!')
+        
         # I want to set dfw=1, so:
         epsL2 = [e / problem.dfw for e in problem.epsL2]
         epsL1 = [e / problem.dfw for e in problem.epsL1]
         gamma = max(epsL1)
 
         # A is the Vstack of the L1 reg operators, scaled by their respective eps
+        # we divide by gamma as gamma becomes the lambda value for the FISTA problem
         self.A = problem.regL1_op * [e / gamma for e in epsL1]
         
         # initialize all others variables
@@ -716,7 +704,7 @@ def main():
                 model.scaleAdd(self.data_tmp)
             return
      
-    PLOT = True
+    PLOT = False
     
     # data examples
     np.random.seed(1)
@@ -759,7 +747,7 @@ def main():
     
     # FISTA
     problemFISTA = ProblemL1Lasso(x.clone().zero(), y, Iop, lambda_value=2, op_norm=1.)
-    FISTA = ISTAsolver(BasicStopper(niter=30), fast=True)
+    FISTA = ISTAsolver(BasicStopper(niter=300), fast=True)
     FISTA.setDefaults()
     FISTA.run(problemFISTA, verbose=True)
     if PLOT:
@@ -771,9 +759,8 @@ def main():
         plt.title('FISTA inversion')
         plt.show()
 
-    # TODO SB and ADMM do not recover the real amplitude. Why?
     # SplitBregman
-    problemSB = ProblemLinearReg(x.clone().zero(), y, Iop, regsL1=Dop, epsL1=.3, dfw=0.01)
+    problemSB = ProblemLinearReg(x.clone().zero(), y, Iop, regsL1=Dop, epsL1=4., dfw=1.)
 
     SB = SplitBregmanSolver(BasicStopper(niter=50), niter_inner=3, niter_solver=30,
                             steepest=False, breg_weight=1, use_prev_sol=False)
@@ -789,20 +776,22 @@ def main():
         plt.legend()
         plt.title('SB inversion')
         plt.show()
-    # mse_sb = (model.clone() - problemSB.model).norm()**2
-    # print("Split-Bregman solution MSE = %.2e" % mse_sb)
 
     # ADMM
-    problemADMM = ProblemLinearReg(model.clone().zero(), data, G,
-                                   regsL1=pyOperator.IdentityOp(model), epsL1=1)
-    ADMM = ADMMsolver(BasicStopper(niter=1))
+    problemADMM = ProblemLinearReg(x.clone().zero(), y, Iop, regsL1=Dop, epsL1=4., dfw=1.)
+    
+    ADMM = ADMMsolver(BasicStopper(niter=10), niter_LCG=30, niter_ISTA=100)
     ADMM.setDefaults()
     ADMM.run(problemADMM, verbose=True, inner_verbose=True)
     if PLOT:
-        plt.figure(figsize=(7, 3))
-        plt.imshow(problemADMM.model.getNdArray(), cmap='gray'), plt.colorbar()
-        plt.title(r'ADMM, $\lambda$=%.1e, iters=%d,%d,%d'
-                  % (problemADMM.epsL1[0], ADMM.stopper.niter, ADMM.niter_LCG, ADMM.niter_ISTA))
+        plt.figure(figsize=(5, 4))
+        plt.plot(x.getNdArray(), 'k', lw=1, label='x')
+        plt.plot(y.getNdArray(), '.k', label='y=x+n')
+        plt.plot(problemADMM.model.getNdArray(), 'r', lw=1, label='x_inv')
+        plt.plot(derivative.getNdArray(), '.b', label='dx')
+        plt.plot((Dop * problemADMM.model).getNdArray(), 'b', label='dx_inv')
+        plt.legend()
+        plt.title('ADMM inversion')
         plt.show()
     return 0
 
