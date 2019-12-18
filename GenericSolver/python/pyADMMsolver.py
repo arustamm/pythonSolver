@@ -201,11 +201,10 @@ class SplitBregmanSolver(Solver):
         self.stopper.reset()
 
         # initialize all the vectors and operators for Split-Bregman
-        self.breg_b = problem.regL1_op.range.clone().zero()
-        self.breg_a = self.breg_b.clone()
-        RL1x = self.breg_b.clone()  # store RegL1 * solution
+        breg_b = problem.regL1_op.range.clone().zero()
+        breg_a = breg_b.clone()
+        RL1x = breg_b.clone()  # store RegL1 * solution
         
-        # TODO it is correct?
         sb_mdl = problem.model.clone().zero() if initial_guess is None else initial_guess.clone()
         
         # reweight the eps according to dfw
@@ -279,7 +278,7 @@ class SplitBregmanSolver(Solver):
 
                 if self.create_msg:
                     msg = "\t\tstarting inner iter %d with a = %.2e, b = %.2e"\
-                          % (iter_inner, self.breg_a.norm(), self.breg_b.norm())
+                          % (iter_inner, breg_a.norm(), breg_b.norm())
                     if verbose:
                         print(msg)
                     if self.logger:
@@ -292,7 +291,7 @@ class SplitBregmanSolver(Solver):
                     op=problem.op,
                     epsilon=eps,
                     reg_op=pyOperator.Vstack(problem.regL2_op, problem.regL1_op),
-                    prior_model=pyVector.superVector(problem.dataregsL2, self.breg_a.clone() - self.breg_b),
+                    prior_model=pyVector.superVector(problem.dataregsL2, breg_a.clone() - breg_b),
                     minBound=problem.minBound, maxBound=problem.maxBound, boundProj=problem.boundProj
                 )
                 if outer_iter == 0 and initial_guess is not None:
@@ -300,15 +299,7 @@ class SplitBregmanSolver(Solver):
                     
                 self.linear_solver.setDefaults()
                 self.linear_solver.run(linear_problem, verbose=inner_verbose)
-                # if np.isclose(sb_mdl.norm(), linear_problem.model.norm()):
-                #     if self.create_msg:
-                #         msg = "\t\tsolution not improving: mdl_old = %.2e, mdl_new = %.2e" \
-                #               % (sb_mdl.norm(), linear_problem.model.norm())
-                #         if verbose:
-                #             print(msg)
-                #         if self.logger:
-                #             self.logger.addToLog("\n" + msg)
-                #     break
+
                 sb_mdl = linear_problem.model.clone()
                 
                 # compute RL1*x
@@ -323,10 +314,10 @@ class SplitBregmanSolver(Solver):
                         self.logger.addToLog("\n" + msg)
                 
                 # update breg_a
-                self.breg_a.copy(_shrinkage(RL1x.clone() + self.breg_b, thresh=eps[-problem.nregsL1:]))
+                breg_a.copy(_shrinkage(RL1x.clone() + breg_b, thresh=eps[-problem.nregsL1:]))
                 
             # update breg_b
-            self.breg_b.scaleAdd(RL1x.clone() - self.breg_a, 1., self.breg_weight)
+            breg_b.scaleAdd(RL1x.clone() - breg_a, 1., self.breg_weight)
 
             outer_iter += 1
             # check objective function
@@ -385,7 +376,7 @@ class ADMMsolver(Solver):
     """Alternate Directions of Multipliers Method (ADMM)"""
 
     # Default class methods/functions
-    def __init__(self, stopper, logger=None, niter_LCG=5, niter_ISTA=15, rho=None, auto_rho=True, mu=10., tau=2.):
+    def __init__(self, stopper, logger=None, niter_LCG=5, niter_ISTA=15, rho=None, auto_rho=True, mu=10., tau=2., use_prev_sol=False):
         """
         Constructor for ADMM Solver
         .. math ::
@@ -400,6 +391,7 @@ class ADMMsolver(Solver):
         :param auto_rho     : bool; update rho automatically
         :param mu           : float; norm ratio between residuals for updating rho [10]
         :param tau          : float; scaling factor for updating rho [2]
+        :param use_prev_sol : bool; linear solver uses previous solution [False]
         """
         # Calling parent construction
         super(ADMMsolver, self).__init__()
@@ -413,6 +405,7 @@ class ADMMsolver(Solver):
         self.solver_LCG.setDefaults(iter_sampling=1, flush_memory=True)
         self.solver_ISTA = ISTAsolver(BasicStopper(niter=self.niter_ISTA), fast=True, logger=self.logger)
         self.solver_ISTA.setDefaults(iter_sampling=1, flush_memory=True)
+        self.use_prev_sol = use_prev_sol
 
         self.rho = rho          # ADMM penalty parameter
         self.mu = mu
@@ -420,38 +413,13 @@ class ADMMsolver(Solver):
         self.auto_rho = auto_rho
         self.primal = None      # aka r (in the complete formulation is A x + B z - c)
         self.dual = None        # aka s (in the complete formulation is rho A.H B r)
-        self.x = None           # solution vector
-        self.y = None           # lagrangian vector
-        self.u = None           # scaled dual variable
-        self.y_minus_u = None   # store y-u
-        self.A = None           # constraint matrix A
-        self.Ax = None          # store A*x
-        self.Ax_plus_u = None   # storee A*x+u for ISTA data
 
         # print formatting
-        self.iter_msg = "iter = %s, obj = %.2e, df_obj = %.2e, reg_obj = %.2e, resnorm = %.2e"
+        self.iter_msg = "iter = %s, obj = %.5e, df_obj = %.2e, reg_obj = %.2e, resnorm = %.2e"
 
     def __del__(self):
         print('Destructor called, ADMM deleted')
-
-    def compute_primal(self):
-        """r = Ax - y"""
-        self.primal = self.Ax.clone() - self.y
-
-    def compute_dual(self):
-        """s = -rho A.H r"""
-        self.A.adjoint(False, self.dual, self.primal)
-        self.dual.scale(-self.rho)
-    
-    def compute_y_minus_u(self):
-        self.y_minus_u = self.y.clone() - self.u
-        
-    def compute_Ax(self):
-        self.A.forward(False, self.x, self.Ax)
-        
-    def compute_Ax_plus_u(self):
-        self.Ax_plus_u = self.Ax.clone() + self.u
-    
+ 
     def update_rho(self):
         """update penalty parameter rho as suggested in boyd2010distributed (3.13)"""
         if self.primal.norm(2) > self.mu * self.dual.norm(2):
@@ -469,6 +437,8 @@ class ADMMsolver(Solver):
         assert type(problem) == ProblemLinearReg, 'problem has to be a ProblemLinearReg'
         if problem.nregsL1 == 0:
             raise ValueError('ERROR! Provide at least one L1 regularizer!')
+
+        self.create_msg = verbose or self.logger
         
         # I want to set dfw=1, so:
         epsL2 = [e / problem.dfw for e in problem.epsL2]
@@ -477,93 +447,65 @@ class ADMMsolver(Solver):
 
         # A is the Vstack of the L1 reg operators, scaled by their respective eps
         # we divide by gamma as gamma becomes the lambda value for the FISTA problem
-        self.A = problem.regL1_op * [e / gamma for e in epsL1]
+        A = problem.regL1_op * [e / gamma for e in epsL1]
         
         # initialize all others variables
         if self.rho is None:
             self.init_rho(gamma)
-        self.x = initial_guess.clone() if initial_guess is not None else problem.model.clone().zero()
-        self.y = self.A.range.clone().zero()
-        self.u = self.y.clone()
-        self.compute_y_minus_u()
-        self.dual = self.A.domain.clone()
         
-        # Linear Problem:       1/2 | Op x - d| + epsL2   | R2 x - dr   |
-        #                                         rho/2   | A x  - (y-u)|
-        problem_linear = ProblemL2LinearReg(
-            model=self.x,
-            data=problem.data,
-            op=problem.op,
-            epsilon=epsL2 + [self.rho/2]*self.A.n,
-            reg_op=pyOperator.Vstack(problem.regL2_op, self.A),
-            prior_model=pyVector.superVector(problem.dataregsL2, self.y_minus_u),
-            minBound=problem.minBound,
-            maxBound=problem.maxBound,
-            boundProj=problem.boundProj
-        )
-
-        # lasso problem: rho/2 | A x - z + u|_2^2 + gamma | y |_1
-        # this means to solve: 1/2 | I y - (Ax + u)| + gamma/rho | y |_1
-        self.Ax = self.A.range.clone()
-        self.compute_Ax_plus_u()
-        problem_lasso = ProblemL1Lasso(
-            model=self.y,
-            data=self.Ax_plus_u,
-            op=pyOperator.IdentityOp(self.y),
-            op_norm=1.,
-            lambda_value=gamma/self.rho,
-            minBound=problem.minBound,
-            maxBound=problem.maxBound,
-            boundProj=problem.boundProj
-        )
+        admm_mdl = problem.model.clone().zero() if initial_guess is None else initial_guess.clone()
+        y = A.range.clone().zero()
+        u = y.clone()
+        self.dual = A.domain.clone().zero()
         
         if restart:
             self.restart.read_restart()
             outer_iter = self.restart.retrieve_parameter("iter")
             initial_obj_value = self.restart.retrieve_parameter("obj_initial")
-            self.x = self.restart.retrieve_vector("solution")
-    
-            msg = "Restarting previous solver run from: %s" % self.restart.restart_folder
-            if verbose:
-                print(msg)
-            if self.logger:
-                self.logger.addToLog(msg)
+            admm_mdl = self.restart.retrieve_vector("admm_mdl")
+            if self.create_msg:
+                msg = "Restarting previous solver run from: %s" % self.restart.restart_folder
+                if verbose:
+                    print(msg)
+                if self.logger:
+                    self.logger.addToLog(msg)
         else:
             outer_iter = 0
-    
-            msg = 90 * '#' + '\n'
-            msg += "\t\t\t\t\tADMM ALGORITHM log file\n\n"
-            msg += "\tRestart folder: %s\n" % self.restart.restart_folder
-            msg += "\tModeling Operator:\t\t%s\n" % problem.op
-            msg += "\tData Fidelity weight:\t%.2e\n" % problem.dfw
-            if problem.nregsL2 != 0:
-                msg += "\tL2 Regularizer ops:\t\t" + ", ".join(["%s" % op for op in problem.regL2_op.ops]) + "\n"
-                msg += "\tL2 Regularizer weights:\t" + ", ".join(["{:.2e}".format(e) for e in problem.epsL2]) + "\n"
-            msg += "\tL1 Regularizer ops:\t\t" + ", ".join(["%s" % op for op in problem.regL1_op.ops]) + "\n"
-            msg += "\tL1 Regularizer weights:\t" + ", ".join(["{:.2e}".format(e) for e in problem.epsL1]) + "\n"
-            msg += "\tPenalty parameter:\t\t%.2e\n" % self.rho
-            msg += 90 * '#' + '\n'
-            if verbose:
-                print(msg.replace(" log file", ""))
-            if self.logger:
-                self.logger.addToLog(msg)
+            if self.create_msg:
+                msg = 90 * '#' + '\n'
+                msg += "\t\t\t\t\tADMM ALGORITHM log file\n\n"
+                msg += "\tRestart folder: %s\n" % self.restart.restart_folder
+                msg += "\tModeling Operator:\t\t%s\n" % problem.op
+                msg += "\tData Fidelity weight:\t%.2e\n" % problem.dfw
+                if problem.nregsL2 != 0:
+                    msg += "\tL2 Regularizer ops:\t\t" + ", ".join(["%s" % op for op in problem.regL2_op.ops]) + "\n"
+                    msg += "\tL2 Regularizer weights:\t" + ", ".join(["{:.2e}".format(e) for e in problem.epsL2]) + "\n"
+                msg += "\tL1 Regularizer ops:\t\t" + ", ".join(["%s" % op for op in problem.regL1_op.ops]) + "\n"
+                msg += "\tL1 Regularizer weights:\t" + ", ".join(["{:.2e}".format(e) for e in problem.epsL1]) + "\n"
+                msg += "\tPenalty parameter:\t\t%.2e\n" % self.rho
+                msg += 90 * '#' + '\n'
+                if verbose:
+                    print(msg.replace(" log file", ""))
+                if self.logger:
+                    self.logger.addToLog(msg)
 
         # Main iteration loop
         while True:
-            obj0 = problem.get_obj(self.x)
+            obj0 = problem.get_obj(admm_mdl)
 
             if outer_iter == 0:
                 initial_obj_value = obj0
                 self.restart.save_parameter("obj_initial", initial_obj_value)
-                msg = self.iter_msg % (str(outer_iter).zfill(self.stopper.zfill),
-                                       obj0,
-                                       problem.obj_terms[0],
-                                       obj0 - problem.obj_terms[0],
-                                       problem.get_rnorm(self.x))
-                if verbose:
-                    print(msg)
-                if self.logger:
-                    self.logger.addToLog("\n" + msg)
+                if self.create_msg:
+                    msg = self.iter_msg % (str(outer_iter).zfill(self.stopper.zfill),
+                                           obj0,
+                                           problem.obj_terms[0],
+                                           obj0 - problem.obj_terms[0],
+                                           problem.get_rnorm(admm_mdl))
+                    if verbose:
+                        print(msg)
+                    if self.logger:
+                        self.logger.addToLog("\n" + msg)
     
                 if isnan(obj0):
                     raise ValueError("Objective function values NaN!")
@@ -574,29 +516,53 @@ class ADMMsolver(Solver):
 
             self.save_results(outer_iter, problem, force_save=False)
             
-            # update x
+            # 1) update x
+            # Linear Problem:       1/2 | Op x - d| + epsL2   | R2 x -  dr  |
+            #                                         rho/2   | A  x - (y-u)|
+            linear_problem = ProblemL2LinearReg(
+                model=admm_mdl.clone().zero() if not self.use_prev_sol else admm_mdl.clone(),
+                data=problem.data,
+                op=problem.op,
+                epsilon=epsL2 + [self.rho / 2] * A.n,
+                reg_op=pyOperator.Vstack(problem.regL2_op, A),
+                prior_model=pyVector.superVector(problem.dataregsL2, y.clone() - u),
+                minBound=problem.minBound, maxBound=problem.maxBound, boundProj=problem.boundProj
+            )
+            if outer_iter == 0 and initial_guess is not None:
+                linear_problem.model = initial_guess.clone()
+            
             self.solver_LCG.setDefaults()
-            self.solver_LCG.run(problem_linear, verbose=inner_verbose)
-            self.x = problem_linear.model
+            self.solver_LCG.run(linear_problem, verbose=inner_verbose)
             
-            # update y TODO FISTA Gradient vanishes identically: why?
-            self.compute_Ax()
-            self.compute_Ax_plus_u()  # i.e., data for the LASSO problem
-            problem_lasso.data = self.Ax_plus_u  # TODO why the pointer is not working?
+            admm_mdl = linear_problem.model.clone()
+            
+            # 2) update y
+            # lasso problem: rho/2 | A x - z + u|_2^2 + gamma | y |_1
+            # this means to solve: 1/2 | I y - (Ax + u)| + gamma/rho | y |_1
+            Ax = A * admm_mdl
+            problem_lasso = ProblemL1Lasso(     # TODO it stops at the second iteration
+                model=y.clone(),
+                data=Ax.clone() + u,
+                op=pyOperator.IdentityOp(y),
+                op_norm=1.,
+                lambda_value=gamma / self.rho,
+                minBound=problem.minBound, maxBound=problem.maxBound, boundProj=problem.boundProj
+            )
             self.solver_ISTA.setDefaults()
-            problem_lasso.set_lambda(gamma/self.rho)
-            self.solver_ISTA.run(problem_lasso, verbose=inner_verbose)  # TODO the iteration is not updating
-            self.y = problem_lasso.model
+            self.solver_ISTA.run(problem_lasso, verbose=inner_verbose)
+            y = problem_lasso.model.clone()
             
-            # update penalty parameter and scaled dual variable
-            self.compute_primal()  # r = Ax - y
-            self.compute_dual()    # s = rho A.H r
+            # 3) update penalty parameter and scaled dual variable
+            self.primal = Ax.clone() - y
+            
+            A.adjoint(False, self.dual, self.primal)
+            self.dual.scale(-self.rho)
             self.update_rho()
-            self.u.__add__(self.primal).scale(1/self.rho)  # u = (u + r)/rho
+            u.__add__(self.primal).scale(1/self.rho)  # u = (u + r)/rho
 
             outer_iter += 1
             # check objective function
-            obj1 = problem.get_obj(self.x)
+            obj1 = problem.get_obj(admm_mdl)
             if obj1 >= obj0:
                 msg = "Objective function didn't reduce, will terminate solver:\n\t" \
                       "obj_new = %.2e\tobj_cur = %.2e" % (obj1, obj0)
@@ -607,19 +573,20 @@ class ADMMsolver(Solver):
                 break
             
             # iteration info
-            msg = self.iter_msg % (str(outer_iter).zfill(self.stopper.zfill),
-                                   obj1,
-                                   problem.obj_terms[0],
-                                   obj1 - problem.obj_terms[0],
-                                   problem.get_rnorm(self.x))
-            if verbose:
-                print(msg)
-            if self.logger:
-                self.logger.addToLog("\n" + msg)
+            if self.create_msg:
+                msg = self.iter_msg % (str(outer_iter).zfill(self.stopper.zfill),
+                                       obj1,
+                                       problem.obj_terms[0],
+                                       obj1 - problem.obj_terms[0],
+                                       problem.get_rnorm(admm_mdl))
+                if verbose:
+                    print(msg)
+                if self.logger:
+                    self.logger.addToLog("\n" + msg)
 
             # saving in case of restart
             self.restart.save_parameter("iter", outer_iter)
-            self.restart.save_vector("solution", self.x)
+            self.restart.save_vector("admm_mdl", admm_mdl)
 
             if self.stopper.run(problem, outer_iter, initial_obj_value, verbose):
                 break
@@ -628,13 +595,14 @@ class ADMMsolver(Solver):
         self.save_results(outer_iter, problem, model=None, force_save=False, force_write=False)
     
         # ending message and log file
-        msg = 90 * '#' + '\n'
-        msg += "\t\t\t\t\tADMM ALGORITHM log file end\n"
-        msg += 90 * '#'
-        if verbose:
-            print(msg.replace(" log file", ""))
-        if self.logger:
-            self.logger.addToLog("\n" + msg)
+        if self.create_msg:
+            msg = 90 * '#' + '\n'
+            msg += "\t\t\t\t\tADMM ALGORITHM log file end\n"
+            msg += 90 * '#'
+            if verbose:
+                print(msg.replace(" log file", ""))
+            if self.logger:
+                self.logger.addToLog("\n" + msg)
 
         # Clear restart object
         self.restart.clear_restart()
@@ -704,7 +672,7 @@ def main():
                 model.scaleAdd(self.data_tmp)
             return
      
-    PLOT = False
+    PLOT = True
     
     # data examples
     np.random.seed(1)
@@ -778,7 +746,7 @@ def main():
         plt.show()
 
     # ADMM
-    problemADMM = ProblemLinearReg(x.clone().zero(), y, Iop, regsL1=Dop, epsL1=4., dfw=1.)
+    problemADMM = ProblemLinearReg(x.clone().zero(), y, Iop, regsL1=Dop, epsL1=2., dfw=1.)
     
     ADMM = ADMMsolver(BasicStopper(niter=10), niter_LCG=30, niter_ISTA=100)
     ADMM.setDefaults()
