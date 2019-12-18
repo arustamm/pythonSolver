@@ -315,8 +315,7 @@ class Operator:
     
     def hermitian(self):
         """Instantiate the Hermitian operator"""
-        return _CustomOperator(domain=self.range, range=self.domain,
-                               forward_function=self.adjoint, adjoint_function=self.forward)
+        return _Hermitian(self)
     
     H = property(hermitian)
     T = H  # misleading (H is the conjugate transpose), probably we can delete it
@@ -355,6 +354,20 @@ class Operator:
 ################################
 # OPERATIONS BETWEEN OPERATORS #
 ################################
+
+class _Hermitian(Operator):
+    
+    def __init__(self, op):
+        super(_Hermitian, self).__init__(op.range, op.domain)
+        self.op = op
+    
+    def forward(self, add, model, data):
+        return self.op.adjoint(add, data, model)
+    
+    def adjoint(self, add, model, data):
+        return self.op.forward(add, data, model)
+    
+
 class _CustomOperator(Operator):
     """Linear operator defined in terms of user-specified operations."""
     
