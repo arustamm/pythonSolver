@@ -42,12 +42,12 @@ import pyVector as Vec
 import pyOperator as Op
 import pyProblem as Prblm
 import pyVPproblem as VPprblm
-import pyStopperBase as Stopper
+import pyStopper as Stopper
 import time
 #Solvers
-import pyLCGsolver as LCG
-import pyNLCGsolver as NLCG
-import pyLBFGSsolver as LBFGS
+from pyLinearSolver import LCGsolver as LCG
+from pyNonLinearSolver import NLCGsolver as NLCG
+from pyNonLinearSolver import LBFGSsolver as LBFGS
 #Plotting library
 import matplotlib
 from matplotlib import pyplot as plt
@@ -193,7 +193,7 @@ ax.set_aspect('auto')
 ```{python}
 niter = 1000
 Stop  = Stopper.BasicStopper(niter=niter,tolr=1e-32,tolg=1e-32)
-NLCGsolver = NLCG.NLCGsolver(Stop,beta_type="FR")
+NLCGsolver = NLCG(Stop,beta_type="FR")
 model_init = model_test
 model_initNp = model_init.getNdArray()
 a_initial = 2.0
@@ -235,7 +235,7 @@ ax.set_aspect('auto')
 ```
 
 ```{python}
-BFGSsolver = LBFGS.LBFGSsolver(Stop)
+BFGSsolver = LBFGS(Stop)
 #Setting initial model
 _=L2_sym.get_obj(model_init)
 L2_sym.setDefaults()
@@ -451,7 +451,7 @@ exp_vp_op = VPprblm.VpOperator(exp_nl_op,expon_lin,expon_lin.set_nl,expon_nl_jac
                                set_lin=expon_nl.set_lin)
 #Instantiating VarPro problem object
 #Create solver for linear inverse problem
-LCGsolver = LCG.LCGsolver(Stopper.BasicStopper(niter=10))
+LCGsolver = LCG(Stopper.BasicStopper(niter=10))
 VPproblem = VPprblm.ProblemL2VpReg(b_init,a_init,exp_vp_op,data_true,LCGsolver)
 ```
 
