@@ -247,7 +247,7 @@ class ProblemL2VpReg(pyProb.Problem):
 
 		##################################
 		#Obtaining the residuals
-		if((self.epsilon != None) and not("epsilon" in dir(self.vp_linear_prob))):
+		if (self.epsilon != None) and not("epsilon" in dir(self.vp_linear_prob)):
 			#Regularization contains a non-linear operator only
 			self.res.vecs[0].copy(self.vp_linear_prob.get_res(self.lin_model))
 			self.res.vecs[1].scale(self.epsilon)

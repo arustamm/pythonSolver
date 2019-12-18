@@ -437,7 +437,7 @@ class CvSrchStep(Stepper):
             if (brackt and (alpha <= alpha_int_min or alpha >= alpha_int_max)) or (not cstep_success):
                 if logger:
                     logger.addToLog("\tRounding errors prevent further progress. There may not be a step which satisfies"
-                                    "\tthe sufficient decrease and curvature conditions. Tolerances may be too small.")
+                                    "the sufficient decrease and curvature conditions. Tolerances may be too small.")
                 break
             if alpha == self.alpha_max and phi_alpha <= phi_test1 and dphi_alpha <= dphi_test:
                 if logger:
@@ -459,8 +459,8 @@ class CvSrchStep(Stepper):
                 success = True
                 if logger:
                     logger.addToLog("\tThe sufficient decrease condition and the directional derivative condition hold "
-                                    "\t(i.e., Strong Wolfe conditions met).\n	Stepper successuful for step length value"
-                                    "\tof %.2e and objective function of %.2e (feval = %d)"
+                                    "(i.e., Strong Wolfe conditions met).\n	Stepper successuful for step length value"
+                                    "of %.2e and objective function of %.2e (feval = %d)"
                                     % (alpha, phi_alpha, problem.get_fevals()))
                 break
 
@@ -737,9 +737,9 @@ class ParabolicStep(Stepper):
             # Writing info to log file
             if logger:
                 logger.addToLog("\tInitial objective function value: %.2e,"
-                                "\tObjective function at c1*alpha*dm: %.2e,"
-                                "\tObjective function at c2*alpha*dm: %.2e,"
-                                "\tObjective function at parabola minimum: %.2e"
+                                "Objective function at c1*alpha*dm: %.2e,"
+                                "Objective function at c2*alpha*dm: %.2e,"
+                                "Objective function at parabola minimum: %.2e"
                                 % (obj0, obj1, obj2, obj3))
             itry += 1
 
@@ -957,8 +957,8 @@ class ParabolicStepConst(Stepper):
             # Writing info to log file
             if logger:
                 logger.addToLog("\tInitial objective function value: %2e,"
-                                "\tObjective function at c1*alpha*dm: %.2e,"
-                                "\tObjective function at parabola minimum: %.2e"
+                                "Objective function at c1*alpha*dm: %.2e,"
+                                "Objective function at parabola minimum: %.2e"
                                 % (obj0, obj1, obj2))
             itry += 1
 
