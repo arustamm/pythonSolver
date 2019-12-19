@@ -1,6 +1,6 @@
-##DESCRIPTION
+## DESCRIPTION
 Package containing generic in-core/out-of-core python solver for optimization based on operators  
-##COMPILATION
+## COMPILATION
 To build library run:
 ```
 cd build
