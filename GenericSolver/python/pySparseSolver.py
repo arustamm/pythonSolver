@@ -21,7 +21,7 @@ class ISTAsolver(Solver):
     Iterative Shrikage-Thresholding Algorithm (ISTA) solver to solve:
         1/2*| y - Am |_2 + lambda*| m |_1
     """
-
+    
     def __init__(self, stopper, fast=False, logger=None):
         """
         Constructor for ISTA Solver:
@@ -41,14 +41,14 @@ class ISTAsolver(Solver):
         self.fast = fast
         # print formatting
         self.iter_msg = "iter = %s, obj = %.5e, resnorm = %.2e, gradnorm = %.2e, feval = %d"
-
+    
     def __del__(self):
         """Default destructor"""
         return
-
+    
     def run(self, problem, verbose=False, restart=False):
         """Running ISTA solver"""
-
+        
         self.create_msg = verbose or self.logger
         # Resetting stopper before running the inversion
         self.stopper.reset()
@@ -58,6 +58,7 @@ class ISTAsolver(Solver):
         # Checking if the regularization weight was set
         if problem.lambda_value is None:
             raise ValueError("Regularization weight (lambda_value) is not set!")
+        
         if not restart:
             if self.create_msg:
                 msg = 90 * "#" + "\n"
@@ -71,15 +72,15 @@ class ISTAsolver(Solver):
                     print(msg.replace(" log file", ""))
                 if self.logger:
                     self.logger.addToLog(msg)
-
+            
             # Setting internal vectors (model, search direction, and previous gradient vectors)
             prblm_mdl = problem.get_model()
             ista_mdl = prblm_mdl.clone()
             # Other parameters in case FISTA is requested
             if self.fast:
                 t = 1.0
-                fista_mdl = prblm_mdl.clone()
-
+                # fista_mdl = prblm_mdl.clone()
+            
             # Other internal variables
             iiter = 0
         else:
@@ -98,12 +99,10 @@ class ISTAsolver(Solver):
             # Other parameters in case FISTA is requested
             if self.fast:
                 t = self.restart.retrieve_parameter("t")
-                fista_mdl = self.restart.retrieve_vector("fista_mdl")
-
-        # Common variables unrelated to restart
-        success = True
+                # fista_mdl = self.restart.retrieve_vector("fista_mdl")
+        
         ista_mdl0 = ista_mdl.clone()  # Previous model in case stepping procedure fails
-
+        
         # Inversion loop
         while True:
             obj0 = problem.get_obj(ista_mdl)  # Compute objective function value
@@ -129,45 +128,29 @@ class ISTAsolver(Solver):
             if problem.get_gnorm(ista_mdl) == 0.:
                 print("Gradient vanishes identically")
                 break
-
+            
             # Saving results
             self.save_results(iiter, problem, force_save=False)
-
+            
             ista_mdl0.copy(ista_mdl)  # Saving model before updating it
+
+            # Update model x = x + scale_precond * A' [y - Ax]
+            ista_mdl.scaleAdd(prblm_grad, 1.0, -1.0 / problem.op_norm)
+
+            # SOFT-THRESHOLDING STEP
+            ista_mdl = _soft_thresh(ista_mdl, problem.lambda_value / problem.op_norm)
+
+            # Projecting model onto the bounds (if any)
+            if "bounds" in dir(problem):
+                problem.bounds.apply(ista_mdl)
+            
             if self.fast:
-                # Running FISTA
-                fista_mdl.scaleAdd(prblm_grad, 1.0, -1.0 / problem.op_norm)
-                #########################################
-                # SOFT-THRESHOLDING STEP
-                # ista_mdl.copy(fista_mdl)
-                # modl_arr = ista_mdl.getNdArray()
-                # modl_arr[:] = _soft_thresh(modl_arr, problem.lambda_value / problem.op_norm)
-                ista_mdl = _soft_thresh(fista_mdl, problem.lambda_value/problem.op_norm)
-
-                #########################################
-                # Projecting model onto the bounds (if any)
-                if "bounds" in dir(problem):
-                    problem.bounds.apply(ista_mdl)
                 t0 = t
-                t = (1.0 + np.sqrt(1.0 + 4.0 * t * t)) / 2.0
-                # z = x
-                fista_mdl.copy(ista_mdl)
+                t = (1. + np.sqrt(1. + 4. * t ** 2)) / 2.
                 # z = x + ((t0 - 1.) / t) * (x - xold)
-                scale = (t0 - 1.0) / t
-                fista_mdl.scaleAdd(ista_mdl0, 1.0 + scale, -scale)
-            else:
-                # Running ISTA
-                ista_mdl.scaleAdd(prblm_grad, 1.0, -1.0 / problem.op_norm)  # Update model x = x + scale_precond * A' [y - Ax]
-                #########################################
-                # SOFT-THRESHOLDING STEP
-                # modl_arr = ista_mdl.getNdArray()
-                # modl_arr[:] = _soft_thresh(modl_arr, problem.lambda_value / problem.op_norm)
-                ista_mdl = _soft_thresh(ista_mdl, problem.lambda_value / problem.op_norm)
-                #########################################
-                # Projecting model onto the bounds (if any)
-                if "bounds" in dir(problem):
-                    problem.bounds.apply(ista_mdl)
-
+                scale = (t0 - 1.) / t
+                ista_mdl.scaleAdd(ista_mdl0, 1.0 + scale, -scale)
+            
             obj1 = problem.get_obj(ista_mdl)
             if obj1 >= obj0:
                 if self.create_msg:
@@ -181,14 +164,14 @@ class ISTAsolver(Solver):
                 # Copying back to the previous solution
                 ista_mdl.copy(ista_mdl0)
                 break
-
+            
             # Saving current model in case of restart and other parameters
             self.restart.save_parameter("iter", iiter)
             self.restart.save_vector("ista_mdl", ista_mdl)
             if self.fast:
                 self.restart.save_parameter("t", t)
-                self.restart.save_vector("fista_mdl", fista_mdl)
-
+                # self.restart.save_vector("fista_mdl", fista_mdl)
+            
             # iteration info
             iiter = iiter + 1
             if self.create_msg:
@@ -207,7 +190,7 @@ class ISTAsolver(Solver):
                 raise ValueError("Either gradient norm or objective function value NaN!")
             if self.stopper.run(problem, iiter, initial_obj_value, verbose):
                 break
-
+        
         # Writing last inverted model
         self.save_results(iiter, problem, force_save=True, force_write=True)
         if self.create_msg:
