@@ -374,7 +374,7 @@ class SplitBregmanSolver(Solver):
 
 class ADMMsolver(Solver):
     """Alternate Directions of Multipliers Method (ADMM)"""
-
+    
     # Default class methods/functions
     def __init__(self, stopper, logger=None, niter_LCG=5, niter_ISTA=15, rho=None, auto_rho=True, mu=10., tau=2., use_prev_sol=False):
         """
@@ -540,8 +540,8 @@ class ADMMsolver(Solver):
             # lasso problem: rho/2 | A x - z + u|_2^2 + gamma | y |_1
             # this means to solve: 1/2 | I y - (Ax + u)| + gamma/rho | y |_1
             Ax = A * admm_mdl
-            problem_lasso = ProblemL1Lasso(     # TODO it stops at the second iteration
-                model=y.clone(),
+            lasso_problem = ProblemL1Lasso(     # TODO it stops at the second iteration
+                model=y.clone().zero(),
                 data=Ax.clone() + u,
                 op=pyOperator.IdentityOp(y),
                 op_norm=1.,
@@ -549,8 +549,8 @@ class ADMMsolver(Solver):
                 minBound=problem.minBound, maxBound=problem.maxBound, boundProj=problem.boundProj
             )
             self.solver_ISTA.setDefaults()
-            self.solver_ISTA.run(problem_lasso, verbose=inner_verbose)
-            y = problem_lasso.model.clone()
+            self.solver_ISTA.run(lasso_problem, verbose=inner_verbose)
+            y = lasso_problem.model.clone()
             
             # 3) update penalty parameter and scaled dual variable
             self.primal = Ax.clone() - y
@@ -612,7 +612,9 @@ def main():
     from sys import path
     path.insert(0, '.')
     import numpy as np
-    from scipy.ndimage.filters import gaussian_filter
+    from scipy.signal import convolve, correlate
+    from scipy.ndimage import gaussian_filter
+    from itertools import product
     import pyVector
     import pyOperator
     import matplotlib.pyplot as plt
@@ -627,11 +629,14 @@ def main():
             :param sampling : scalar; sampling step [1.]
             :param dir      : int; direction along with to compute the derivative [0]
             """
-            self.setDomainRange(model, model)
             self.sampling = sampling
             self.dir = dir
             self.data_tmp = model.clone().zero()
             self.dims = model.getNdArray().shape
+            super(FirstDerivative, self).__init__(model, model)
+        
+        def __str__(self):
+            return "FirstDer"
     
         def forward(self, add, model, data):
             """Forward operator"""
@@ -671,96 +676,323 @@ def main():
             if add:
                 model.scaleAdd(self.data_tmp)
             return
-     
+    
+    class ConvND(pyOperator.Operator):
+        """ND convolution operator upon a image"""
+        def __init__(self, model, kernel, method='auto'):
+            
+            self.kernel = kernel.getNdArray()
+            self.method = method
+            self.data_tmp = model.clone().zero()
+            super(ConvND, self).__init__(model, model)
+            
+        def __str__(self):
+            return " ConvOp "
+        
+        def forward(self, add, model, data):
+            self.checkDomainRange(model, data)
+            if add:
+                self.data_tmp.copy(data)
+            data.zero()
+            data.getNdArray()[:] = convolve(model.getNdArray(), self.kernel,
+                                            mode='same', method=self.method)
+            if add:
+                data.scaleAdd(self.data_tmp)
+            return
+        
+        def adjoint(self, add, model, data):
+            self.checkDomainRange(model, data)
+            if add:
+                self.data_tmp.copy(model)
+            model.zero()
+            model.getNdArray()[:] = correlate(data.getNdArray(), self.kernel,
+                                              mode='same', method=self.method)
+            if add:
+                model.scaleAdd(self.data_tmp)
+            return
+
+    class Gauss_smooth_scipy(pyOperator.Operator):
+        def __init__(self, model, sigmax, sigmaz):
+            """
+            Gaussian 2D smoothing operator using scipy smoothing:
+            model    = [no default] - vector class; domain vector
+            sigmax   = [no default] - float; standard deviation along the x direction
+            sigmaz   = [no default] - float; standard deviation along the z direction
+            """
+            self.setDomainRange(model, model)
+            self.sigmax = sigmax
+            self.sigmaz = sigmaz
+            self.scaling = 2.0 * np.pi * sigmax * sigmaz  # in order to have the max amplitude 1
+            return
+    
+        def __str__(self):
+            return "GauSmoot"
+    
+        def forward(self, add, model, data):
+            """Forward operator"""
+            self.checkDomainRange(model, data)
+            if not add:
+                data.zero()
+            # Getting Ndarrays
+            model_arr = model.getNdArray()
+            data_arr = data.getNdArray()
+            data_arr[:] = self.scaling * gaussian_filter(model_arr, sigma=[self.sigmax, self.sigmaz])
+            return
+    
+        def adjoint(self, add, model, data):
+            """Self-adjoint operator"""
+            self.forward(add, data, model)
+            return
+    
     PLOT = True
+    EXAMPLE = 'noisy'
+    EXAMPLE = 'gaussian'
+    EXAMPLE = 'python'
     
-    # data examples
-    np.random.seed(1)
-    nx = 101
-    x = pyVector.vectorIC((nx,)).zero()
-    x.getNdArray()[:nx // 2] = 10
-    x.getNdArray()[nx // 2:3 * nx // 4] = -5
-
-    Iop = pyOperator.IdentityOp(x)
-    Dop = FirstDerivative(x)
+    if EXAMPLE == 'noisy':
+        # data examples
+        np.random.seed(1)
+        nx = 101
+        x = pyVector.vectorIC((nx,)).zero()
+        x.getNdArray()[:nx // 2] = 10
+        x.getNdArray()[nx // 2:3 * nx // 4] = -5
     
-    n = x.clone()
-    n.getNdArray()[:] = np.random.normal(0,1,nx)
-    y = Iop * (x.clone() + n)
+        Iop = pyOperator.IdentityOp(x)
+        Dop = FirstDerivative(x)
+        
+        n = x.clone()
+        n.getNdArray()[:] = np.random.normal(0,1,nx)
+        y = Iop * (x.clone() + n)
+        
+        derivative = Dop * x
     
-    derivative = Dop * x
-
-    if PLOT:
-        plt.figure(figsize=(5, 4))
-        plt.plot(x.getNdArray(), 'k', lw=1, label='x')
-        plt.plot(y.getNdArray(), '.k', label='y=x+n')
-        plt.plot(derivative.getNdArray(), '.b', lw=3, label='dx')
-        plt.legend()
-        plt.title('Model, Data and Derivative')
-        plt.show()
-
-    # CG solver
-    problemLS = ProblemL2Linear(x.clone().zero(), y, Iop)
-    CG = LCGsolver(BasicStopper(niter=30))
-    CG.setDefaults()
-    CG.run(problemLS, verbose=True)
-    if PLOT:
-        plt.figure(figsize=(5, 4))
-        plt.plot(x.getNdArray(), 'k', lw=1, label='x')
-        plt.plot(y.getNdArray(), '.k', label='y=x+n')
-        plt.plot(problemLS.model.getNdArray(), 'r', lw=1, label='x_inv')
-        plt.legend()
-        plt.title('Least-Squares')
-        plt.show()
+        if PLOT:
+            plt.figure(figsize=(5, 4))
+            plt.plot(x.getNdArray(), 'k', lw=1, label='x')
+            plt.plot(y.getNdArray(), '.k', label='y=x+n')
+            plt.plot(derivative.getNdArray(), '.b', lw=3, label='dx')
+            plt.legend()
+            plt.title('Model, Data and Derivative')
+            plt.show()
     
-    # FISTA
-    problemFISTA = ProblemL1Lasso(x.clone().zero(), y, Iop, lambda_value=2, op_norm=1.)
-    FISTA = ISTAsolver(BasicStopper(niter=300), fast=True)
-    FISTA.setDefaults()
-    FISTA.run(problemFISTA, verbose=True)
-    if PLOT:
-        plt.figure(figsize=(5, 4))
-        plt.plot(x.getNdArray(), 'k', lw=1, label='x')
-        plt.plot(y.getNdArray(), '.k', label='y=x+n')
-        plt.plot(problemFISTA.model.getNdArray(), 'r', lw=1, label='x_inv')
-        plt.legend()
-        plt.title('FISTA inversion')
-        plt.show()
-
-    # SplitBregman
-    problemSB = ProblemLinearReg(x.clone().zero(), y, Iop, regsL1=Dop, epsL1=4., dfw=1.)
-
-    SB = SplitBregmanSolver(BasicStopper(niter=50), niter_inner=3, niter_solver=30,
-                            steepest=False, breg_weight=1, use_prev_sol=False)
-    SB.setDefaults()
-    SB.run(problemSB, verbose=True, inner_verbose=False)
-    if PLOT:
-        plt.figure(figsize=(5, 4))
-        plt.plot(x.getNdArray(), 'k', lw=1, label='x')
-        plt.plot(y.getNdArray(), '.k', label='y=x+n')
-        plt.plot(problemSB.model.getNdArray(), 'r', lw=1, label='x_inv')
-        plt.plot(derivative.getNdArray(), '.b', label='dx')
-        plt.plot((Dop * problemSB.model).getNdArray(), 'b', label='dx_inv')
-        plt.legend()
-        plt.title('SB inversion')
-        plt.show()
-
-    # ADMM
-    problemADMM = ProblemLinearReg(x.clone().zero(), y, Iop, regsL1=Dop, epsL1=2., dfw=1.)
+        # CG solver
+        problemLS = ProblemL2Linear(x.clone().zero(), y, Iop)
+        CG = LCGsolver(BasicStopper(niter=30))
+        CG.setDefaults()
+        CG.run(problemLS, verbose=True)
+        if PLOT:
+            plt.figure(figsize=(5, 4))
+            plt.plot(x.getNdArray(), 'k', lw=1, label='x')
+            plt.plot(y.getNdArray(), '.k', label='y=x+n')
+            plt.plot(problemLS.model.getNdArray(), 'r', lw=1, label='x_inv')
+            plt.legend()
+            plt.title('Least-Squares')
+            plt.show()
+        
+        # FISTA
+        problemFISTA = ProblemL1Lasso(x.clone().zero(), y, Iop, lambda_value=5, op_norm=1)
+        FISTA = ISTAsolver(BasicStopper(niter=300), fast=True)
+        FISTA.setDefaults()
+        FISTA.run(problemFISTA, verbose=True)
+        if PLOT:
+            plt.figure(figsize=(5, 4))
+            plt.plot(x.getNdArray(), 'k', lw=1, label='x')
+            plt.plot(y.getNdArray(), '.k', label='y=x+n')
+            plt.plot(problemFISTA.model.getNdArray(), 'r', lw=1, label='x_inv')
+            plt.legend()
+            plt.title('FISTA inversion')
+            plt.show()
     
-    ADMM = ADMMsolver(BasicStopper(niter=10), niter_LCG=30, niter_ISTA=100)
-    ADMM.setDefaults()
-    ADMM.run(problemADMM, verbose=True, inner_verbose=True)
-    if PLOT:
-        plt.figure(figsize=(5, 4))
-        plt.plot(x.getNdArray(), 'k', lw=1, label='x')
-        plt.plot(y.getNdArray(), '.k', label='y=x+n')
-        plt.plot(problemADMM.model.getNdArray(), 'r', lw=1, label='x_inv')
-        plt.plot(derivative.getNdArray(), '.b', label='dx')
-        plt.plot((Dop * problemADMM.model).getNdArray(), 'b', label='dx_inv')
-        plt.legend()
-        plt.title('ADMM inversion')
-        plt.show()
+        # SplitBregman
+        problemSB = ProblemLinearReg(x.clone().zero(), y, Iop, regsL1=Dop, epsL1=4., dfw=1.)
+    
+        SB = SplitBregmanSolver(BasicStopper(niter=50), niter_inner=3, niter_solver=30,
+                                steepest=False, breg_weight=1, use_prev_sol=False)
+        SB.setDefaults()
+        SB.run(problemSB, verbose=True, inner_verbose=False)
+        if PLOT:
+            plt.figure(figsize=(5, 4))
+            plt.plot(x.getNdArray(), 'k', lw=1, label='x')
+            plt.plot(y.getNdArray(), '.k', label='y=x+n')
+            plt.plot(problemSB.model.getNdArray(), 'r', lw=1, label='x_inv')
+            plt.plot(derivative.getNdArray(), '.b', label='dx')
+            plt.plot((Dop * problemSB.model).getNdArray(), 'b', label='dx_inv')
+            plt.legend()
+            plt.title('SB inversion')
+            plt.show()
+    
+        # ADMM
+        problemADMM = ProblemLinearReg(x.clone().zero(), y, Iop, regsL1=Dop, epsL1=2., dfw=1.)
+        
+        ADMM = ADMMsolver(BasicStopper(niter=10), niter_LCG=30, niter_ISTA=100)
+        ADMM.setDefaults()
+        ADMM.run(problemADMM, verbose=True, inner_verbose=True)
+        if PLOT:
+            plt.figure(figsize=(5, 4))
+            plt.plot(x.getNdArray(), 'k', lw=1, label='x')
+            plt.plot(y.getNdArray(), '.k', label='y=x+n')
+            plt.plot(problemADMM.model.getNdArray(), 'r', lw=1, label='x_inv')
+            plt.plot(derivative.getNdArray(), '.b', label='dx')
+            plt.plot((Dop * problemADMM.model).getNdArray(), 'b', label='dx_inv')
+            plt.legend()
+            plt.title('ADMM inversion')
+            plt.show()
+    
+    elif EXAMPLE == 'gaussian':
+        x = pyVector.vectorIC(np.empty((301, 601))).set(0)
+        x.getNdArray()[150, 300] = 1.0
+        # x.getNdArray()[100, 200] = -5.0
+        # x.getNdArray()[280, 400] = 1.0
+        if PLOT:
+            plt.figure(figsize=(6, 3))
+            plt.imshow(x.getNdArray()), plt.colorbar()
+            plt.title('Model')
+            plt.show()
+
+        G = Gauss_smooth_scipy(x, 25, 15)
+        y = G * x
+        # y.scale(1./y.norm())
+        if PLOT:
+            plt.figure(figsize=(6, 3))
+            plt.imshow(y.getNdArray()), plt.colorbar()
+            plt.title('Data')
+            plt.show()
+
+        # CG solver
+        problemLS = ProblemL2Linear(x.clone().zero(), y, G)
+        CG = LCGsolver(BasicStopper(niter=30))
+        CG.setDefaults()
+        CG.run(problemLS, verbose=True)
+        if PLOT:
+            plt.figure(figsize=(6, 3))
+            plt.imshow(problemLS.model.getNdArray()), plt.colorbar()
+            plt.title('Conjugate Gradient')
+            plt.show()
+
+        # FISTA
+        problemFISTA = ProblemL1Lasso(x.clone().zero(), y, G, lambda_value=1000, op_norm=1.)
+        FISTA = ISTAsolver(BasicStopper(niter=1000), fast=True)
+        FISTA.setDefaults()
+        FISTA.run(problemFISTA, verbose=True)
+        if PLOT:
+            plt.figure(figsize=(6, 3))
+            plt.imshow(problemFISTA.model.getNdArray()), plt.colorbar()
+            plt.title(r'FISTA, $\lambda$=%.2e' % problemFISTA.lambda_value)
+            plt.show()
+
+        # SplitBregman
+        I = pyOperator.IdentityOp(x)
+        problemSB = ProblemLinearReg(x.clone().zero(), y, G, regsL1=I, epsL1=10., dfw=1.)
+
+        SB = SplitBregmanSolver(BasicStopper(niter=50), niter_inner=3, niter_solver=30,
+                                steepest=False, breg_weight=1, use_prev_sol=False)
+        SB.setDefaults()
+        SB.run(problemSB, verbose=True, inner_verbose=False)
+        if PLOT:
+            plt.figure(figsize=(6, 3))
+            plt.imshow(problemSB.model.getNdArray()), plt.colorbar()
+            plt.title('SplitBregman')
+            plt.show()
+
+        # ADMM
+        problemADMM = ProblemLinearReg(x.clone().zero(), y, G, regsL1=I, epsL1=2., dfw=1.)
+
+        ADMM = ADMMsolver(BasicStopper(niter=10), niter_LCG=30, niter_ISTA=100)
+        ADMM.setDefaults()
+        ADMM.run(problemADMM, verbose=True, inner_verbose=True)
+        if PLOT:
+            plt.figure(figsize=(6, 3))
+            plt.imshow(problemADMM.model.getNdArray()), plt.colorbar()
+            plt.title('ADMM')
+            plt.show()
+    
+    elif EXAMPLE == 'python':
+        x = pyVector.vectorIC(np.load('../../python.npy', allow_pickle=True)[::5, ::5, 0].astype(np.float32))
+        if PLOT:
+            plt.figure(figsize=(5, 4))
+            plt.imshow(x.getNdArray()), plt.colorbar()
+            plt.title('Model')
+            plt.show()
+            
+        nh = [15, 25]
+        hz = np.exp(-0.1 * np.linspace(-(nh[0] // 2), nh[0] // 2, nh[0]) ** 2)
+        hx = np.exp(-0.03 * np.linspace(-(nh[1] // 2), nh[1] // 2, nh[1]) ** 2)
+        hz /= np.trapz(hz)  # normalize the integral to 1
+        hx /= np.trapz(hx)  # normalize the integral to 1
+        h = hz[:, np.newaxis] * hx[np.newaxis, :]
+        if PLOT:
+            plt.figure(figsize=(5, 4))
+            plt.imshow(h, aspect='equal'), plt.colorbar()
+            plt.title('Kernel')
+            plt.show()
+        Blurring = ConvND(model=x, kernel=pyVector.vectorIC(h))
+        
+        y = Blurring * x
+        if PLOT:
+            plt.figure(figsize=(5, 4))
+            plt.imshow(y.getNdArray()), plt.colorbar()
+            plt.title('Data')
+            plt.show()
+
+        # CG solver
+        problemLS = ProblemL2Linear(x.clone().zero(), y, Blurring)
+        CG = LCGsolver(BasicStopper(niter=50))
+        CG.setDefaults()
+        CG.run(problemLS, verbose=True)
+        if PLOT:
+            plt.figure(figsize=(5, 4))
+            plt.imshow(problemLS.model.getNdArray()), plt.colorbar()
+            plt.title('CG, %d iter' % CG.stopper.niter)
+            plt.show()
+
+        # FISTA
+        problemFISTA = ProblemL1Lasso(x.clone().zero(), y, Blurring, lambda_value=.1, op_norm=1.)
+        FISTA = ISTAsolver(BasicStopper(niter=100), fast=True)
+        FISTA.setDefaults()
+        FISTA.run(problemFISTA, verbose=True)
+        if PLOT:
+            plt.figure(figsize=(5, 4))
+            plt.imshow(problemFISTA.model.getNdArray()), plt.colorbar()
+            plt.title(r'FISTA, $\lambda$=%.2e, %d iter'
+                      % (problemFISTA.lambda_value, FISTA.stopper.niter))
+            plt.show()
+
+        # SplitBregman
+        D = pyOperator.Vstack(FirstDerivative(x, dir=0), FirstDerivative(x, dir=1))
+        D0 = FirstDerivative(x, dir=0)
+        D1 = FirstDerivative(x, dir=1)
+        problemSB = ProblemLinearReg(x.clone().zero(), y, Blurring,
+                                     regsL1=[D0, D1], epsL1=[1,1], dfw=1.5)
+
+        SB = SplitBregmanSolver(BasicStopper(niter=10), niter_inner=5, niter_solver=5,
+                                steepest=False, breg_weight=1, use_prev_sol=False)
+        SB.setDefaults()
+        SB.run(problemSB, verbose=True, inner_verbose=False)
+        if PLOT:
+            plt.figure(figsize=(5, 4))
+            plt.imshow(problemSB.model.getNdArray()), plt.colorbar()
+            plt.title(r'SB TV, $\varepsilon=%.2e$, %d iter'
+                      % (problemSB.epsL1[0], SB.stopper.niter))
+            plt.show()
+
+        # ADMM
+        problemADMM = ProblemLinearReg(x.clone().zero(), y, Blurring,
+                                       regsL1=D, epsL1=1., dfw=1.)
+
+        ADMM = ADMMsolver(BasicStopper(niter=10), niter_LCG=5, niter_ISTA=5)
+        ADMM.setDefaults()
+        ADMM.run(problemADMM, verbose=True, inner_verbose=True)
+        if PLOT:
+            plt.figure(figsize=(5, 4))
+            plt.imshow(problemSB.model.getNdArray()), plt.colorbar()
+            plt.title(r'ADMM TV, $\varepsilon=%.2e$, %d iter'
+                      % (problemADMM.epsL1[0], ADMM.stopper.niter))
+            plt.show()
+        
+        
+    else:
+        raise ValueError("EXAMPLE has to be one of noisy, gaussian, python")
+
     return 0
 
 
