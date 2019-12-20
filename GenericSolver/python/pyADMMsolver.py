@@ -112,30 +112,26 @@ class ProblemLinearReg(Problem):
     
     def resf(self, model):
         # compute data residual: Op * m - d
-        if not self.res_data_already_computed:
-            if model.norm() != 0:
-                self.op.forward(False, self.model, self.res_data)
-            else:
-                self.res.vecs[0].zero()
-            self.res_data.scaleAdd(self.data, 1., -1.)
-            # self.res_data_already_computed = True
+        if model.norm() != 0:
+            self.op.forward(False, self.model, self.res_data)
+        else:
+            self.res_data.zero()
+        self.res_data.scaleAdd(self.data, 1., -1.)
         
         # compute L2 reg residuals
-        if not self.res_regsL2_already_computed and self.res_regsL2 is not None:
+        if self.res_regsL2 is not None:
             if model.norm() != 0 and self.regL2_op is not None:
                 self.regL2_op.forward(False, self.model, self.res_regsL2)
             
             if self.dataregsL2 is not None and self.dataregsL2.norm() != 0.:
                 self.res_regsL2.scaleAdd(self.dataregsL2, 1., -1.)
-            # self.res_regsL2_already_computed = True
         
         # compute L1 reg residuals
-        if not self.res_regsL1_already_computed and self.res_regsL1 is not None:
+        if self.res_regsL1 is not None:
             if model.norm() != 0. and self.regL1_op is not None:
                 self.regL1_op.forward(False, self.model, self.res_regsL1)
             else:
                 self.res_regsL1.zero()
-            # self.res_regsL1_already_computed = True
         
         return self.res
     
@@ -208,9 +204,10 @@ class SplitBregmanSolver(Solver):
         sb_mdl = problem.model.clone().zero() if initial_guess is None else initial_guess.clone()
         
         # reweight the eps according to dfw
-        eps = [(e / problem.dfw)**.5 for e in problem.epsL2 + problem.epsL1]
-        
-        # TODO add restart and merge with initial guess
+        epsL2 = [(e / problem.dfw)**.5 for e in problem.epsL2]
+        epsL1 = [(e / problem.dfw) ** .5 for e in problem.epsL1]
+        reg_op = pyOperator.Vstack(problem.regL2_op*epsL2 if problem.nregsL2 != 0 else [], problem.regL1_op*epsL1)
+
         if restart:
             self.restart.read_restart()
             outer_iter = self.restart.retrieve_parameter("iter")
@@ -270,10 +267,6 @@ class SplitBregmanSolver(Solver):
             
             self.save_results(outer_iter, problem, force_save=False)
             
-            problem.res_data_already_computed = False
-            problem.res_regsL2_already_computed = False
-            problem.res_regsL1_already_computed = False
-            
             for iter_inner in range(self.niter_inner):
 
                 if self.create_msg:
@@ -285,12 +278,13 @@ class SplitBregmanSolver(Solver):
                         self.logger.addToLog("\n" + msg)
                 
                 # solve inner problem
+                
                 linear_problem = ProblemL2LinearReg(
                     model=sb_mdl.clone().zero() if not self.use_prev_sol else sb_mdl.clone(),
                     data=problem.data,
                     op=problem.op,
-                    epsilon=eps,
-                    reg_op=pyOperator.Vstack(problem.regL2_op, problem.regL1_op),
+                    epsilon=1.,
+                    reg_op=reg_op,
                     prior_model=pyVector.superVector(problem.dataregsL2, breg_a.clone() - breg_b),
                     minBound=problem.minBound, maxBound=problem.maxBound, boundProj=problem.boundProj
                 )
@@ -314,14 +308,14 @@ class SplitBregmanSolver(Solver):
                         self.logger.addToLog("\n" + msg)
                 
                 # update breg_a
-                breg_a.copy(_shrinkage(RL1x.clone() + breg_b, thresh=eps[-problem.nregsL1:]))
+                breg_a.copy(_shrinkage(RL1x.clone() + breg_b, thresh=epsL1))
                 
             # update breg_b
             breg_b.scaleAdd(RL1x.clone() - breg_a, 1., self.breg_weight)
 
             outer_iter += 1
             # check objective function
-            problem.res_regsL1 = RL1x.clone()
+            # problem.res_regsL1 = RL1x.clone()
             # problem.res_regsL1_already_computed = True
             # problem.res_data_already_computed = False
             obj1 = problem.get_obj(sb_mdl)
@@ -335,7 +329,6 @@ class SplitBregmanSolver(Solver):
                         self.logger.addToLog(msg)
                 break
             
-            # TODO save cost data, logger and all the stuff
             # iteration info
             if self.create_msg:
                 msg = self.iter_msg % (str(outer_iter).zfill(self.stopper.zfill),
@@ -620,23 +613,23 @@ def main():
     import matplotlib.pyplot as plt
     plt.style.use('ggplot')
     from pyProblem import ProblemL2Linear
-
+    
     class FirstDerivative(pyOperator.Operator):
-        def __init__(self, model, sampling=1., dir=0):
+        def __init__(self, model, sampling=1., axis=0):
             """
             Compute 2nd order centered first derivative
             :param model    : vector class; domain vector
             :param sampling : scalar; sampling step [1.]
-            :param dir      : int; direction along with to compute the derivative [0]
+            :param axis     : int; axis along which to compute the derivative [0]
             """
             self.sampling = sampling
-            self.dir = dir
             self.data_tmp = model.clone().zero()
             self.dims = model.getNdArray().shape
+            self.axis = axis if axis >= 0 else len(self.dims) + axis
             super(FirstDerivative, self).__init__(model, model)
         
         def __str__(self):
-            return "FirstDer"
+            return "1stDer_%d" % self.axis
     
         def forward(self, add, model, data):
             """Forward operator"""
@@ -645,14 +638,15 @@ def main():
                 self.data_tmp.copy(data)
             data.zero()
             # Getting Ndarrays
-            x = model.getNdArray().reshape(self.dims)
-            y = data.getNdArray().reshape(self.dims)
-            if self.dir > 0:  #need to bring the dim. to derive to first dim
-                x = np.swapaxes(x, self.dir, 0)
+            x = model.clone().getNdArray()
+            y = np.zeros(x.shape)
+            if self.axis > 0:  # need to bring the dim. to derive to first dim
+                x = np.swapaxes(x, self.axis, 0)
             y[:-1] = (x[1:] - x[:-1]) / self.sampling
             y[-1] = 0
-            if self.dir > 0:
-                y = np.swapaxes(y, 0, self.dir)
+            if self.axis > 0:  # reset axis order
+                y = np.swapaxes(y, 0, self.axis)
+            data.getNdArray()[:] = y
             if add:
                 data.scaleAdd(self.data_tmp)
             return
@@ -664,30 +658,31 @@ def main():
                 self.data_tmp.copy(model)
             model.zero()
             # Getting Ndarrays
-            x = model.getNdArray().reshape(self.dims)
-            y = data.getNdArray().reshape(self.dims)
-            if self.dir > 0:  # need to bring the dim. to derive to first dim
-                y = np.swapaxes(y, self.dir, 0)
+            y = data.clone().getNdArray().reshape(self.dims)
+            x = np.zeros(y.shape)
+            if self.axis > 0:  # need to bring the dim. to derive to first dim
+                y = np.swapaxes(y, self.axis, 0)
             x[0] = -y[0] / self.sampling
             x[1:-1] = (-y[1:-1]+y[:-2]) / self.sampling
             x[-1] = y[-2] / self.sampling
-            if self.dir > 0:
-                x = np.swapaxes(x, 0, self.dir)
+            if self.axis > 0:
+                x = np.swapaxes(x, 0, self.axis)
+            model.getNdArray()[:] = x
             if add:
                 model.scaleAdd(self.data_tmp)
             return
     
-    class ConvND(pyOperator.Operator):
+    class ConvNDscipy(pyOperator.Operator):
         """ND convolution operator upon a image"""
         def __init__(self, model, kernel, method='auto'):
             
             self.kernel = kernel.getNdArray()
             self.method = method
             self.data_tmp = model.clone().zero()
-            super(ConvND, self).__init__(model, model)
+            super(ConvNDscipy, self).__init__(model, model)
             
         def __str__(self):
-            return " ConvOp "
+            return "ConvScipy"
         
         def forward(self, add, model, data):
             self.checkDomainRange(model, data)
@@ -744,7 +739,7 @@ def main():
             self.forward(add, data, model)
             return
     
-    PLOT = True
+    PLOT = False
     EXAMPLE = 'noisy'
     EXAMPLE = 'gaussian'
     EXAMPLE = 'python'
@@ -923,9 +918,9 @@ def main():
         if PLOT:
             plt.figure(figsize=(5, 4))
             plt.imshow(h, aspect='equal'), plt.colorbar()
-            plt.title('Kernel')
+            plt.title('Blurring Kernel')
             plt.show()
-        Blurring = ConvND(model=x, kernel=pyVector.vectorIC(h))
+        Blurring = ConvNDscipy(model=x, kernel=pyVector.vectorIC(h))
         
         y = Blurring * x
         if PLOT:
@@ -933,7 +928,7 @@ def main():
             plt.imshow(y.getNdArray()), plt.colorbar()
             plt.title('Data')
             plt.show()
-
+            
         # CG solver
         problemLS = ProblemL2Linear(x.clone().zero(), y, Blurring)
         CG = LCGsolver(BasicStopper(niter=50))
@@ -958,15 +953,16 @@ def main():
             plt.show()
 
         # SplitBregman
-        D = pyOperator.Vstack(FirstDerivative(x, dir=0), FirstDerivative(x, dir=1))
-        D0 = FirstDerivative(x, dir=0)
-        D1 = FirstDerivative(x, dir=1)
-        problemSB = ProblemLinearReg(x.clone().zero(), y, Blurring,
-                                     regsL1=[D0, D1], epsL1=[1,1], dfw=1.5)
+        # the gradient of the image is 6e3
+        D = FirstDerivative(x, axis=0) + FirstDerivative(x, axis=1)
+        I = pyOperator.IdentityOp(x)
 
-        SB = SplitBregmanSolver(BasicStopper(niter=10), niter_inner=5, niter_solver=5,
+        problemSB = ProblemLinearReg(x.clone().zero(), y, Blurring, dfw=1,
+                                     regsL1=D, epsL1=.01)
+        
+        SB = SplitBregmanSolver(BasicStopper(niter=10), niter_inner=10, niter_solver=50,
                                 steepest=False, breg_weight=1, use_prev_sol=False)
-        SB.setDefaults()
+        SB.setDefaults(save_obj=True, save_model=True)
         SB.run(problemSB, verbose=True, inner_verbose=False)
         if PLOT:
             plt.figure(figsize=(5, 4))
@@ -976,10 +972,10 @@ def main():
             plt.show()
 
         # ADMM
-        problemADMM = ProblemLinearReg(x.clone().zero(), y, Blurring,
-                                       regsL1=D, epsL1=1., dfw=1.)
+        problemADMM = ProblemLinearReg(x.clone().zero(), y, Blurring, dfw=1.5,
+                                     regsL1=D, epsL1=.01)
 
-        ADMM = ADMMsolver(BasicStopper(niter=10), niter_LCG=5, niter_ISTA=5)
+        ADMM = ADMMsolver(BasicStopper(niter=10), niter_LCG=10, niter_ISTA=5)
         ADMM.setDefaults()
         ADMM.run(problemADMM, verbose=True, inner_verbose=True)
         if PLOT:
