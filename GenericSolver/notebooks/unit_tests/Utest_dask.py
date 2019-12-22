@@ -5,14 +5,15 @@ import pyOperator as pyOp
 import pyVector as  Vec
 import numpy as np
 
-
-hostnames = ["192.168.66.67","192.168.66.66","192.168.66.166","192.168.66.167"]
-client = DaskClient(hostnames)
+hostnames = ["thanos", "thanos", "vision", "vision"]
+client = DaskClient(hostnames=hostnames)
 vec = Vec.vectorIC((100,10))
 chunks = (1,1,1,1)
 vecD = pyDaskVector.DaskVector(client,vector_template=vec,chunks=chunks)
 
+# Checking which worker has a given chunk
 client.getClient().who_has(vecD.vecDask[0])
+client.getClient().who_has(vecD.vecDask[1])
 client.getClient().who_has(vecD.vecDask[2])
 client.getClient().who_has(vecD.vecDask[3])
 
@@ -37,7 +38,7 @@ vec2D.norm()**2
 
 #Testing Dask Operator
 vec = Vec.vectorIC((2,1))
-chunks = (5,5,5)
+chunks = (5,5,5,5)
 sc = 10.0
 vecD = pyDaskVector.DaskVector(client,vector_template=vec,chunks=chunks)
 scal_op_args = [(vec_i,sc) for vec_i in vecD.vecDask]

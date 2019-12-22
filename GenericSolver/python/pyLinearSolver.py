@@ -17,7 +17,7 @@ class LCGsolver(Solver):
 		Constructor for LCG/SD Solver:
 		:param stopper: Stopper, object to terminate inversion
 		:param steepest: bool, use the steepest-descent instead of conjugate gradient [False]
-		:param logger: Logger, object to write inversion log file
+		:param logger: Logger, object to write inversion log file [None]
 		"""
         # Calling parent construction
         super(LCGsolver, self).__init__()
@@ -327,6 +327,81 @@ class LCGsolver(Solver):
                                  "STEEPEST-DESCENT" if self.steepest else "CONJUGATE GRADIENT")
         # Clear restart object
         self.restart.clear_restart()
+
+        return
+
+
+class LSQRsolver(Solver):
+    """
+       LSQR Solver parent object following algorithm in Paige and Saunders (1982)
+       Find the least-squares solution to a large, sparse, linear system
+       of equations.
+       The function solves Ax = b or min ||b - Ax||^2
+       If A is symmetric, LSQR should not be used! Use SymLCGsolver
+    """
+
+    def __init__(self, stopper, logger=None):
+        """
+        Constructor for LSQR Solver:
+        :param stopper: Stopper, object to terminate inversion
+		:param logger: Logger, object to write inversion log file [None]
+        """
+        # Calling parent construction
+        super(LSQRsolver, self).__init__()
+        # Defining stopper object
+        self.stopper = stopper
+        # Logger object to write on log file
+        self.logger = logger
+        # Overwriting logger of the Stopper object
+        self.stopper.logger = self.logger
+        # print formatting
+        self.iter_msg = "iter = %s, obj = %.5e, resnorm = %.2e, feval = %d"
+
+    def __del__(self):
+        """Default destructor"""
+        return
+
+    def run(self, problem, verbose=False, restart=False):
+        """Running LSQR solver"""
+        self.create_msg = verbose or self.logger
+
+        # Resetting stopper before running the inversion
+        self.stopper.reset()
+
+        if not restart:
+            if self.create_msg:
+                msg += "LSQR SOLVER"
+                if verbose:
+                    print(msg)
+                if self.logger:
+                    self.logger.addToLog(msg + " log file")
+                # Printing restart folder
+                msg = "Restart folder: %s\n" % self.restart.restart_folder
+                if verbose:
+                    print(msg)
+                if self.logger:
+                    self.logger.addToLog(msg)
+
+            # Setting internal vectors (model and search direction vectors)
+            prblm_mdl = problem.get_model()
+            lsqr_mdl = prblm_mdl.clone()
+
+
+            # Other internal variables
+            iiter = 0
+        else:
+            # Retrieving parameters and vectors to restart the solver
+            if self.create_msg:
+                msg = "Restarting previous solve run from: %s" % self.restart.restart_folder
+                if verbose:
+                    print(msg)
+                if self.logger:
+                    self.logger.addToLog(msg)
+            self.restart.read_restart()
+            iiter = self.restart.retrieve_parameter("iter")
+
+        # Common variables unrelated to restart
+        success = True
 
         return
 
