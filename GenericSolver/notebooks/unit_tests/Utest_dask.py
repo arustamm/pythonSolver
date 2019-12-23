@@ -77,9 +77,10 @@ try:
 	vec1 = vecSep.clone(); vec1.rand()
 	vec2 = vecSep.clone(); vec2.rand()
 	vec3 = vecSep.clone(); vec3.rand()
-	vectors = [vec1,vec2,vec3]
+	vec4 = vecSep.clone(); vec4.rand()
+	vectors = [vec1, vec2, vec3, vec4]
 	vecD1 = pyDaskVector.DaskVector(client,vectors=vectors,chunks=chunks)
-	vec1.norm()**2+vec2.norm()**2+vec3.norm()**2
+	vec1.norm()**2+vec2.norm()**2+vec3.norm()**2+vec4.norm()**2
 	vecD1.norm()**2
 	chunks = (10,10,10,10)
 	sc = 10.0

@@ -73,8 +73,7 @@ class DaskClient:
             t0 = time.time()
             while True:
                 if os.path.isfile(scheduler_file):
-                    tcp_info = get_tcp_info(scheduler_file)
-                    if tcp_info: break
+                    if get_tcp_info(scheduler_file): break
                 # If the dask scheduler is not started in 5 minutes raise exception
                 if (time.time() - t0 > 300.0):
                     raise SystemError("Dask could not start scheduler! Try different first host name.")
