@@ -72,7 +72,7 @@ try:
 	#Testing with GenericIO
 	import SepVector
 	vecSep = SepVector.getSepVector(ns=[200,400])
-	chunks = (1,1,1)
+	chunks = (1,1,1,1)
 	vecD = pyDaskVector.DaskVector(client,vector_template=vecSep,chunks=chunks)
 	vec1 = vecSep.clone(); vec1.rand()
 	vec2 = vecSep.clone(); vec2.rand()
@@ -81,7 +81,7 @@ try:
 	vecD1 = pyDaskVector.DaskVector(client,vectors=vectors,chunks=chunks)
 	vec1.norm()**2+vec2.norm()**2+vec3.norm()**2
 	vecD1.norm()**2
-	chunks = (10,10,10)
+	chunks = (10,10,10,10)
 	sc = 10.0
 	vecD = pyDaskVector.DaskVector(client,vector_template=vecSep,chunks=chunks)
 	scal_op_args = [(ivec,sc) for ivec in vecD.vecDask]
