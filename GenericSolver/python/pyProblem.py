@@ -697,7 +697,7 @@ class ProblemL2NonLinearReg(Problem):
         if not isinstance(op, pyOp.NonLinearOperator):
             raise TypeError("Not provided a non-linear operator!")
         # Setting non-linear stack of operators
-        self.op = pyOp.stackNonOperator(op, reg_op)
+        self.op = pyOp.VstackNonLinearOperator(op, reg_op)
         self.epsilon = epsilon  # Regularization weight
         # Residual vector (data and model residual vectors)
         self.res = self.op.nl_op.range.clone()
@@ -810,10 +810,10 @@ class ProblemL2NonLinearReg(Problem):
         # Setting model point on which the F is evaluated
         self.op.set_background(model)
         # g = epsilon*A'r_m
-        self.op.lin_op.op2.adjoint(False, self.grad, res.vecs[1])
+        self.op.lin_op.ops[1].adjoint(False, self.grad, res.vecs[1])
         self.grad.scale(self.epsilon)
         # g = F'r_d + A'(epsilon*r_m)
-        self.op.lin_op.op1.adjoint(True, self.grad, res.vecs[0])
+        self.op.lin_op.ops[0].adjoint(True, self.grad, res.vecs[0])
         # Applying the gradient mask if present
         if self.grad_mask is not None:
             self.grad.multiply(self.grad_mask)
