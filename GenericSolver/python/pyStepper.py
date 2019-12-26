@@ -670,7 +670,7 @@ class ParabolicStep(Stepper):
                 # Setting third point to infinity
                 obj3 = np.inf
                 # Check which one is the best step length
-                msg = "\n\tAs requested, parabola minimum was not evaluated!"
+                msg = "\n\tAs requested, parabola minimum was not evaluated! Unless necessary!"
                 if obj1 < obj0 and obj1 < obj2 and obj1 < obj3:
                     success = True
                     alpha *= self.c1
@@ -696,50 +696,49 @@ class ParabolicStep(Stepper):
                 if logger:
                     logger.addToLog("\tTesting point (c_opt=%.2e): m_current+c_opt*alpha*dm (parabola minimum)" % step_scale)
             # If step length negative, re-evaluate points
-            if step_scale * alpha < 0.:
+            if step_scale < 0.:
                 if logger:
-                    logger.addToLog("\tEncountered a negative step-length value: %.2e; Shrinking step-length value."
+                    logger.addToLog("\tEncountered a negative step-length value: %.2e; Setting parabola-minimum objective function to infinity."
                                     % (step_scale * alpha))
-                # Shrink line search
-                alpha *= self.shrink
-                itry += 1
-                continue
-            # Clipping the step-length scale
-            if step_scale < self.alpha_scale_min:
-                if logger:
-                    logger.addToLog("\t!!! step-length scale of %.2e smaller than provided lower bound."
-                                    "Clipping its value to bound value of %.2e !!!" % (step_scale, self.alpha_scale_min))
-                step_scale = self.alpha_scale_min
-            elif step_scale > self.alpha_scale_max:
-                if logger:
-                    logger.addToLog("\t!!! step-length scale of %.2e greater than provided upper bound."
-                                    "Clipping its value to bound value of %.2e !!!" % (step_scale, self.alpha_scale_max))
-                step_scale = self.alpha_scale_max
+                # Skipping parabola minimum and setting obj3 to infinity
+                obj3 = np.inf
+            else:
+                # Clipping the step-length scale
+                if step_scale < self.alpha_scale_min:
+                    if logger:
+                        logger.addToLog("\t!!! step-length scale of %.2e smaller than provided lower bound."
+                                        "Clipping its value to bound value of %.2e !!!" % (step_scale, self.alpha_scale_min))
+                    step_scale = self.alpha_scale_min
+                elif step_scale > self.alpha_scale_max:
+                    if logger:
+                        logger.addToLog("\t!!! step-length scale of %.2e greater than provided upper bound."
+                                        "Clipping its value to bound value of %.2e !!!" % (step_scale, self.alpha_scale_max))
+                    step_scale = self.alpha_scale_max
 
-            # Testing parabolic scale
-            # Compute new objective function at the minimum of the parabolic approximation
-            model_step.copy(modl)
-            model_step.scaleAdd(dmodl, sc2=step_scale * alpha)
-            # Checking if model parameters hit the bounds
-            problem.set_model(model_step)
-            # Projecting model onto the bounds (if any)
-            if "bounds" in dir(problem):
-                problem.bounds.apply(model_step)
-            if prblm_mdl.isDifferent(model_step):
-                # Model hit bounds
-                msg = "\tModel hit provided bounds. Projecting it onto them."
+                # Testing parabolic scale
+                # Compute new objective function at the minimum of the parabolic approximation
+                model_step.copy(modl)
+                model_step.scaleAdd(dmodl, sc2=step_scale * alpha)
+                # Checking if model parameters hit the bounds
+                problem.set_model(model_step)
+                # Projecting model onto the bounds (if any)
+                if "bounds" in dir(problem):
+                    problem.bounds.apply(model_step)
+                if prblm_mdl.isDifferent(model_step):
+                    # Model hit bounds
+                    msg = "\tModel hit provided bounds. Projecting it onto them."
+                    if logger:
+                        logger.addToLog(msg)
+                obj3 = problem.get_obj(model_step)
                 if logger:
-                    logger.addToLog(msg)
-            obj3 = problem.get_obj(model_step)
-            if logger:
-                logger.addToLog("\tObjective function value of %.5e" % obj3)
+                    logger.addToLog("\tObjective function value of %.5e" % obj3)
 
             # Writing info to log file
             if logger:
-                logger.addToLog("\tInitial objective function value: %.2e,"
-                                "Objective function at c1*alpha*dm: %.2e,"
-                                "Objective function at c2*alpha*dm: %.2e,"
-                                "Objective function at parabola minimum: %.2e"
+                logger.addToLog("\tInitial objective function value: %.5e,"
+                                "Objective function at c1*alpha*dm: %.5e,"
+                                "Objective function at c2*alpha*dm: %.5e,"
+                                "Objective function at parabola minimum: %.5e"
                                 % (obj0, obj1, obj2, obj3))
             itry += 1
 
