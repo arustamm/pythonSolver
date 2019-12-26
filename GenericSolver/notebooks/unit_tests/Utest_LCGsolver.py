@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-import sys,os
+import sys, os
+
 sys.path.insert(0, "../../python")
 import pyVector as Vec
 import pyOperator as Op
@@ -11,221 +12,217 @@ from sys_util import logger
 import sep_util as sep
 import numpy as np
 
-#Testing the NLCG to solver a regularized linear problem treated as if it was non linear
+# Testing the NLCG to solver a regularized linear problem treated as if it was non linear
 from pyNonLinearSolver import NLCGsolver as NLCG
 from pyNonLinearSolver import LBFGSsolver as BFGS
 
+
 class MatMult_incore(Op.Operator):
-	"""Operator class to perform matrix-vector multiplication"""
-	def __init__(self,A,domain,range):
-		"""Constructor for the class: A = matrix to use; domain = domain vector; range = range vector"""
-		if(not isinstance(domain,Vec.vector)): raise TypeError("ERROR! Domain vector not a vector object")
-		if(not isinstance(range,Vec.vector)): raise TypeError("ERROR! Range vector not a vector object")
-		#Setting domain and range of operator and matrix to use during application of the operator
-		self.setDomainRange(domain,range)
-		self.A = np.matrix(A)
-		return
-	def forward(self,add,model,data):
-		"""Method to compute d = A m"""
-		self.checkDomainRange(model,data)
-		if(not isinstance(model,Vec.vector)): raise TypeError("ERROR! Model vector not a vector object")
-		if(not isinstance(data,Vec.vector)): raise TypeError("ERROR! Data vector not a vector object")
-		if(not add): data.zero()
-		model_arr = model.getNdArray()
-		data_arr = data.getNdArray()
-		data_arr+=np.matmul(self.A,model_arr)
-		return
-	def adjoint(self,add,model,data):
-		"""Method to compute m = A d"""
-		self.checkDomainRange(model,data)
-		if(not isinstance(model,Vec.vector)): raise TypeError("ERROR! Model vector not a vector object")
-		if(not isinstance(data,Vec.vector)): raise TypeError("ERROR! Data vector not a vector object")
-		if(not add): model.zero()
-		model_arr = model.getNdArray()
-		data_arr = data.getNdArray()
-		model_arr+=np.matmul(self.A.H,data_arr)
-		return
+    """Operator class to perform matrix-vector multiplication"""
+
+    def __init__(self, A, domain, range):
+        """Constructor for the class: A = matrix to use; domain = domain vector; range = range vector"""
+        if (not isinstance(domain, Vec.vector)): raise TypeError("ERROR! Domain vector not a vector object")
+        if (not isinstance(range, Vec.vector)): raise TypeError("ERROR! Range vector not a vector object")
+        # Setting domain and range of operator and matrix to use during application of the operator
+        self.setDomainRange(domain, range)
+        self.A = np.matrix(A)
+        return
+
+    def forward(self, add, model, data):
+        """Method to compute d = A m"""
+        self.checkDomainRange(model, data)
+        if (not isinstance(model, Vec.vector)): raise TypeError("ERROR! Model vector not a vector object")
+        if (not isinstance(data, Vec.vector)): raise TypeError("ERROR! Data vector not a vector object")
+        if (not add): data.zero()
+        model_arr = model.getNdArray()
+        data_arr = data.getNdArray()
+        data_arr += np.matmul(self.A, model_arr)
+        return
+
+    def adjoint(self, add, model, data):
+        """Method to compute m = A d"""
+        self.checkDomainRange(model, data)
+        if (not isinstance(model, Vec.vector)): raise TypeError("ERROR! Model vector not a vector object")
+        if (not isinstance(data, Vec.vector)): raise TypeError("ERROR! Data vector not a vector object")
+        if (not add): model.zero()
+        model_arr = model.getNdArray()
+        data_arr = data.getNdArray()
+        model_arr += np.matmul(self.A.H, data_arr)
+        return
+
 
 class MatMult_outcore(Op.Operator):
-	"""Operator class to perform matrix-vector multiplication"""
-	def __init__(self,A,domain,range):
-		"""Constructor for the class: A = matrix to use; domain = domain vector; range = range vector"""
-		if(not isinstance(domain,Vec.vector)): raise TypeError("ERROR! Domain vector not a vector object")
-		if(not isinstance(range,Vec.vector)): raise TypeError("ERROR! Range vector not a vector object")
-		#Setting domain and range of operator and matrix to use during application of the operator
-		self.setDomainRange(domain,range)
-		self.A = np.matrix(A)
-		return
-	def forward(self,add,model,data):
-		"""Method to compute d = A m"""
-		self.checkDomainRange(model,data)
-		if(not isinstance(model,Vec.vectorOC)): raise TypeError("ERROR! Model vector not a vectorOC object")
-		if(not isinstance(data,Vec.vectorOC)): raise TypeError("ERROR! Data vector not a vectorOC object")
-		if(not add): data.zero()
-		#Reading model and data vector files
-		model_arr = model.getNdArray()
-		[data_arr,data_axis]=sep.read_file(data.vecfile)
-		data_arr+=np.matmul(self.A,model_arr)
-		#writing data vector file
-		sep.write_file(data.vecfile,data_arr,data_axis)
-		return
-	def adjoint(self,add,model,data):
-		"""Method to compute m = A d"""
-		self.checkDomainRange(model,data)
-		if(not isinstance(model,Vec.vectorOC)): raise TypeError("ERROR! Model vector not a vectorOC object")
-		if(not isinstance(data,Vec.vectorOC)): raise TypeError("ERROR! Data vector not a vectorOC object")
-		if(not add): model.zero()
-		#Reading model and data vector files
-		[model_arr,model_axis]=sep.read_file(model.vecfile)
-		data_arr = data.getNdArray()
-		model_arr+=np.matmul(self.A.H,data_arr)
-		#writing data vector file
-		sep.write_file(model.vecfile,model_arr,model_axis)
-		return
+    """Operator class to perform matrix-vector multiplication"""
+
+    def __init__(self, A, domain, range):
+        """Constructor for the class: A = matrix to use; domain = domain vector; range = range vector"""
+        if (not isinstance(domain, Vec.vector)): raise TypeError("ERROR! Domain vector not a vector object")
+        if (not isinstance(range, Vec.vector)): raise TypeError("ERROR! Range vector not a vector object")
+        # Setting domain and range of operator and matrix to use during application of the operator
+        self.setDomainRange(domain, range)
+        self.A = np.matrix(A)
+        return
+
+    def forward(self, add, model, data):
+        """Method to compute d = A m"""
+        self.checkDomainRange(model, data)
+        if (not isinstance(model, Vec.vectorOC)): raise TypeError("ERROR! Model vector not a vectorOC object")
+        if (not isinstance(data, Vec.vectorOC)): raise TypeError("ERROR! Data vector not a vectorOC object")
+        if (not add): data.zero()
+        # Reading model and data vector files
+        model_arr = model.getNdArray()
+        [data_arr, data_axis] = sep.read_file(data.vecfile)
+        data_arr += np.matmul(self.A, model_arr)
+        # writing data vector file
+        sep.write_file(data.vecfile, data_arr, data_axis)
+        return
+
+    def adjoint(self, add, model, data):
+        """Method to compute m = A d"""
+        self.checkDomainRange(model, data)
+        if (not isinstance(model, Vec.vectorOC)): raise TypeError("ERROR! Model vector not a vectorOC object")
+        if (not isinstance(data, Vec.vectorOC)): raise TypeError("ERROR! Data vector not a vectorOC object")
+        if (not add): model.zero()
+        # Reading model and data vector files
+        [model_arr, model_axis] = sep.read_file(model.vecfile)
+        data_arr = data.getNdArray()
+        model_arr += np.matmul(self.A.H, data_arr)
+        # writing data vector file
+        sep.write_file(model.vecfile, model_arr, model_axis)
+        return
 
 
 if __name__ == '__main__':
-	#In-core run
-	#Creating model vector
-	model_vec = Vec.vectorIC(np.zeros((100,1)))
-	model_vec.zero()
-	#Creating data vector
-	data_vec  = Vec.vectorIC(np.zeros((200,1)))
-	data_vec.rand()
-	#Matrix to be inverted
-	A = np.matrix(np.random.rand(200,100))
-	#Create operator
-	MatMult = MatMult_incore(A,model_vec,data_vec)
-	#Create L2-norm linear problem
-	L2Prob = Prblm.ProblemL2Linear(model_vec,data_vec,MatMult)
-	#Create stopper
-	niter = 2000
-	Stop  = Stopper(niter=niter)#,tolobjchng=1e-15)
-	#Create solver
-	LCGsolver = LCG(Stop)
-	LCGsolver.setDefaults(iter_sampling=10)
-	#Running the solver
-	# LCGsolver.run(L2Prob,verbose=True)
+    # In-core run
+    # Creating model vector
+    model_vec = Vec.vectorIC(np.zeros((100, 1)))
+    model_vec.zero()
+    # Creating data vector
+    data_vec = Vec.vectorIC(np.zeros((200, 1)))
+    data_vec.rand()
+    # Matrix to be inverted
+    A = np.matrix(np.random.rand(200, 100))
+    # Create operator
+    MatMult = MatMult_incore(A, model_vec, data_vec)
+    # Create L2-norm linear problem
+    L2Prob = Prblm.ProblemL2Linear(model_vec, data_vec, MatMult)
+    # Create stopper
+    niter = 2000
+    Stop = Stopper(niter=niter)  # ,tolobjchng=1e-15)
+    # Create solver
+    LCGsolver = LCG(Stop)
+    LCGsolver.setDefaults(iter_sampling=10)
+    # Running the solver
+    # LCGsolver.run(L2Prob,verbose=True)
 
-	#Out-of-core run
-	# Creating model vector
-	# model_vecOC = Vec.vectorOC(model_vec)
-	#Creating data vector
-	# data_vecOC  = Vec.vectorOC(data_vec)
-	#Create operator
-	# MatMultOC = MatMult_outcore(A,model_vecOC,data_vecOC)
-	#Create L2-norm linear problem
-	# L2Prob_outcore = Prblm.ProblemL2Linear(model_vecOC,data_vecOC,MatMultOC)
-	#Running the solver
-	LCGsolver.setDefaults()
-	# LCGsolver.run(L2Prob_outcore,True)
+    # Out-of-core run
+    # Creating model vector
+    # model_vecOC = Vec.vectorOC(model_vec)
+    # Creating data vector
+    # data_vecOC  = Vec.vectorOC(data_vec)
+    # Create operator
+    # MatMultOC = MatMult_outcore(A,model_vecOC,data_vecOC)
+    # Create L2-norm linear problem
+    # L2Prob_outcore = Prblm.ProblemL2Linear(model_vecOC,data_vecOC,MatMultOC)
+    # Running the solver
+    LCGsolver.setDefaults()
+    # LCGsolver.run(L2Prob_outcore,True)
 
-	#Testing inversion of a symmetric matrix (second-order derivative operator)
-	n=200
-	A = np.matrix(np.zeros((n,n),dtype=np.float64))
-	np.fill_diagonal(A, -2)
-	np.fill_diagonal(A[1:], 1)
-	np.fill_diagonal(A[:,1:], 1)
-	model_vec_sym = Vec.vectorIC(np.zeros((n,1),dtype=np.float64))
-	data_vec_sym = Vec.vectorIC(np.zeros((n,1),dtype=np.float64))
-	#Constant derivative
-	data_vec_sym.set(1.)
-	#Create operator
-	MatMultSym = MatMult_incore(A,model_vec_sym,data_vec_sym)
-	#Inverse of A as preconditioning
-	Prec = MatMult_incore(np.linalg.inv(A),model_vec_sym,data_vec_sym)
-	#Computing max and min eigenvalues using power method
-	# eg,vec=MatMultSym.powerMethod(verbose=False,eval_min=True,return_vec=True,tol=1e-18)
-	# print("power",eg)
-	# eigenValues, eigenVectors = np.linalg.eig(A)
-	# idx = eigenValues.argsort()[::-1]
-	# eigenValues = eigenValues[idx]
-	# eigenVectors = eigenVectors[:,idx]
-	# print(eigenValues[-1],eigenValues[0])
-	# print("max eigen vec",np.append(vec[0].getNdArray(),eigenVectors[:,-1],axis=1))
-	# print("min eigen vec",np.append(vec[1].getNdArray(),eigenVectors[:,0],axis=1))
-	# quit()
-	#Create L2-norm linear problem
-	L2Prob_sym = Prblm.ProblemL2Linear(model_vec_sym,data_vec_sym,MatMultSym)
-	#Running the solver
-	# LCGsolver.setDefaults(iter_buffer_size=None,iter_sampling=1000,save_obj=True,save_model=True,prefix="sym_test")
-	LCGsolver.run(L2Prob_sym,True)
+    # Testing inversion of a symmetric matrix (second-order derivative operator)
+    n = 200
+    A = np.matrix(np.zeros((n, n), dtype=np.float64))
+    np.fill_diagonal(A, -2)
+    np.fill_diagonal(A[1:], 1)
+    np.fill_diagonal(A[:, 1:], 1)
+    model_vec_sym = Vec.vectorIC(np.zeros((n, 1), dtype=np.float64))
+    data_vec_sym = Vec.vectorIC(np.zeros((n, 1), dtype=np.float64))
+    # Constant derivative
+    data_vec_sym.set(1.)
+    # Create operator
+    MatMultSym = MatMult_incore(A, model_vec_sym, data_vec_sym)
+    # Inverse of A as preconditioning
+    Prec = MatMult_incore(np.linalg.inv(A), model_vec_sym, data_vec_sym)
+    # Computing max and min eigenvalues using power method
+    # eg,vec=MatMultSym.powerMethod(verbose=False,eval_min=True,return_vec=True,tol=1e-18)
+    # print("power",eg)
+    # eigenValues, eigenVectors = np.linalg.eig(A)
+    # idx = eigenValues.argsort()[::-1]
+    # eigenValues = eigenValues[idx]
+    # eigenVectors = eigenVectors[:,idx]
+    # print(eigenValues[-1],eigenValues[0])
+    # print("max eigen vec",np.append(vec[0].getNdArray(),eigenVectors[:,-1],axis=1))
+    # print("min eigen vec",np.append(vec[1].getNdArray(),eigenVectors[:,0],axis=1))
+    # quit()
+    # Create L2-norm linear problem
+    L2Prob_sym = Prblm.ProblemL2Linear(model_vec_sym, data_vec_sym, MatMultSym)
+    # Running the solver
+    # LCGsolver.setDefaults(iter_buffer_size=None,iter_sampling=1000,save_obj=True,save_model=True,prefix="sym_test")
+    # LCGsolver.run(L2Prob_sym,True)
 
-	L2Prob_sym = Prblm.ProblemL2Linear(model_vec_sym,data_vec_sym,MatMultSym,prec=Op.ChainOperator(Prec,Prec))
-	LCGsolver.run(L2Prob_sym,True)
+    L2Prob_sym = Prblm.ProblemL2Linear(model_vec_sym, data_vec_sym, MatMultSym, prec=Op.ChainOperator(Prec, Prec))
+    # LCGsolver.run(L2Prob_sym,True)
 
-	#Testing LCG with regularized problem
-	L2Prob_reg = Prblm.ProblemL2LinearReg(model_vec_sym,data_vec_sym,MatMultSym,0.0001)
-	L2Prob_reg.estimate_epsilon(True)
-	#Running the solver
-	# LCGsolver.setDefaults(iter_sampling=100,iter_buffer_size=1,save_obj=True,save_model=True,save_grad=True,save_res=True,prefix="lin_test")
-	LCGsolver.run(L2Prob_reg,verbose=True)
+    # Testing LCG with regularized problem
+    L2Prob_reg = Prblm.ProblemL2LinearReg(model_vec_sym, data_vec_sym, MatMultSym, 0.0001)
+    L2Prob_reg.estimate_epsilon(True)
+    # Running the solver
+    # LCGsolver.setDefaults(iter_sampling=100,iter_buffer_size=1,save_obj=True,save_model=True,save_grad=True,save_res=True,prefix="lin_test")
+    # LCGsolver.run(L2Prob_reg,verbose=True)
 
-	#Testing estimate_epsilon when initial model different than zero
-	model_vec_sym.rand()
-	L2Prob_reg1 = Prblm.ProblemL2LinearReg(model_vec_sym,data_vec_sym,MatMultSym,0.0001)
-	L2Prob_reg1.estimate_epsilon(True)
-	model_vec_sym.zero()
+    # Testing estimate_epsilon when initial model different than zero
+    model_vec_sym.rand()
+    L2Prob_reg1 = Prblm.ProblemL2LinearReg(model_vec_sym, data_vec_sym, MatMultSym, 0.0001)
+    L2Prob_reg1.estimate_epsilon(True)
+    model_vec_sym.zero()
 
-	#Testing LCG for symmetric systems
-	low_bound = model_vec_sym.clone()
-	# low_bound.set(-2000.)
-	SymProb = Prblm.ProblemLinearSymmetric(model_vec_sym,data_vec_sym,MatMultSym)#,minBound=low_bound)
-	SLCG = SymLCGsolver(Stop)
-	# SLCG.setDefaults(iter_sampling=5,save_obj=True,save_res=True,save_grad=True,save_model=True,prefix="test")
-	SLCG.run(SymProb,verbose=True)
-	# print(SymProb.model.arr)
+    # Testing LCG for symmetric systems
+    low_bound = model_vec_sym.clone()
+    # low_bound.set(-2000.)
+    SymProb = Prblm.ProblemLinearSymmetric(model_vec_sym, data_vec_sym, MatMultSym)  # ,minBound=low_bound)
+    SLCG = SymLCGsolver(Stop)
+    # SLCG.setDefaults(iter_sampling=5,save_obj=True,save_res=True,save_grad=True,save_model=True,prefix="test")
+    # SLCG.run(SymProb,verbose=True)
+    # print(SymProb.model.arr)
 
-	#Testing preconditioned CG
-	SymProbPrec = Prblm.ProblemLinearSymmetric(model_vec_sym,data_vec_sym,MatMultSym,prec=Prec)
-	SLCG.run(SymProbPrec,verbose=True)
+    # Testing preconditioned CG
+    SymProbPrec = Prblm.ProblemLinearSymmetric(model_vec_sym, data_vec_sym, MatMultSym, prec=Prec)
+    # SLCG.run(SymProbPrec,verbose=True)
 
-	#Testing Linear steepest-descent algorithm for symmetric systems
-	SymProb1 = Prblm.ProblemLinearSymmetric(model_vec_sym,data_vec_sym,MatMultSym)
-	SLSD = SymLCGsolver(Stop,steepest=True)
-	SLSD.setDefaults(iter_sampling=100)
-	# SLSD.run(SymProb1)
+    # Testing Linear steepest-descent algorithm for symmetric systems
+    SymProb1 = Prblm.ProblemLinearSymmetric(model_vec_sym, data_vec_sym, MatMultSym)
+    SLSD = SymLCGsolver(Stop, steepest=True)
+    SLSD.setDefaults(iter_sampling=100)
+    # SLSD.run(SymProb1)
 
-	#Testing non-linear regularized problem
-	non_lin_op = Op.NonLinearOperator(MatMultSym,MatMultSym)
-	L2NLRegProb = Prblm.ProblemL2NonLinearReg(model_vec_sym,data_vec_sym,non_lin_op,0.)
-	L2NLRegProb.estimate_epsilon()
-	NLCGsolver = NLCG.NLCGsolver(Stop)
-	# NLCGsolver.setDefaults(iter_sampling=5,save_obj=True,save_res=True,save_grad=True,save_model=True,prefix="test_nl")
-	# NLCGsolver.run(L2NLRegProb,verbose=True)
+    # Testing non-linear regularized problem
+    non_lin_op = Op.NonLinearOperator(MatMultSym, MatMultSym)
+    L2NLRegProb = Prblm.ProblemL2NonLinearReg(model_vec_sym, data_vec_sym, non_lin_op, 0.)
+    L2NLRegProb.estimate_epsilon()
+    NLCGsolver = NLCG(Stop)
+    # NLCGsolver.setDefaults(iter_sampling=5, save_obj=True, save_res=True, save_grad=True, save_model=True, prefix="test_nl")
+    NLCGsolver.run(L2NLRegProb, verbose=True)
 
+    # Testing non-linear bounded problem with NLCG
+    L2NLProb = Prblm.ProblemL2NonLinear(model_vec_sym, data_vec_sym, non_lin_op, minBound=low_bound)
+    NLCGsolver = NLCG(Stop)
+    # NLCGsolver.run(L2NLProb,verbose=False)
+    # print(L2NLProb.model.arr)
 
-	#Testing non-linear bounded problem with NLCG
-	L2NLProb = Prblm.ProblemL2NonLinear(model_vec_sym,data_vec_sym,non_lin_op,minBound=low_bound)
-	NLCGsolver = NLCG(Stop)
-	# NLCGsolver.run(L2NLProb,verbose=False)
-	# print(L2NLProb.model.arr)
+    # Testing non-linear bounded problem with BFGS
+    L2NLProb = Prblm.ProblemL2NonLinear(model_vec_sym, data_vec_sym, non_lin_op, minBound=low_bound)
+    BFGSsolver = BFGS(Stop)
+    # BFGSsolver.run(L2NLProb,verbose=True)
+    # print(L2NLProb.model.arr)
 
-	#Testing non-linear bounded problem with BFGS
-	L2NLProb = Prblm.ProblemL2NonLinear(model_vec_sym,data_vec_sym,non_lin_op,minBound=low_bound)
-	BFGSsolver = BFGS(Stop)
-	# BFGSsolver.run(L2NLProb,verbose=True)
-	# print(L2NLProb.model.arr)
-
-	#Bounded problem
-	#Creating the bounds
-	model_vec_sym.zero()
-	#Create L2-norm linear problem
-	L2Prob_sym = Prblm.ProblemL2Linear(model_vec_sym,data_vec_sym,MatMultSym,minBound=low_bound)
-	# L2Prob_sym = Prblm.ProblemL2Linear(model_vec_sym,data_vec_sym,MatMultSym)
-	#Running the solver
-	# LCGsolver.run(L2Prob_sym,verbose=False)
-	# print(L2Prob_sym.model.arr)
-
-
-
-
-
-
-
-
-
-
-
+    # Bounded problem
+    # Creating the bounds
+    model_vec_sym.zero()
+    # Create L2-norm linear problem
+    L2Prob_sym = Prblm.ProblemL2Linear(model_vec_sym, data_vec_sym, MatMultSym, minBound=low_bound)
+# L2Prob_sym = Prblm.ProblemL2Linear(model_vec_sym,data_vec_sym,MatMultSym)
+# Running the solver
+# LCGsolver.run(L2Prob_sym,verbose=False)
+# print(L2Prob_sym.model.arr)
 
 #
