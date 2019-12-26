@@ -403,7 +403,7 @@ class ProblemL2LinearReg(Problem):
         # Setting epsilon to one to evaluate the scale
         self.epsilon = 1.0
         if self.model.norm() != 0.:
-            self.get_res(self.model)
+            prblm_res = self.get_res(self.model)
             msg = "	Epsilon balancing data and regularization residuals is: %.2e"
         else:
             prblm_grad = self.get_grad(self.model)  # Compute first gradient
