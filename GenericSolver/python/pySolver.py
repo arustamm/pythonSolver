@@ -146,7 +146,7 @@ class Solver:
     def save_results(self, iiter, problem, model=None, force_save=False, force_write=False):
         """
         Method to save results
-        :param problem        : Problem that is being solved
+        :param problem      : Problem that is being solved
         :param iiter        : Iteration index
         :param model        : [None]; Model vector to be saved
         :param force_save   : [False]; Flag to ignore iteration sampling

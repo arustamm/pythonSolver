@@ -34,15 +34,15 @@ class BasicStopper(Stopper):
                  toleta=None, tolobjchng=None, logger=None):
         """
         Constructor for Basic Stopper:
-        niter    	= [0] - integer; Number of iterations to run (must be greater than 0 to be checked)
+        niter    	 = [0] - integer; Number of iterations to run (must be greater than 0 to be checked)
         maxfevals    = [0] - integer; Maximum number of function evaluations (must be greater than 0 to be checked)
         maxhours     = [0.0] - float; Maxium total running time in hours (must be greater than 0.0 to be checked)
-        tolr     	= [1.0e-18] - float; Tolerance on residual norm
-        tolg     	= [1.0e-18] - float; Tolerance on gradient norm (Note: ignore for symmetric system)
-        tolobj     	= [None] - float; Tolerance on objective function value (Not relative value compared to initial one)
+        tolr     	 = [1.0e-18] - float; Tolerance on residual norm
+        tolg     	 = [1.0e-18] - float; Tolerance on gradient norm (Note: ignore for symmetric system)
+        tolobj     	 = [None] - float; Tolerance on objective function value (Not relative value compared to initial one)
         tolobjrel    = [None] - float; Tolerance on relative objective function value (Should range between 0 and 1)
-        toleta    	= [None] - float; Tolerance on |Am - b|/|b| (Not supported for regularized problems)
-        tolobjchng  	= [None] - float; Tolerance on the change of the relative objective function value (phi(m_i) - phi(m_i-1)/ phi(m_0)) (Note that, the stopper averages 3 points by default, modify the internal variable 'ave_pts' to change the number of points)
+        toleta       = [None] - float; Tolerance on |Am - b|/|b| (Not supported for regularized problems)
+        tolobjchng   = [None] - float; Tolerance on the change of the relative objective function value (phi(m_i) - phi(m_i-1)/ phi(m_0)) (Note that, the stopper averages 3 points by default, modify the internal variable 'ave_pts' to change the number of points)
         """
         # Criteria to evaluate whether or not to stop the solver
         super(BasicStopper, self).__init__()

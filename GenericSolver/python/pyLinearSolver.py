@@ -1,14 +1,13 @@
-# Module containing Linear-Conjugate Gradient Solver class
-# It can also handle steppest-descent algorithm
+# Module containing Linear Solver classes
 from math import isnan
 import numpy as np
 
 zero = 10 ** (np.floor(np.log10(np.abs(float(np.finfo(np.float64).tiny)))) + 2)  # Check for avoid Overflow or Underflow
-from pySolver import Solver
+import pySolver
 from pyProblem import ProblemLinearSymmetric
 
 
-class LCGsolver(Solver):
+class LCGsolver(pySolver.Solver):
     """Linear-Conjugate Gradient and Steepest-Descent Solver parent object"""
 
     # Default class methods/functions
@@ -233,7 +232,7 @@ class LCGsolver(Solver):
                 cg_mdl.scaleAdd(cg_dmodl)  # Update model
 
             # Increasing iteration counter
-            iiter = iiter + 1
+            iiter += 1
             # Setting the model
             problem.set_model(cg_mdl)
             # Projecting model onto the bounds (if any)
@@ -331,19 +330,57 @@ class LCGsolver(Solver):
         return
 
 
-class LSQRsolver(Solver):
+
+def _sym_ortho(a, b):
+    """
+    Stable implementation of Givens rotation.
+    Notes
+    -----
+    The routine 'SymOrtho' was added for numerical stability. This is
+    recommended by S.-C. Choi in [1]_.  It removes the unpleasant potential of
+    ``1/eps`` in some important places (see, for example text following
+    "Compute the next plane rotation Qk" in minres.py).
+    References
+    ----------
+    .. [1] S.-C. Choi, "Iterative Methods for Singular Linear Equations
+           and Least-Squares Problems", Dissertation,
+           http://www.stanford.edu/group/SOL/dissertations/sou-cheng-choi-thesis.pdf
+    """
+    if b == 0.:
+        return np.sign(a), 0, np.abs(a)
+    elif a == 0.:
+        return 0., np.sign(b), np.abs(b)
+    elif np.abs(b) > np.abs(a):
+        tau = a / b
+        s = np.sign(b) / np.sqrt(1. + tau * tau)
+        c = s * tau
+        r = b / s
+    else:
+        tau = b / a
+        c = np.sign(a) / np.sqrt(1. + tau * tau)
+        s = c * tau
+        r = a / c
+    return c, s, r
+
+class LSQRsolver(pySolver.Solver):
     """
        LSQR Solver parent object following algorithm in Paige and Saunders (1982)
        Find the least-squares solution to a large, sparse, linear system
        of equations.
        The function solves Ax = b or min ||b - Ax||^2
        If A is symmetric, LSQR should not be used! Use SymLCGsolver
+       If initial model different than zero the solver will perform the following:
+         1. Compute initial residual vector ``r0 = b - A*x0``.
+         2. Use LSQR to solve the system  ``A*dx = r0``.
+         3. Add the correction dx to obtain a final solution ``x = x0 + dx``.
     """
 
-    def __init__(self, stopper, logger=None):
+    def __init__(self, stopper, estimate_cond=False, estimate_var=False, logger=None):
         """
         Constructor for LSQR Solver:
         :param stopper: Stopper, object to terminate inversion
+        :param estimate_cond: Boolean, whether the condition number of A is estimated
+        :param estimate_var:  Boolean, whether the diagonal of A'A^-1 is estimated or not; access self.var after solver run [False]
 		:param logger: Logger, object to write inversion log file [None]
         """
         # Calling parent construction
@@ -352,10 +389,13 @@ class LSQRsolver(Solver):
         self.stopper = stopper
         # Logger object to write on log file
         self.logger = logger
+        # Create var variable if estimate var is requested
+        self.est_cond = True if estimate_cond or estimate_var else False
+        self.var = estimate_var
         # Overwriting logger of the Stopper object
         self.stopper.logger = self.logger
         # print formatting
-        self.iter_msg = "iter = %s, obj = %.5e, resnorm = %.2e, feval = %d"
+        self.iter_msg = "iter = %s, obj = %.5e, resnorm = %.2e, gradnorm = %.2e, feval = %d"
 
     def __del__(self):
         """Default destructor"""
@@ -370,7 +410,7 @@ class LSQRsolver(Solver):
 
         if not restart:
             if self.create_msg:
-                msg += "LSQR SOLVER"
+                msg = "LSQR SOLVER"
                 if verbose:
                     print(msg)
                 if self.logger:
@@ -382,13 +422,63 @@ class LSQRsolver(Solver):
                 if self.logger:
                     self.logger.addToLog(msg)
 
-            # Setting internal vectors (model and search direction vectors)
+            # Setting internal vectors and initial variables
             prblm_mdl = problem.get_model()
-            lsqr_mdl = prblm_mdl.clone()
+            inv_model = prblm_mdl.clone()  # Inverted model to be saved during the inversion
+            # If initial model different than zero the solver will perform the following:
+            # 1. Compute a residual vector ``r0 = b - A*x0``.
+            # 2. Use LSQR to solve the system  ``A*dx = r0``.
+            # 3. Add the correction dx to obtain a final solution ``x = x0 + dx``.
+            u = problem.get_res(prblm_mdl)  # Initial data residuals
+            x = prblm_mdl.clone().zero()  # Solution vector
+            w = x.clone()
+            v = x.clone()
+            if self.est_cond:
+                dk = x.clone()
+                ddnorm = 0.
+            # Estimating variance or diagonal elements of the inverse
+            if self.var:
+                self.var = x.clone()
 
+            # Initial inversion parameters
+            alpha = 0.
+            beta = u.norm()
+            if beta > 0.:
+                u.scale(1./beta)
+                # A.H * u => gradient with scaled residual vector
+                problem.set_model(x)  # x = 0
+                problem.set_residuals(u)  # res = u
+                prblm_grad = problem.get_grad(x)  # g = A.H * u
+                v.copy(prblm_grad)  # v = g
+                alpha = v.norm()
+            if alpha > 0.:
+                v.scale(1./alpha)
+                w.copy(v)
+            rhobar = alpha
+            phibar = beta
+            anorm = 0.
 
             # Other internal variables
             iiter = 0
+
+            # First inversion logging
+            initial_obj_value = problem.get_obj(prblm_mdl)  # For relative objective function value
+            # Saving initial objective function value
+            self.restart.save_parameter("obj_initial", initial_obj_value)
+            if self.create_msg:
+                msg = self.iter_msg % (str(iiter).zfill(self.stopper.zfill),
+                                       initial_obj_value,
+                                       problem.get_rnorm(prblm_mdl),
+                                       problem.get_gnorm(prblm_mdl),
+                                       problem.get_fevals())
+                if verbose:
+                    print(msg)
+                # Writing on log file
+                if self.logger:
+                    self.logger.addToLog(msg)
+            # Check if either objective function value or gradient norm is NaN
+            if isnan(obj0) or isnan(problem.get_gnorm(x)):
+                raise ValueError("Either gradient norm or objective function value NaN!")
         else:
             # Retrieving parameters and vectors to restart the solver
             if self.create_msg:
@@ -398,15 +488,142 @@ class LSQRsolver(Solver):
                 if self.logger:
                     self.logger.addToLog(msg)
             self.restart.read_restart()
+
+            # Retrieving iteration number
             iiter = self.restart.retrieve_parameter("iter")
+            initial_obj_value = self.restart.retrieve_parameter("obj_initial")
+            # Retrieving state vectors
+            inv_model = self.restart.retrieve_vector("inv_model")
+            u = self.restart.retrieve_vector("u")
+            x = self.restart.retrieve_vector("x")
+            w = self.restart.retrieve_vector("w")
+            v = self.restart.retrieve_vector("v")
+            problem.set_model(x)
+            problem.set_residuals(u)
+            u = problem.get_res(prblm_mdl) # Using problem's residual vector
+            if self.est_cond:
+                dk = self.restart.retrieve_vector("dk")
+                ddnorm = self.restart.retrieve_parameter("ddnorm")
+            if self.var:
+                self.var = self.restart.retrieve_vector("var")
+            # Retrieving inversion parameters
+            alpha = self.restart.retrieve_parameter("alpha")
+            rhobar = self.restart.retrieve_parameter("rhobar")
+            phibar = self.restart.retrieve_parameter("phibar")
+            anorm = self.restart.retrieve_parameter("anorm")
+
 
         # Common variables unrelated to restart
-        success = True
+        prblm_mdl = problem.get_model()
 
+        # Iteration loop
+        while True:
+            if problem.get_gnorm(x) == 0.:
+                print("Gradient vanishes identically")
+                break
+
+            # Saving results
+            inv_model.scaleAdd(x) # x = x0 + dx; Updating inverted model
+            self.save_results(iiter, problem, model=inv_model, force_save=False)
+
+            """
+                %     Perform the next step of the bidiagonalization to obtain the
+                %     next  beta, u, alpha, v.  These satisfy the relations
+                %                beta*u  =  A*v   -  alpha*u,
+                %                alpha*v  =  A'*u  -  beta*v.
+            """
+
+            # A.matvec(v) (i.e., projection of v onto the data space)
+            v_prblm = problem.get_dres(x, v)
+            # u = A.matvec(v) - alpha * u
+            u.scaleAdd(v_prblm, -alpha, 1.0)
+            beta = u.norm()
+
+            if beta > 0.:
+                u.scale(1./beta)
+                anorm = np.sqrt(anorm **2 + alpha ** 2 + beta ** 2)
+                problem.set_model(x)
+                problem.set_residuals(u)  # res = u
+                prblm_grad = problem.get_grad(x)  # g = A.H * u
+                # v = A.rmatvec(u) - beta * v
+                v.scaleAdd(prblm_grad, -beta, 1.0)
+                alpha = v.norm()
+                if alpha > 0.:
+                    v.scale(1./alpha)
+
+
+            # Use a plane rotation to eliminate the subdiagonal element (beta)
+            # of the lower-bidiagonal matrix, giving an upper-bidiagonal matrix.
+            cs, sn, rho = _sym_ortho(rhobar, beta)
+
+            theta = sn * alpha
+            rhobar = -cs * alpha
+            phi = cs * phibar
+            phibar *= sn
+
+            if self.est_cond:
+                dk.copy(w).scale(1. / rho)
+                ddnorm += dk.norm() ** 2
+                # Estimate the condition of the matrix  Abar,
+                acond = anorm * np.sqrt(ddnorm)
+                self.restart.save_vector("dk", dk)
+                self.restart.save_parameter("ddnorm", ddnorm)
+            if self.var:
+                # var = var + dk ** 2
+                self.var.scaleAdd(dk.clone().multiply(dk))
+                self.restart.save_vector("var", var)
+
+            # Update x and w.
+            # x = x + t1 * w
+            x.scaleAdd(w, 1.0, phi / rho)
+            # w = v + t2 * w
+            w.scaleAdd(v, -theta / rho, 1.0)
+
+            # Increasing iteration counter
+            iiter += 1
+
+            # Saving state variables and vectors for restart
+            self.restart.save_parameter("iter", iiter)
+            self.restart.save_parameter("alpha", alpha)
+            self.restart.save_parameter("rhobar", rhobar)
+            self.restart.save_parameter("phibar", phibar)
+            self.restart.save_parameter("anorm", anorm)
+            self.restart.save_vector("u", u)
+            self.restart.save_vector("x", x)
+            self.restart.save_vector("w", w)
+            self.restart.save_vector("v", v)
+
+            # iteration info
+            if self.create_msg:
+                msg = self.iter_msg % (str(iiter).zfill(self.stopper.zfill),
+                                       problem.get_obj(prblm_mdl),
+                                       problem.get_rnorm(prblm_mdl),
+                                       problem.get_gnorm(prblm_mdl),
+                                       problem.get_fevals())
+                if self.est_cond:
+                    msg += ", condition_num =  %.2e, matrix_norm = %.2e"%(acond, anorm)
+                if verbose:
+                    print(msg)
+                # Writing on log file
+                if self.logger:
+                    self.logger.addToLog("\n" + msg)
+            # Check if either objective function value or gradient norm is NaN
+            if isnan(problem.get_obj(x)) or isnan(problem.get_gnorm(x)):
+                raise ValueError("Either gradient norm or objective function value NaN!")
+            if self.stopper.run(problem, iiter, initial_obj_value, verbose):
+                break
+
+        # Writing last inverted model
+        inv_model.scaleAdd(x)  # x = x0 + dx; Updating inverted model
+        self.save_results(iiter, problem, model=inv_model, force_save=True, force_write=True)
+        if self.logger:
+            self.logger.addToLog("LSQR SOLVER log file end")
+        # Clear restart object
+        self.restart.clear_restart()
         return
 
 
-class SymLCGsolver(Solver):
+class SymLCGsolver(pySolver.Solver):
     """Linear-Conjugate Gradient Solver (for symmetric systems) parent object"""
 
     # Default class methods/functions
