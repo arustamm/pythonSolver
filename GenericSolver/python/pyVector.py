@@ -165,6 +165,16 @@ class vector:
         """Compute element-wise power of the vector"""
         raise NotImplementedError('pow method must be implemented')
 
+    # TODO implement on seplib
+    def real(self):
+        """Return the real part of the vector"""
+        raise NotImplementedError('real method must be implemented')
+
+    # TODO implement on seplib
+    def imag(self):
+        """Return the imaginary part of the vector"""
+        raise NotImplementedError('imag method must be implemented')
+
     # Combination of different vectors
 
     def copy(self, vec2):
@@ -417,6 +427,16 @@ class superVector(vector):
             self.vecs[idx].conj()
         return self
 
+    def real(self):
+        for idx in range(self.n):
+            self.vecs[idx].real()
+        return self
+
+    def imag(self,):
+        for idx in range(self.n):
+            self.vecs[idx].imag()
+        return self
+
     def pow(self, power):
         for idx in range(self.n):
             self.vecs[idx].pow(power)
@@ -630,6 +650,16 @@ class vectorIC(vector):
     def pow(self, power):
         """Compute element-wise power of the vector"""
         self.getNdArray()[:] = self.getNdArray() ** power
+        return self
+
+    def real(self):
+        """Return the real part of the vector"""
+        self.getNdArray()[:] = self.getNdArray().real
+        return self
+
+    def imag(self,):
+        """Return the imaginary part of the vector"""
+        self.getNdArray()[:] = self.getNdArray().imag
         return self
 
     def copy(self, vec2):

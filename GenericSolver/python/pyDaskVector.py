@@ -137,6 +137,16 @@ def call_conj(vecObj):
     res = vecObj.conj()
     return res
 
+def call_real(vecObj):
+    """Function to call real method"""
+    res = vecObj.real()
+    return res
+
+def call_imag(vecObj):
+    """Function to call imag method"""
+    res = vecObj.imag()
+    return res
+
 
 def call_pow(vecObj, power):
     """Function to call pow method"""
@@ -519,7 +529,17 @@ class DaskVector(Vec.vector):
         """Compute conjugate transpose of the vector"""
         daskD.wait(self.client.map(call_conj, self.vecDask, pure=False))
         return self
-    
+
+    def real(self):
+        """Return the real part of the vector"""
+        daskD.wait(self.client.map(call_real, self.vecDask, pure=False))
+        return self
+
+    def imag(self):
+        """Return the imaginary part of the vector"""
+        daskD.wait(self.client.map(call_imag, self.vecDask, pure=False))
+        return self
+
     def pow(self, power):
         """Compute element-wise power of the vector"""
         daskD.wait(self.client.map(call_pow, self.vecDask, power=power, pure=False))
