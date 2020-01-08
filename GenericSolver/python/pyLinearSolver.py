@@ -172,7 +172,7 @@ class LCGsolver(pySolver.Solver):
                     # Steepest descent
                     beta = 0.0
                     dot_gradd = prblm_gradd.dot(prblm_gradd)
-                    if dot_gradd == 0.:
+                    if dot_gradd <= zero:
                         success = False
                         # Writing on log file
                         if self.logger:
@@ -180,7 +180,7 @@ class LCGsolver(pySolver.Solver):
                                 "Gradient orthogonal to span of linear operator, will terminate solver")
                     else:
                         dot_gradd_res = prblm_gradd.dot(prblm_res)
-                        alpha = - dot_gradd_res / dot_gradd
+                        alpha = - np.real(dot_gradd_res) / dot_gradd
                         msg = "Steppest-descent step length: %.2e" % alpha
                         # Writing on log file
                         if iiter == 0:
@@ -191,8 +191,8 @@ class LCGsolver(pySolver.Solver):
                     # Conjugate-gradient coefficients
                     dot_gradd = prblm_gradd.dot(prblm_gradd)
                     dot_dres = cg_dres.dot(cg_dres)
-                    dot_gradd_dres = prblm_gradd.dot(cg_dres)
-                    if dot_gradd == 0. or dot_dres == 0.:
+                    dot_gradd_dres = np.real(prblm_gradd.dot(cg_dres))
+                    if dot_gradd <= zero or dot_dres <= zero:
                         success = False
                     else:
                         determ = dot_gradd * dot_dres - dot_gradd_dres * dot_gradd_dres
@@ -205,8 +205,8 @@ class LCGsolver(pySolver.Solver):
                                 if self.logger:
                                     self.logger.addToLog(msg)
                             break
-                        dot_gradd_res = prblm_gradd.dot(prblm_res)
-                        dot_dres_res = cg_dres.dot(prblm_res)
+                        dot_gradd_res = np.real(prblm_gradd.dot(prblm_res))
+                        dot_dres_res = np.real(cg_dres.dot(prblm_res))
                         alpha = -(dot_dres * dot_gradd_res - dot_gradd_dres * dot_dres_res) / determ
                         beta = (dot_gradd_dres * dot_gradd_res - dot_gradd * dot_dres_res) / determ
                         # Writing on log file
@@ -328,7 +328,6 @@ class LCGsolver(pySolver.Solver):
         self.restart.clear_restart()
 
         return
-
 
 
 def _sym_ortho(a, b):
