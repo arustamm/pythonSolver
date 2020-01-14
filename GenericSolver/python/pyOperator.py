@@ -9,9 +9,9 @@ from pyVector import vector, superVector
 import sep_util
 
 # for __truediv__
-# from pyLinearSolver import LCGsolver
-# from pyProblem import ProblemL2Linear
-# from pyStopper import BasicStopper
+from pyLinearSolver import LCGsolver
+from pyProblem import ProblemL2Linear
+from pyStopper import BasicStopper
 
 
 class Operator:
@@ -47,7 +47,7 @@ class Operator:
         return self.dot(other)
     
     __rmul__ = __mul__  # other * self
-    
+
     def __truediv__(self, other, niter=2000):
         """x = A / y through CG"""
         
@@ -666,7 +666,7 @@ class DiagonalOp(Operator):
         model.multiply(self.diag)
 
 
-class MatMult(Operator):
+class MatrixOp(Operator):
     """Operator built upon a matrix"""
 
     def __init__(self, A, domain, range, outcore=False):
@@ -688,7 +688,7 @@ class MatMult(Operator):
         self.outcore = outcore
         
     def __str__(self):
-        return "MatMult "
+        return "MatrixOp"
     
     def forward(self, add, model, data):
         """d = A * m"""
@@ -717,7 +717,7 @@ class MatMult(Operator):
             sep_util.write_file(model.vecfile, model_arr, model_axis)
         else:
             model_arr = model.getNdArray()
-            model_arr += np.matmul(self.A.H, data_arr.ravel()).reshape(model_arr.shape)
+            model_arr += np.matmul(self.A.T.conj(), data_arr.ravel()).reshape(model_arr.shape)
         return
 
 
@@ -907,7 +907,7 @@ def main():
     
     # test MatMult
     x = pyVector.vectorIC(np.empty((100, 200)))
-    A = MatMult(np.eye(x.getNdArray().size), x, x, outcore=False)
+    A = MatrixOp(np.eye(x.getNdArray().size), x, x, outcore=False)
     y = A * x
     if x.isDifferent(y):
         print("MatMult not working")
