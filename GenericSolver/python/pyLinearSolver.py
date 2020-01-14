@@ -449,7 +449,7 @@ class LSQRsolver(pySolver.Solver):
                 u.scale(1. / beta)
                 # A.H * u => gradient with scaled residual vector
                 problem.set_model(x)  # x = 0
-                problem.set_residuals(u)  # res = u
+                problem.set_residual(u)  # res = u
                 prblm_grad = problem.get_grad(x)  # g = A.H * u
                 v.copy(prblm_grad)  # v = g
                 alpha = v.norm()
@@ -479,6 +479,7 @@ class LSQRsolver(pySolver.Solver):
                 if self.logger:
                     self.logger.addToLog(msg)
             # Check if either objective function value or gradient norm is NaN
+            obj0 = initial_obj_value
             if isnan(obj0) or isnan(problem.get_gnorm(x)):
                 raise ValueError("Either gradient norm or objective function value NaN!")
         else:
@@ -501,7 +502,7 @@ class LSQRsolver(pySolver.Solver):
             w = self.restart.retrieve_vector("w")
             v = self.restart.retrieve_vector("v")
             problem.set_model(x)
-            problem.set_residuals(u)
+            problem.set_residual(u)
             
             u = problem.get_res(x)  # Using problem's residual vector
             if self.est_cond:
@@ -545,7 +546,7 @@ class LSQRsolver(pySolver.Solver):
                 u.scale(1. / beta)
                 anorm = np.sqrt(anorm ** 2 + alpha ** 2 + beta ** 2)
                 problem.set_model(x)
-                problem.set_residuals(u)  # res = u
+                problem.set_residual(u)  # res = u
                 prblm_grad = problem.get_grad(x)  # g = A.H * u
                 # v = A.rmatvec(u) - beta * v
                 v.scaleAdd(prblm_grad, -beta, 1.0)
@@ -572,7 +573,7 @@ class LSQRsolver(pySolver.Solver):
             if self.var:
                 # var = var + dk ** 2
                 self.var.scaleAdd(dk.clone().multiply(dk))
-                self.restart.save_vector("var", var)
+                self.restart.save_vector("var", self.var)
             
             # Update x and w.
             # x = x + t1 * w
