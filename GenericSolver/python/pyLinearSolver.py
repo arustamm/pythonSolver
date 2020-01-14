@@ -46,19 +46,17 @@ class LCGsolver(pySolver.Solver):
         
         if not restart:
             if self.create_msg:
-                msg = "PRECONDITIONED " if precond else ""
-                msg += "LINEAR %s SOLVER" % ("STEEPEST-DESCENT" if self.steepest else "CONJUGATE GRADIENT")
+                msg = 90 * "#" + "\n"
+                msg += "\t\t\t\tPRECONDITIONED " if precond else "\t\t\t\t"
+                msg += "LINEAR %s SOLVER\n" % ("STEEPEST-DESCENT" if self.steepest else "CONJUGATE GRADIENT")
+                msg += "\tRestart folder: %s\n" % self.restart.restart_folder
+                msg += "\tModeling Operator:\t\t%s\n" % problem.op
+                msg += 90 * "#" + "\n"
                 if verbose:
                     print(msg)
                 if self.logger:
                     self.logger.addToLog(msg + " log file")
-                # Printing restart folder
-                msg = "Restart folder: %s\n" % self.restart.restart_folder
-                if verbose:
-                    print(msg)
-                if self.logger:
-                    self.logger.addToLog(msg)
-            
+
             # Setting internal vectors (model and search direction vectors)
             prblm_mdl = problem.get_model()
             cg_mdl = prblm_mdl.clone()
@@ -160,7 +158,7 @@ class LCGsolver(pySolver.Solver):
                     alpha = - dot_grad_prec_grad / dot_cg_dmodld
                     # Writing on log file
                     if beta == 0.:
-                        msg = "Steppest-descent step length: %.2e" % alpha
+                        msg = "Steepest-descent step length: %.2e" % alpha
                     else:
                         msg = "Conjugate alpha, beta: %.2e, %.2e" % (alpha, beta)
                     if self.logger:
@@ -320,10 +318,15 @@ class LCGsolver(pySolver.Solver):
         
         # Writing last inverted model
         self.save_results(iiter, problem, force_save=True, force_write=True)
-        msg = "PRECONDITIONED " if precond else ""
-        if self.logger:
-            self.logger.addToLog(msg + "LINEAR %s SOLVER log file end" %
-                                 "STEEPEST-DESCENT" if self.steepest else "CONJUGATE GRADIENT")
+        if self.create_msg:
+            msg = 90 * "#" + "\n"
+            msg += "\t\t\t\tPRECONDITIONED " if precond else "\t\t\t\t"
+            msg += "LINEAR %s SOLVER log file end\n" % ("STEEPEST-DESCENT" if self.steepest else "CONJUGATE GRADIENT")
+            msg += 90 * "#" + "\n"
+            if verbose:
+                print(msg.replace(" log file", ""))
+            if self.logger:
+                self.logger.addToLog(msg)
         # Clear restart object
         self.restart.clear_restart()
         
@@ -378,10 +381,11 @@ class LSQRsolver(pySolver.Solver):
     def __init__(self, stopper, estimate_cond=False, estimate_var=False, logger=None):
         """
         Constructor for LSQR Solver:
-        :param stopper: Stopper, object to terminate inversion
-        :param estimate_cond: Boolean, whether the condition number of A is estimated
-        :param estimate_var:  Boolean, whether the diagonal of A'A^-1 is estimated or not; access self.var after solver run [False]
-        :param logger: Logger, object to write inversion log file [None]
+        :param stopper          : Stopper, object to terminate inversion
+        :param estimate_cond    : Boolean, whether the condition number of A is estimated
+        :param estimate_var     : Boolean, whether the diagonal of A'A^-1 is estimated or not;
+                                  access self.var after solver run [False]
+        :param logger           : Logger, object to write inversion log file [None]
         """
         # Calling parent construction
         super(LSQRsolver, self).__init__()
@@ -410,17 +414,15 @@ class LSQRsolver(pySolver.Solver):
         
         if not restart:
             if self.create_msg:
-                msg = "LSQR SOLVER"
+                msg = 90 * "#" + "\n"
+                msg += "\t\t\t\tLSQR SOLVER\n"
+                msg += "\tRestart folder: %s\n" % self.restart.restart_folder
+                msg += "\tModeling Operator:\t\t%s\n" % problem.op
+                msg += 90 * "#" + "\n"
                 if verbose:
                     print(msg)
                 if self.logger:
                     self.logger.addToLog(msg + " log file")
-                # Printing restart folder
-                msg = "Restart folder: %s\n" % self.restart.restart_folder
-                if verbose:
-                    print(msg)
-                if self.logger:
-                    self.logger.addToLog(msg)
             
             # Setting internal vectors and initial variables
             prblm_mdl = problem.get_model()
@@ -500,7 +502,8 @@ class LSQRsolver(pySolver.Solver):
             v = self.restart.retrieve_vector("v")
             problem.set_model(x)
             problem.set_residuals(u)
-            u = problem.get_res(prblm_mdl)  # Using problem's residual vector
+            
+            u = problem.get_res(x)  # Using problem's residual vector
             if self.est_cond:
                 dk = self.restart.retrieve_vector("dk")
                 ddnorm = self.restart.retrieve_parameter("ddnorm")
@@ -614,8 +617,14 @@ class LSQRsolver(pySolver.Solver):
         # Writing last inverted model
         inv_model.scaleAdd(x)  # x = x0 + dx; Updating inverted model
         self.save_results(iiter, problem, model=inv_model, force_save=True, force_write=True)
-        if self.logger:
-            self.logger.addToLog("LSQR SOLVER log file end")
+        if self.create_msg:
+            msg = 90 * "#" + "\n"
+            msg += "\t\t\t\tLSQR SOLVER log file end\n"
+            msg += 90 * "#" + "\n"
+            if verbose:
+                print(msg)
+            if self.logger:
+                self.logger.addToLog(msg + " log file")
         # Clear restart object
         self.restart.clear_restart()
         return
