@@ -7,13 +7,14 @@ The prerequisites packages are the following:
 
 1. Numpy (https://numpy.org/) 
 2. Matplotlib (https://matplotlib.org/)
-3. Dask (https://dask.org/)
-4. Dask Distributed (https://distributed.dask.org/en/latest/)
-5. Dask Jobqueue (https://jobqueue.dask.org/en/latest/)
+3. Scipy (https://www.scipy.org/)
+4. Dask (https://dask.org/)
+5. Dask Distributed (https://distributed.dask.org/en/latest/)
+6. Dask Jobqueue (https://jobqueue.dask.org/en/latest/)
 
-The first two packages can be easily installed by running:
+The first three packages can be easily installed by running:
 ```
-pip install numpy matplotlib
+pip install numpy matplotlib scipy
 ``` 
 
 The last three packages are necessary to use the Dask interface. To install them run:
