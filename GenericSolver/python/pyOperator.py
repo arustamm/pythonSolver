@@ -669,9 +669,9 @@ class DiagonalOp(Operator):
 class MatrixOp(Operator):
     """Operator built upon a matrix"""
 
-    def __init__(self, A, domain, range, outcore=False):
+    def __init__(self, matrix, domain, range, outcore=False):
         """Class constructor
-        :param A        : matrix to use
+        :param matrix   : matrix to use
         :param domain   : domain vector
         :param range    : range vector
         :param outcore  : use outcore sep operators
@@ -682,9 +682,9 @@ class MatrixOp(Operator):
             raise TypeError("ERROR! Range vector not a vector object")
         # Setting domain and range of operator and matrix to use during application of the operator
         self.setDomainRange(domain, range)
-        if not isinstance(A, np.ndarray):
-            raise ValueError("ERROR! Matrix A has to be a numpy ndarray")
-        self.A = A
+        if not isinstance(matrix, np.ndarray):
+            raise ValueError("ERROR! matrix has to be a numpy ndarray")
+        self.M = matrix
         self.outcore = outcore
         
     def __str__(self):
@@ -698,11 +698,11 @@ class MatrixOp(Operator):
         model_arr = model.getNdArray()
         if self.outcore:
             [data_arr, data_axis] = sep_util.read_file(data.vecfile)
-            data_arr += np.matmul(self.A, model_arr.ravel()).reshape(data_arr.shape)
+            data_arr += np.matmul(self.M, model_arr.ravel()).reshape(data_arr.shape)
             sep_util.write_file(data.vecfile, data_arr, data_axis)
         else:
             data_arr = data.getNdArray()
-            data_arr += np.matmul(self.A, model_arr.ravel()).reshape(data_arr.shape)
+            data_arr += np.matmul(self.M, model_arr.ravel()).reshape(data_arr.shape)
         return
 
     def adjoint(self, add, model, data):
@@ -713,12 +713,15 @@ class MatrixOp(Operator):
         data_arr = data.getNdArray()
         if self.outcore:
             [model_arr, model_axis] = sep_util.read_file(model.vecfile)
-            model_arr += np.matmul(self.A.H, data_arr.ravel()).reshape(model_arr.shape)
+            model_arr += np.matmul(self.M.H, data_arr.ravel()).reshape(model_arr.shape)
             sep_util.write_file(model.vecfile, model_arr, model_axis)
         else:
             model_arr = model.getNdArray()
-            model_arr += np.matmul(self.A.T.conj(), data_arr.ravel()).reshape(model_arr.shape)
+            model_arr += np.matmul(self.M.T.conj(), data_arr.ravel()).reshape(model_arr.shape)
         return
+    
+    def getNdArray(self):
+        return np.array(self.M)
 
 
 # for backward compatibility

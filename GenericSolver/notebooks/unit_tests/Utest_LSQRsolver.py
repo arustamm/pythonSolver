@@ -30,8 +30,7 @@ if __name__ == "__main__":
     print('CG result: \t\t', L2ProbCG.model.getNdArray())  # should be near [1, -1]
     
     # LSQR from scipy
-    print('scipy result: \t',
-          lsqr(np.array([[1., 0.], [1., 1.], [0., 1.]], dtype=float), np.array([1., 0.01, -1.], dtype=float))[0])
+    print('scipy result: \t', lsqr(A.getNdArray(), data.getNdArray())[0])
     
     # LSQR
     L2Prob = ProblemL2Linear(model, data, A)

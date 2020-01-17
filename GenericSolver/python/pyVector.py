@@ -1,17 +1,16 @@
 # Module containing the definition of an abstract, in-core, and out-of-core vectors
-import numpy as np
-import re
 import math
-import time
 import os
-import imp
+import re
+import time
 from copy import deepcopy
 from shutil import copyfile
 from sys import version_info
 
+import numpy as np
+import sep_util
 # other modules
 import sys_util
-import sep_util
 
 # regex to read output of Solver_ops
 re_dpr = re.compile("DOT RESULT(.*)")
