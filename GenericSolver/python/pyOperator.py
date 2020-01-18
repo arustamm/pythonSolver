@@ -599,50 +599,6 @@ class scalingOp(Operator):
         model.scaleAdd(data, 1. if add else 0., self.scalar)
 
 
-class ZeroOp(Operator):
-    """Zero matrix operator; useful for Jacobian matrices that are zeros"""
-    
-    def __init__(self, domain, range):
-        super(ZeroOp, self).__init__(domain, range)
-    
-    def __str__(self):
-        return "  Zero  "
-    
-    def forward(self, add, model, data):
-        self.checkDomainRange(model, data)
-        if not add:
-            data.zero()
-    
-    def adjoint(self, add, model, data):
-        self.checkDomainRange(model, data)
-        if not add:
-            model.zero()
-
-
-class IdentityOp(Operator):
-    """Identity operator"""
-    
-    def __init__(self, domain):
-        super(IdentityOp, self).__init__(domain, domain)
-    
-    def __str__(self):
-        return "Identity"
-    
-    def forward(self, add, model, data):
-        self.checkDomainRange(model, data)
-        if add:
-            data.scaleAdd(model)
-        else:
-            data.copy(model)
-    
-    def adjoint(self, add, model, data):
-        self.checkDomainRange(model, data)
-        if add:
-            model.scaleAdd(data)
-        else:
-            model.copy(data)
-
-
 class DiagonalOp(Operator):
     """Diagonal operator for performing element-wise multiplication"""
     
@@ -736,6 +692,219 @@ def ChainOperator(A, B):
                 d = B A m
     """
     return _prodOperator(B, A)
+
+
+#########################
+# SOME USEFUL OPERATORS #
+#########################
+
+class ZeroOp(Operator):
+    """Zero matrix operator; useful for Jacobian matrices that are zeros"""
+    
+    def __init__(self, domain, range):
+        super(ZeroOp, self).__init__(domain, range)
+    
+    def __str__(self):
+        return "  Zero  "
+    
+    def forward(self, add, model, data):
+        self.checkDomainRange(model, data)
+        if not add:
+            data.zero()
+    
+    def adjoint(self, add, model, data):
+        self.checkDomainRange(model, data)
+        if not add:
+            model.zero()
+
+
+class IdentityOp(Operator):
+    """Identity operator"""
+    
+    def __init__(self, domain):
+        super(IdentityOp, self).__init__(domain, domain)
+    
+    def __str__(self):
+        return "Identity"
+    
+    def forward(self, add, model, data):
+        self.checkDomainRange(model, data)
+        if add:
+            data.scaleAdd(model)
+        else:
+            data.copy(model)
+    
+    def adjoint(self, add, model, data):
+        self.checkDomainRange(model, data)
+        if add:
+            model.scaleAdd(data)
+        else:
+            model.copy(data)
+
+
+class FirstDerivative(Operator):
+    def __init__(self, model, sampling=1., axis=0):
+        r"""
+        Compute 2nd order centered first derivative
+
+        .. math::
+            y[i] = 0.5 (x[i+1] - x[i-1]) / dx
+
+        :param model    : vector class; domain vector
+        :param sampling : scalar; sampling step [1.]
+        :param axis     : int; axis along which to compute the derivative [0]
+        """
+        self.sampling = sampling
+        self.data_tmp = model.clone().zero()
+        self.dims = model.getNdArray().shape
+        self.axis = axis if axis >= 0 else len(self.dims) + axis
+        super(FirstDerivative, self).__init__(model, model)
+
+    def __str__(self):
+        return "1stDer_%d" % self.axis
+
+    def forward(self, add, model, data):
+        """Forward operator"""
+        self.checkDomainRange(model, data)
+        if add:
+            self.data_tmp.copy(data)
+        data.zero()
+        # Getting Ndarrays
+        x = model.clone().getNdArray()
+        if self.axis > 0:  # need to bring the dim. to derive to first dim
+            x = np.swapaxes(x, self.axis, 0)
+        y = np.zeros(x.shape)
+    
+        y[:-1] = (x[1:] - x[:-1]) / self.sampling / 2
+    
+        if self.axis > 0:  # reset axis order
+            y = np.swapaxes(y, 0, self.axis)
+        data.getNdArray()[:] = y
+        if add:
+            data.scaleAdd(self.data_tmp)
+        return
+
+    def adjoint(self, add, model, data):
+        """Adjoint operator"""
+        self.checkDomainRange(model, data)
+        if add:
+            self.data_tmp.copy(model)
+        model.zero()
+        # Getting Ndarrays
+        y = data.clone().getNdArray().reshape(self.dims)
+        if self.axis > 0:  # need to bring the dim. to derive to first dim
+            y = np.swapaxes(y, self.axis, 0)
+        x = np.zeros(y.shape)
+    
+        x[0] = -y[0] / self.sampling / 2
+        x[1:-1] = (-y[1:-1] + y[:-2]) / self.sampling / 2
+        x[-1] = y[-2] / self.sampling / 2
+    
+        if self.axis > 0:
+            x = np.swapaxes(x, 0, self.axis)
+        model.getNdArray()[:] = x
+        if add:
+            model.scaleAdd(self.data_tmp)
+        return
+
+
+class SecondDerivative(Operator):
+    def __init__(self, model, sampling=1., axis=0):
+        r"""
+        Compute 2nd order second derivative
+
+        .. math::
+            y[i] = (x[i+1] - 2x[i] + x[i-1]) / dx^2
+
+        :param model    : vector class; domain vector
+        :param sampling : scalar; sampling step [1.]
+        :param axis     : int; axis along which to compute the derivative [0]
+        """
+        self.sampling = sampling
+        self.data_tmp = model.clone().zero()
+        self.dims = model.getNdArray().shape
+        self.axis = axis if axis >= 0 else len(self.dims) + axis
+        super(SecondDerivative, self).__init__(model, model)
+
+    def __str__(self):
+        return "2ndDer_%d" % self.axis
+
+    def forward(self, add, model, data):
+        """Forward operator"""
+        self.checkDomainRange(model, data)
+        if add:
+            self.data_tmp.copy(data)
+        data.zero()
+    
+        # Getting Ndarrays
+        x = model.clone().getNdArray()
+        if self.axis > 0:  # need to bring the dim. to derive to first dim
+            x = np.swapaxes(x, self.axis, 0)
+        y = np.zeros(x.shape)
+    
+        y[1:-1] = (x[0:-2] - 2 * x[1:-1] + x[2:]) / self.sampling ** 2
+    
+        if self.axis > 0:  # reset axis order
+            y = np.swapaxes(y, 0, self.axis)
+        data.getNdArray()[:] = y
+        if add:
+            data.scaleAdd(self.data_tmp)
+        return
+
+    def adjoint(self, add, model, data):
+        """Adjoint operator"""
+        self.checkDomainRange(model, data)
+        if add:
+            self.data_tmp.copy(model)
+        model.zero()
+    
+        # Getting numpy arrays
+        y = data.clone().getNdArray()
+        if self.axis > 0:  # need to bring the dim. to derive to first dim
+            y = np.swapaxes(y, self.axis, 0)
+        x = np.zeros(y.shape)
+    
+        x[0:-2] += (y[1:-1]) / self.sampling ** 2
+        x[1:-1] -= (2 * y[1:-1]) / self.sampling ** 2
+        x[2:] += (y[1:-1]) / self.sampling ** 2
+    
+        if self.axis > 0:
+            x = np.swapaxes(x, 0, self.axis)
+        model.getNdArray()[:] = x
+        if add:
+            model.scaleAdd(self.data_tmp)
+        return
+
+
+class Laplacian(Operator):
+    def __init__(self, model, axis=(0, 1), weights=(0, 1), sampling=(1, 1)):
+        r"""
+        Laplacian operator (at least 2 dims are required)
+
+        :param model    : vector class; domain vector
+        :param sampling : tuple; sampling step [1, 1]
+        :param axis     : tuple; axis along which to compute the derivative [0, 1]
+        :param weights  : tuple; scalar weight for the axis [1, 1]
+        """
+        self.sampling = sampling
+        self.data_tmp = model.clone().zero()
+        self.dims = model.getNdArray().shape
+        self.weights = weights
+        self.axis = axis
+        assert len(axis) == len(weights) == len(sampling) != 0, "There is something wrong with the dimensions"
+        self.op = weights[0] * SecondDerivative(model, sampling=sampling[0], axis=axis[0])
+        for d in range(1, len(axis)):
+            self.op += weights[d] * SecondDerivative(model, sampling=sampling[d], axis=axis[d])
+        super(Laplacian, self).__init__(model, model)
+
+    def __str__(self):
+        return "Laplace "
+
+    def forward(self, add, model, data):
+        return self.op.forward(add, model, data)
+
+    def adjoint(self, add, model, data):
+        return self.op.adjoint(add, model, data)
 
 
 #######################
