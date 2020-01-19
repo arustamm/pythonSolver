@@ -612,66 +612,8 @@ def main():
     import pyOperator
     import matplotlib.pyplot as plt
     plt.style.use('ggplot')
-    from pyProblem import ProblemL2Linear
-    
-    class FirstDerivative(pyOperator.Operator):
-        def __init__(self, model, sampling=1., axis=0):
-            """
-            Compute 2nd order centered first derivative
-            :param model    : vector class; domain vector
-            :param sampling : scalar; sampling step [1.]
-            :param axis     : int; axis along which to compute the derivative [0]
-            """
-            self.sampling = sampling
-            self.data_tmp = model.clone().zero()
-            self.dims = model.getNdArray().shape
-            self.axis = axis if axis >= 0 else len(self.dims) + axis
-            super(FirstDerivative, self).__init__(model, model)
-        
-        def __str__(self):
-            return "1stDer_%d" % self.axis
-    
-        def forward(self, add, model, data):
-            """Forward operator"""
-            self.checkDomainRange(model, data)
-            if add:
-                self.data_tmp.copy(data)
-            data.zero()
-            # Getting Ndarrays
-            x = model.clone().getNdArray()
-            y = np.zeros(x.shape)
-            if self.axis > 0:  # need to bring the dim. to derive to first dim
-                x = np.swapaxes(x, self.axis, 0)
-            y[:-1] = (x[1:] - x[:-1]) / self.sampling
-            y[-1] = 0
-            if self.axis > 0:  # reset axis order
-                y = np.swapaxes(y, 0, self.axis)
-            data.getNdArray()[:] = y
-            if add:
-                data.scaleAdd(self.data_tmp)
-            return
-    
-        def adjoint(self, add, model, data):
-            """Adjoint operator"""
-            self.checkDomainRange(model, data)
-            if add:
-                self.data_tmp.copy(model)
-            model.zero()
-            # Getting Ndarrays
-            y = data.clone().getNdArray().reshape(self.dims)
-            x = np.zeros(y.shape)
-            if self.axis > 0:  # need to bring the dim. to derive to first dim
-                y = np.swapaxes(y, self.axis, 0)
-            x[0] = -y[0] / self.sampling
-            x[1:-1] = (-y[1:-1]+y[:-2]) / self.sampling
-            x[-1] = y[-2] / self.sampling
-            if self.axis > 0:
-                x = np.swapaxes(x, 0, self.axis)
-            model.getNdArray()[:] = x
-            if add:
-                model.scaleAdd(self.data_tmp)
-            return
-    
+    from pyProblem import ProblemL2Linear, ProblemL2LinearReg
+
     class ConvNDscipy(pyOperator.Operator):
         """ND convolution operator upon a image"""
         def __init__(self, model, kernel, method='auto'):
@@ -739,10 +681,10 @@ def main():
             self.forward(add, data, model)
             return
     
-    PLOT = False
+    PLOT = True
     EXAMPLE = 'noisy'
     EXAMPLE = 'gaussian'
-    EXAMPLE = 'python'
+    # EXAMPLE = 'python'
     
     if EXAMPLE == 'noisy':
         # data examples
@@ -754,9 +696,10 @@ def main():
     
         Iop = pyOperator.IdentityOp(x)
         Dop = FirstDerivative(x)
+        D2op = SecondDerivative(x)
         
         n = x.clone()
-        n.getNdArray()[:] = np.random.normal(0,1,nx)
+        n.getNdArray()[:] = np.random.normal(0,  1, nx)
         y = Iop * (x.clone() + n)
         
         derivative = Dop * x
@@ -783,7 +726,21 @@ def main():
             plt.legend()
             plt.title('Least-Squares')
             plt.show()
-        
+
+        # CG solver with L2 regularization
+        problemLSR = ProblemL2LinearReg(x.clone().zero(), y, Iop, np.sqrt(50), D2op)
+        CG = LCGsolver(BasicStopper(niter=30))
+        CG.setDefaults()
+        CG.run(problemLSR, verbose=True)
+        if PLOT:
+            plt.figure(figsize=(5, 4))
+            plt.plot(x.getNdArray(), 'k', lw=1, label='x')
+            plt.plot(y.getNdArray(), '.k', label='y=x+n')
+            plt.plot(problemLSR.model.getNdArray(), 'r', lw=1, label='x_inv')
+            plt.legend()
+            plt.title('Least-Squares with Laplacian reg')
+            plt.show()
+            
         # FISTA
         problemFISTA = ProblemL1Lasso(x.clone().zero(), y, Iop, lambda_value=5, op_norm=1)
         FISTA = ISTAsolver(BasicStopper(niter=300), fast=True)
@@ -861,7 +818,7 @@ def main():
         if PLOT:
             plt.figure(figsize=(6, 3))
             plt.imshow(problemLS.model.getNdArray()), plt.colorbar()
-            plt.title('Conjugate Gradient')
+            plt.title('CG, %d its' % CG.stopper.niter)
             plt.show()
 
         # FISTA
@@ -872,7 +829,7 @@ def main():
         if PLOT:
             plt.figure(figsize=(6, 3))
             plt.imshow(problemFISTA.model.getNdArray()), plt.colorbar()
-            plt.title(r'FISTA, $\lambda$=%.2e' % problemFISTA.lambda_value)
+            plt.title(r'FISTA, $\lambda$=%.2e, %d its' % (problemFISTA.lambda_value, FISTA.stopper.niter))
             plt.show()
 
         # SplitBregman
@@ -972,15 +929,15 @@ def main():
             plt.show()
 
         # ADMM
-        problemADMM = ProblemLinearReg(x.clone().zero(), y, Blurring, dfw=1.5,
-                                     regsL1=D, epsL1=.01)
+        problemADMM = ProblemLinearReg(x.clone().zero(), y, Blurring, dfw=1.,
+                                     regsL1=D, epsL1=.1)
 
-        ADMM = ADMMsolver(BasicStopper(niter=10), niter_LCG=10, niter_ISTA=5)
-        ADMM.setDefaults()
+        ADMM = ADMMsolver(BasicStopper(niter=10), niter_LCG=30, niter_ISTA=10)
+        ADMM.setDefaults(save_obj=True, save_model=True)
         ADMM.run(problemADMM, verbose=True, inner_verbose=True)
         if PLOT:
             plt.figure(figsize=(5, 4))
-            plt.imshow(problemSB.model.getNdArray()), plt.colorbar()
+            plt.imshow(problemADMM.model.getNdArray()), plt.colorbar()
             plt.title(r'ADMM TV, $\varepsilon=%.2e$, %d iter'
                       % (problemADMM.epsL1[0], ADMM.stopper.niter))
             plt.show()
