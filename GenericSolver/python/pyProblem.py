@@ -97,6 +97,7 @@ class Problem:
         # Useful for linear inversion (to avoid residual computation)
         if self.res.isDifferent(residual):
             self.res.copy(residual)
+            self.grad_updated = False
         self.res_updated = True
         return
     
