@@ -432,7 +432,9 @@ class LSQRsolver(pySolver.Solver):
             # 1. Compute a residual vector ``r0 = b - A*x0``.
             # 2. Use LSQR to solve the system  ``A*dx = r0``.
             # 3. Add the correction dx to obtain a final solution ``x = x0 + dx``.
-            prblm_res = problem.get_res(prblm_mdl)  # Initial data residuals
+            prblm_res = problem.get_res(initial_mdl)  # Initial data residuals
+            initial_obj_value = problem.get_obj(initial_mdl)  # For relative objective function value
+            # Saving initial objective function value
             u = prblm_res.clone().scale(-1.0)
             x = prblm_mdl.clone().zero()  # Solution vector
             w = x.clone()
@@ -447,26 +449,6 @@ class LSQRsolver(pySolver.Solver):
             # Other internal variables
             iiter = 0
 
-            # First inversion logging
-            # initial_obj_value = problem.get_obj(prblm_mdl)  # For relative objective function value
-            # Saving initial objective function value
-            # self.restart.save_parameter("obj_initial", initial_obj_value)
-            # if self.create_msg:
-            #     msg = self.iter_msg % (str(iiter).zfill(self.stopper.zfill),
-            #                            initial_obj_value,
-            #                            problem.get_rnorm(prblm_mdl),
-            #                            problem.get_gnorm(prblm_mdl),
-            #                            problem.get_fevals())
-            #     if verbose:
-            #         print(msg)
-            #     # Writing on log file
-            #     if self.logger:
-            #         self.logger.addToLog(msg)
-            # # Check if either objective function value or gradient norm is NaN
-            # obj0 = initial_obj_value
-            # if isnan(obj0) or isnan(problem.get_gnorm(x)):
-            #     raise ValueError("Either gradient norm or objective function value NaN!")
-            
             # Initial inversion parameters
             alpha = 0.
             beta = u.norm()
@@ -486,6 +468,26 @@ class LSQRsolver(pySolver.Solver):
             rhobar = alpha
             phibar = beta
             anorm = 0.
+
+            # First inversion logging
+            self.restart.save_parameter("obj_initial", initial_obj_value)
+            # Estimating residual and gradient norms
+            prblm_res.scale(phibar)
+            prblm_grad.scale(alpha*beta)
+            if self.create_msg:
+                msg = self.iter_msg % (str(iiter).zfill(self.stopper.zfill),
+                                       initial_obj_value,
+                                       problem.get_rnorm(prblm_mdl),
+                                       problem.get_gnorm(prblm_mdl),
+                                       problem.get_fevals())
+                if verbose:
+                    print(msg)
+                # Writing on log file
+                if self.logger:
+                    self.logger.addToLog(msg)
+            # Check if either objective function value or gradient norm is NaN
+            if isnan(initial_obj_value) or isnan(problem.get_gnorm(x)):
+                raise ValueError("Either gradient norm or objective function value NaN!")
 
         else:
             # Retrieving parameters and vectors to restart the solver
@@ -531,6 +533,7 @@ class LSQRsolver(pySolver.Solver):
                 break
             
             # Saving results
+            obj0 = problem.get_obj(x)
             inv_model.copy(initial_mdl)
             inv_model.scaleAdd(x)  # x = x0 + dx; Updating inverted model
             self.save_results(iiter, problem, model=inv_model, force_save=False)
@@ -541,7 +544,8 @@ class LSQRsolver(pySolver.Solver):
                 %                beta*u  =  A*v   -  alpha*u,
                 %                alpha*v  =  A'*u  -  beta*v.
             """
-            
+
+
             # A.matvec(v) (i.e., projection of v onto the data space)
             v_prblm = problem.get_dres(x, v)
             # u = A.matvec(v) - alpha * u
@@ -589,6 +593,19 @@ class LSQRsolver(pySolver.Solver):
             
             # Increasing iteration counter
             iiter += 1
+
+            # Computing new objective function value
+            obj1 = problem.get_obj(x)
+            if obj1 >= obj0:
+                if self.create_msg:
+                    msg = "Objective function didn't reduce, will terminate solver:\n\t" \
+                          "obj_new = %.2e\tobj_cur = %.2e" % (obj1, obj0)
+                    if verbose:
+                        print(msg)
+                    # Writing on log file
+                    if self.logger:
+                        self.logger.addToLog(msg)
+                break
             
             # Saving state variables and vectors for restart
             self.restart.save_parameter("iter", iiter)
@@ -601,28 +618,31 @@ class LSQRsolver(pySolver.Solver):
             self.restart.save_vector("w", w)
             self.restart.save_vector("v", v)
 
-            if iiter > 4:
-                break
-            
+            # Estimating residual and gradient norms
+            prblm_res.scale(phibar)
+            if prblm_grad.norm() > zero:
+                prblm_grad.scale(alpha*abs(sn*phi)/prblm_grad.norm())
+            else:
+                prblm_grad.zero()
             # iteration info
-            # if self.create_msg:
-            #     msg = self.iter_msg % (str(iiter).zfill(self.stopper.zfill),
-            #                            problem.get_obj(prblm_mdl),
-            #                            problem.get_rnorm(prblm_mdl),
-            #                            problem.get_gnorm(prblm_mdl),
-            #                            problem.get_fevals())
-            #     if self.est_cond:
-            #         msg += ", condition_num =  %.2e, matrix_norm = %.2e" % (acond, anorm)
-            #     if verbose:
-            #         print(msg)
-            #     # Writing on log file
-            #     if self.logger:
-            #         self.logger.addToLog("\n" + msg)
-            # # Check if either objective function value or gradient norm is NaN
-            # if isnan(problem.get_obj(x)) or isnan(problem.get_gnorm(x)):
-            #     raise ValueError("Either gradient norm or objective function value NaN!")
-            # if self.stopper.run(problem, iiter, initial_obj_value, verbose):
-            #     break
+            if self.create_msg:
+                msg = self.iter_msg % (str(iiter).zfill(self.stopper.zfill),
+                                       problem.get_obj(prblm_mdl),
+                                       problem.get_rnorm(prblm_mdl),
+                                       problem.get_gnorm(prblm_mdl),
+                                       problem.get_fevals())
+                if self.est_cond:
+                    msg += ", condition_num =  %.2e, matrix_norm = %.2e" % (acond, anorm)
+                if verbose:
+                    print(msg)
+                # Writing on log file
+                if self.logger:
+                    self.logger.addToLog("\n" + msg)
+            # Check if either objective function value or gradient norm is NaN
+            if isnan(problem.get_obj(x)) or isnan(problem.get_gnorm(x)):
+                raise ValueError("Either gradient norm or objective function value NaN!")
+            if self.stopper.run(problem, iiter, initial_obj_value, verbose):
+                break
         
         # Writing last inverted model
         inv_model.copy(initial_mdl)
