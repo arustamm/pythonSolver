@@ -383,6 +383,7 @@ class LSQRsolver(pySolver.Solver):
         Constructor for LSQR Solver:
         :param stopper          : Stopper, object to terminate inversion
         :param estimate_cond    : Boolean, whether the condition number of A is estimated
+                                  access self.acond after solver run [False]
         :param estimate_var     : Boolean, whether the diagonal of A'A^-1 is estimated or not;
                                   access self.var after solver run [False]
         :param logger           : Logger, object to write inversion log file [None]
@@ -433,7 +434,7 @@ class LSQRsolver(pySolver.Solver):
             # 2. Use LSQR to solve the system  ``A*dx = r0``.
             # 3. Add the correction dx to obtain a final solution ``x = x0 + dx``.
             prblm_res = problem.get_res(initial_mdl)  # Initial data residuals
-            initial_obj_value = problem.get_obj(initial_mdl)  # For relative objective function value
+            obj0 = initial_obj_value = problem.get_obj(initial_mdl)  # For relative objective function value
             # Saving initial objective function value
             u = prblm_res.clone().scale(-1.0)
             x = prblm_mdl.clone().zero()  # Solution vector
@@ -502,6 +503,7 @@ class LSQRsolver(pySolver.Solver):
             # Retrieving iteration number
             iiter = self.restart.retrieve_parameter("iter")
             initial_obj_value = self.restart.retrieve_parameter("obj_initial")
+            obj0 = self.restart.retrieve_parameter("obj0")
             # Retrieving state vectors
             u = self.restart.retrieve_vector("u")
             x = self.restart.retrieve_vector("x")
@@ -528,12 +530,11 @@ class LSQRsolver(pySolver.Solver):
         
         # Iteration loop
         while True:
-            if problem.get_gnorm(x) == 0.:
+            if problem.get_gnorm(prblm_mdl) == 0.:
                 print("Gradient vanishes identically")
                 break
             
             # Saving results
-            obj0 = problem.get_obj(x)
             inv_model.copy(initial_mdl)
             inv_model.scaleAdd(x)  # x = x0 + dx; Updating inverted model
             self.save_results(iiter, problem, model=inv_model, force_save=False)
@@ -572,18 +573,16 @@ class LSQRsolver(pySolver.Solver):
             rhobar = -cs * alpha
             phi = cs * phibar
             phibar *= sn
-            
-            if self.est_cond:
-                dk.copy(w).scale(1. / rho)
-                ddnorm += dk.norm() ** 2
-                # Estimate the condition of the matrix  Abar,
-                acond = anorm * np.sqrt(ddnorm)
-                self.restart.save_vector("dk", dk)
-                self.restart.save_parameter("ddnorm", ddnorm)
-            if self.var:
-                # var = var + dk ** 2
-                self.var.scaleAdd(dk.clone().multiply(dk))
-                self.restart.save_vector("var", self.var)
+
+            # Estimating residual and gradient norms
+            prblm_res.scale(phibar)
+            if prblm_grad.norm() > zero:
+                prblm_grad.scale(alpha * abs(sn * phi) / prblm_grad.norm())
+            else:
+                prblm_grad.zero()
+            # New objective function value
+            obj1 = problem.get_obj(prblm_mdl)
+
             
             # Update x and w.
             # x = x + t1 * w
@@ -594,8 +593,7 @@ class LSQRsolver(pySolver.Solver):
             # Increasing iteration counter
             iiter += 1
 
-            # Computing new objective function value
-            obj1 = problem.get_obj(x)
+            # Checking new objective function value
             if obj1 >= obj0:
                 if self.create_msg:
                     msg = "Objective function didn't reduce, will terminate solver:\n\t" \
@@ -606,9 +604,25 @@ class LSQRsolver(pySolver.Solver):
                     if self.logger:
                         self.logger.addToLog(msg)
                 break
-            
+
+            if self.est_cond:
+                dk.copy(w).scale(1. / rho)
+                ddnorm += dk.norm() ** 2
+                # Estimate the condition of the matrix  Abar,
+                self.acond = anorm * np.sqrt(ddnorm)
+                self.restart.save_vector("dk", dk)
+                self.restart.save_parameter("ddnorm", ddnorm)
+            if self.var:
+                # var = var + dk ** 2
+                self.var.scaleAdd(dk.clone().multiply(dk))
+                self.restart.save_vector("var", self.var)
+
+            # Saving previous objective function value
+            obj0 = obj1
+
             # Saving state variables and vectors for restart
             self.restart.save_parameter("iter", iiter)
+            self.restart.save_parameter("obj0", obj0)
             self.restart.save_parameter("alpha", alpha)
             self.restart.save_parameter("rhobar", rhobar)
             self.restart.save_parameter("phibar", phibar)
@@ -618,12 +632,6 @@ class LSQRsolver(pySolver.Solver):
             self.restart.save_vector("w", w)
             self.restart.save_vector("v", v)
 
-            # Estimating residual and gradient norms
-            prblm_res.scale(phibar)
-            if prblm_grad.norm() > zero:
-                prblm_grad.scale(alpha*abs(sn*phi)/prblm_grad.norm())
-            else:
-                prblm_grad.zero()
             # iteration info
             if self.create_msg:
                 msg = self.iter_msg % (str(iiter).zfill(self.stopper.zfill),
@@ -632,14 +640,14 @@ class LSQRsolver(pySolver.Solver):
                                        problem.get_gnorm(prblm_mdl),
                                        problem.get_fevals())
                 if self.est_cond:
-                    msg += ", condition_num =  %.2e, matrix_norm = %.2e" % (acond, anorm)
+                    msg += ", condition_num =  %.2e, matrix_norm = %.2e" % (self.acond, anorm)
                 if verbose:
                     print(msg)
                 # Writing on log file
                 if self.logger:
                     self.logger.addToLog("\n" + msg)
             # Check if either objective function value or gradient norm is NaN
-            if isnan(problem.get_obj(x)) or isnan(problem.get_gnorm(x)):
+            if isnan(problem.get_obj(prblm_mdl)) or isnan(problem.get_gnorm(prblm_mdl)):
                 raise ValueError("Either gradient norm or objective function value NaN!")
             if self.stopper.run(problem, iiter, initial_obj_value, verbose):
                 break

@@ -156,6 +156,8 @@ class Problem:
         if not self.dres_updated or dmodel.isDifferent(self.dmodel):
             self.dmodel.copy(dmodel)
             self.dres = self.dresf(self.model, self.dmodel)
+            if self.linear:
+                self.fevals += 1
             self.dres_updated = True
         return self.dres
     
