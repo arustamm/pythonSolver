@@ -876,25 +876,88 @@ class SecondDerivative(Operator):
         return
 
 
-class Laplacian(Operator):
-    def __init__(self, model, axis=(0, 1), weights=(0, 1), sampling=(1, 1)):
+class TotalVariation(Operator):
+    def __init__(self, model, axis=None, weights=None, sampling=None, iso=False):
         r"""
-        Laplacian operator (at least 2 dims are required)
+        (An)isotropic Total Variation operator.
+        The input parameters are tailored for >2D, but it works also for 1D.
 
         :param model    : vector class; domain vector
-        :param sampling : tuple; sampling step [1, 1]
         :param axis     : tuple; axis along which to compute the derivative [0, 1]
         :param weights  : tuple; scalar weight for the axis [1, 1]
+        :param sampling : tuple; sampling step [1, 1]
+        :param iso      : bool; compute isotropic operator [False]
         """
-        self.sampling = sampling
-        self.data_tmp = model.clone().zero()
         self.dims = model.getNdArray().shape
-        self.weights = weights
-        self.axis = axis
-        assert len(axis) == len(weights) == len(sampling) != 0, "There is something wrong with the dimensions"
-        self.op = weights[0] * SecondDerivative(model, sampling=sampling[0], axis=axis[0])
-        for d in range(1, len(axis)):
-            self.op += weights[d] * SecondDerivative(model, sampling=sampling[d], axis=axis[d])
+        self.axis = axis if axis is not None else tuple(range(len(self.dims)))
+        self.sampling = sampling if sampling is not None else tuple([1] * len(self.dims))
+        self.weights = weights if weights is not None else tuple([1] * len(self.dims))
+
+        assert len(self.axis) == len(self.weights) == len(self.sampling) != 0,\
+            "There is something wrong with the dimensions"
+    
+        self.isotropic = iso
+        
+        if self.isotropic:  # self.op is a list of operators
+            self.op = [self.weights[d] * FirstDerivative(model, sampling=self.sampling[d], axis=self.axis[d]) for d in range(len(self.axis))]
+        else:  # self.op is itself the final operator
+            self.op = self.weights[0] * FirstDerivative(model, sampling=self.sampling[0], axis=self.axis[0])
+            for d in range(1, len(self.axis)):
+                self.op += self.weights[d] * FirstDerivative(model, sampling=self.sampling[d], axis=self.axis[d])
+
+        super(TotalVariation, self).__init__(model, model)
+    
+    def __str__(self):
+        return "TotalVar"
+
+    def forward(self, add, model, data):
+        if self.isotropic:
+            self.checkDomainRange(model, data)
+            if add:
+                self.data_tmp.copy(data)
+            data.zero()
+            for op in self.op:
+                temp = data.clone().zero()
+                op.forward(False, model, temp)
+                data.scaleAdd(temp.pow(2))
+            data.pow(.5)
+            if add:
+                data.scaleAdd(self.data_tmp)
+            return
+        else:
+            return self.op.forward(add, model, data)
+
+    def adjoint(self, add, model, data):
+        if self.isotropic:
+            raise ValueError("ERROR! The Isotropic Total Variation is nonlinear.")
+        else:
+            return self.op.adjoint(add, model, data)
+
+
+class Laplacian(Operator):
+    def __init__(self, model, axis=None, weights=None, sampling=None):
+        r"""
+        Laplacian operator.
+        The input parameters are tailored for >2D, but it works also for 1D.
+
+        :param model    : vector class; domain vector
+        :param axis     : tuple; axis along which to compute the derivative [all]
+        :param weights  : tuple; scalar weights for the axis [1 for each model axis]
+        :param sampling : tuple; sampling step [1 for each model axis]
+        """
+        self.dims = model.getNdArray().shape
+        self.axis = axis if axis is not None else tuple(range(len(self.dims)))
+        self.sampling = sampling if sampling is not None else tuple([1]*len(self.dims))
+        self.weights = weights if weights is not None else tuple([1]*len(self.dims))
+        
+        assert len(self.axis) == len(self.weights) == len(self.sampling) != 0,\
+            "There is something wrong with the dimensions"
+
+        self.data_tmp = model.clone().zero()
+
+        self.op = self.weights[0] * SecondDerivative(model, sampling=self.sampling[0], axis=self.axis[0])
+        for d in range(1, len(self.axis)):
+            self.op += self.weights[d] * SecondDerivative(model, sampling=self.sampling[d], axis=self.axis[d])
         super(Laplacian, self).__init__(model, model)
 
     def __str__(self):
