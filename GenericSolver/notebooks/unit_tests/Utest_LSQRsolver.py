@@ -36,7 +36,7 @@ if __name__ == "__main__":
     # LSQR
     L2Prob = ProblemL2Linear(model, data, A)
     LSQR = LSQRsolver(BasicStopper(niter=1000))
-    LSQR.run(L2Prob, verbose=True)
+    LSQR.run(L2Prob, verbose=False)
     print('LSQR result: \t', L2Prob.model.getNdArray())  # should be near [1, -1]
     
     # another example
@@ -61,7 +61,7 @@ if __name__ == "__main__":
     # CG solver
     problemCG = ProblemL2Linear(x.clone().zero(), y, Iop)
     CG = LCGsolver(BasicStopper(niter=30))
-    CG.run(problemCG, verbose=True)
+    CG.run(problemCG, verbose=False)
 
     plt.figure(figsize=(5, 4))
     plt.plot(x.getNdArray(), 'k', lw=1, label='x')
@@ -74,14 +74,8 @@ if __name__ == "__main__":
     # LSQR solver
     problemLSQR = ProblemL2Linear(x.clone().zero(), y, Iop)
     LSQR = LSQRsolver(BasicStopper(niter=1000))
-    LSQR.run(problemLSQR, verbose=True)
+    LSQR.run(problemLSQR, verbose=False)
 
-    # LSQR from scipy
-    # Imat = np.identity(x.getNdArray().shape[0])
-    # y_arr = y.getNdArray()
-    # lsqr(Imat, y_arr, show=True)
-    # exit(0)
-    
     plt.figure(figsize=(5, 4))
     plt.plot(x.getNdArray(), 'k', lw=1, label='x')
     plt.plot(y.getNdArray(), '.k', label='y=x+n')

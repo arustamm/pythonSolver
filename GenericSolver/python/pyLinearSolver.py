@@ -462,6 +462,8 @@ class LSQRsolver(pySolver.Solver):
                 prblm_grad = problem.get_grad(x)  # g = A.H * u
                 v.copy(prblm_grad)  # v = g
                 alpha = v.norm()
+            else:
+                prblm_grad = problem.get_grad(initial_mdl)
             if alpha > 0.:
                 v.scale(1. / alpha)
                 w.copy(v)
@@ -512,7 +514,7 @@ class LSQRsolver(pySolver.Solver):
             problem.set_model(x)
             problem.set_residual(u)
             
-            u = problem.get_res(x)  # Using problem's residual vector
+            prblm_res = problem.get_res(x)
             if self.est_cond:
                 dk = self.restart.retrieve_vector("dk")
                 ddnorm = self.restart.retrieve_parameter("ddnorm")
@@ -564,6 +566,9 @@ class LSQRsolver(pySolver.Solver):
                 alpha = v.norm()
                 if alpha > 0.:
                     v.scale(1. / alpha)
+            else:
+                problem.set_model(x)
+                problem.set_residual(u)  # res = u
             
             # Use a plane rotation to eliminate the subdiagonal element (beta)
             # of the lower-bidiagonal matrix, giving an upper-bidiagonal matrix.
@@ -656,6 +661,7 @@ class LSQRsolver(pySolver.Solver):
         inv_model.copy(initial_mdl)
         inv_model.scaleAdd(x)  # x = x0 + dx; Updating inverted model
         self.save_results(iiter, problem, model=inv_model, force_save=True, force_write=True)
+        prblm_mdl.copy(inv_model) # Setting inverted model to final one
         if self.create_msg:
             msg = 90 * "#" + "\n"
             msg += "\t\t\t\tLSQR SOLVER log file end\n"
