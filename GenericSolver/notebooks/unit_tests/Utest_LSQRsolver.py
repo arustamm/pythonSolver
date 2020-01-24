@@ -27,7 +27,6 @@ if __name__ == "__main__":
     # CG for benchmarking
     L2ProbCG = ProblemL2Linear(model, data, A)
     CG = LCGsolver(BasicStopper(niter=1000))
-    CG.setDefaults()
     CG.run(L2ProbCG, verbose=False)
     print('CG result: \t\t', L2ProbCG.model.getNdArray())  # should be near [1, -1]
     
@@ -37,8 +36,7 @@ if __name__ == "__main__":
     # LSQR
     L2Prob = ProblemL2Linear(model, data, A)
     LSQR = LSQRsolver(BasicStopper(niter=1000))
-    LSQR.setDefaults()
-    LSQR.run(L2Prob, verbose=False)
+    LSQR.run(L2Prob, verbose=True)
     print('LSQR result: \t', L2Prob.model.getNdArray())  # should be near [1, -1]
     
     # another example
@@ -63,8 +61,7 @@ if __name__ == "__main__":
     # CG solver
     problemCG = ProblemL2Linear(x.clone().zero(), y, Iop)
     CG = LCGsolver(BasicStopper(niter=30))
-    CG.setDefaults()
-    CG.run(problemCG, verbose=False)
+    CG.run(problemCG, verbose=True)
 
     plt.figure(figsize=(5, 4))
     plt.plot(x.getNdArray(), 'k', lw=1, label='x')
@@ -77,8 +74,13 @@ if __name__ == "__main__":
     # LSQR solver
     problemLSQR = ProblemL2Linear(x.clone().zero(), y, Iop)
     LSQR = LSQRsolver(BasicStopper(niter=1000))
-    LSQR.setDefaults()
-    LSQR.run(problemLSQR, verbose=False)
+    LSQR.run(problemLSQR, verbose=True)
+
+    # LSQR from scipy
+    # Imat = np.identity(x.getNdArray().shape[0])
+    # y_arr = y.getNdArray()
+    # lsqr(Imat, y_arr, show=True)
+    # exit(0)
     
     plt.figure(figsize=(5, 4))
     plt.plot(x.getNdArray(), 'k', lw=1, label='x')
@@ -91,7 +93,6 @@ if __name__ == "__main__":
     # CG solver with L2 regularization
     problemCGL = ProblemL2LinearReg(x.clone().zero(), y, Iop, np.sqrt(50), L)
     CG = LCGsolver(BasicStopper(niter=30))
-    CG.setDefaults()
     CG.run(problemCGL, verbose=False)
     
     plt.figure(figsize=(5, 4))
@@ -104,8 +105,7 @@ if __name__ == "__main__":
 
     # LSQR solver with L2 regularization
     problemLSQRL = ProblemL2LinearReg(x.clone().zero(), y, Iop, np.sqrt(50), L)
-    LSQR = LCGsolver(BasicStopper(niter=30))
-    LSQR.setDefaults()
+    LSQR = LSQRsolver(BasicStopper(niter=30))
     LSQR.run(problemLSQRL, verbose=False)
 
     plt.figure(figsize=(5, 4))
