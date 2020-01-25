@@ -1,7 +1,7 @@
 # Module containing the definition of inverse problems where the ADMM method is used
 import pyOperator
 import pyVector
-from pyLinearSolver import LCGsolver
+from pyLinearSolver import LCGsolver, LSQRsolver
 from pyProblem import Problem, ProblemL1Lasso, ProblemL2LinearReg, ProblemL2Linear
 from pySolver import Solver
 from pySparseSolver import ISTAsolver
@@ -158,16 +158,16 @@ class SplitBregmanSolver(Solver):
     """Split-Bregman solver for L1 and L2 regularized problems"""
 
     # Default class methods/functions
-    def __init__(self, stopper, logger=None, niter_inner=3, niter_solver=5, breg_weight=1., steepest=False, use_prev_sol=False):
+    def __init__(self, stopper, logger=None, niter_inner=3, niter_solver=5, breg_weight=1., linear_solver='CG', use_prev_sol=False):
         """
         Constructor for Split-Bregman Solver
-        :param stopper      : stopper object
-        :param logger       : logger object
-        :param niter_inner  : int; number of iterations for the shrinkage loop [default 3]
-        :param niter_solver : int; number of iterations for the internal linear solver [default 5]
-        :param breg_weight  : float; coefficient for the Bregman update b += beta * (R*x - d) [1.]
-        :param steepest     : bool; use Steepest Descent instead of Conjugate Gradient [False]
-        :param use_prev_sol : bool; linear solver uses previous solution [False]
+        :param stopper          : stopper object
+        :param logger           : logger object
+        :param niter_inner      : int; number of iterations for the shrinkage loop [default 3]
+        :param niter_solver     : int; number of iterations for the internal linear solver [default 5]
+        :param breg_weight      : float; coefficient for the Bregman update b += beta * (R*x - d) [1.]
+        :param linear_solver    : str; linear solver to be used [CG, SD, LSQR]
+        :param use_prev_sol     : bool; linear solver uses previous solution [False]
         """
         # Calling parent construction
         super(SplitBregmanSolver, self).__init__()
@@ -183,7 +183,14 @@ class SplitBregmanSolver(Solver):
         self.breg_weight = breg_weight
         self.use_prev_sol = use_prev_sol
         
-        self.linear_solver = LCGsolver(BasicStopper(niter=self.niter_solver), steepest=steepest, logger=self.logger)
+        if linear_solver == 'CG':
+            self.linear_solver = LCGsolver(BasicStopper(niter=self.niter_solver), steepest=False, logger=self.logger)
+        elif linear_solver == 'SD':
+            self.linear_solver = LCGsolver(BasicStopper(niter=self.niter_solver), steepest=True, logger=self.logger)
+        elif linear_solver == 'LSQR':
+            self.linear_solver = LSQRsolver(BasicStopper(niter=self.niter_solver), logger=self.logger)
+        else:
+            raise ValueError('ERROR! Solver has to be CG, SD or LSQR')
         self.linear_solver.setDefaults(iter_sampling=1, flush_memory=True)
         
         # print formatting
@@ -383,22 +390,23 @@ class ADMMsolver(Solver):
     """Alternate Directions of Multipliers Method (ADMM)"""
     
     # Default class methods/functions
-    def __init__(self, stopper, logger=None, niter_LCG=5, niter_ISTA=15, rho=None, auto_rho=True, mu=10., tau=2., use_prev_sol=False):
+    def __init__(self, stopper, logger=None, niter_linear=5, niter_lasso=15, rho=None, auto_rho=True, mu=10., tau=2., use_prev_sol=False, linear_solver='CG'):
         """
         Constructor for ADMM Solver
         .. math ::
             dfw/2 |Op x - d|_2^2 + \sum_i epsL2_i |R2_i x - dr|_2^2 + \gamma |y|_1
                 subject to Ax + By = c
         Note: for now B=-I, c=0 (i.e., y=Ax)
-        :param stopper      : stopper object
-        :param logger       : logger object
-        :param niter_LCG    : int; number of iterations for solving the linear problem [5]
-        :param niter_ISTA   : int; number of iterations for solving the lasso problem [5]
-        :param rho          : float; penalty parameter rho (if None it is initialized as 2*gamma+.1)
-        :param auto_rho     : bool; update rho automatically
-        :param mu           : float; norm ratio between residuals for updating rho [10]
-        :param tau          : float; scaling factor for updating rho [2]
-        :param use_prev_sol : bool; linear solver uses previous solution [False]
+        :param stopper          : stopper object
+        :param logger           : logger object
+        :param niter_linear     : int; number of iterations for solving the linear problem [5]
+        :param niter_lasso      : int; number of iterations for solving the lasso problem [5]
+        :param rho              : float; penalty parameter rho (if None it is initialized as 2*gamma+.1)
+        :param auto_rho         : bool; update rho automatically
+        :param mu               : float; norm ratio between residuals for updating rho [10]
+        :param tau              : float; scaling factor for updating rho [2]
+        :param use_prev_sol     : bool; linear solver uses previous solution [False]
+        :param linear_solver    : str; linear solver to be used [CG, SD, LSQR]
         """
         # Calling parent construction
         super(ADMMsolver, self).__init__()
@@ -406,12 +414,21 @@ class ADMMsolver(Solver):
         self.stopper = stopper
         self.logger = logger
         self.stopper.logger = self.logger
-        self.niter_LCG = niter_LCG
-        self.niter_ISTA = niter_ISTA
-        self.solver_LCG = LCGsolver(BasicStopper(niter=self.niter_LCG), steepest=False, logger=self.logger)
-        self.solver_LCG.setDefaults(iter_sampling=1, flush_memory=True)
-        self.solver_ISTA = ISTAsolver(BasicStopper(niter=self.niter_ISTA), fast=True, logger=self.logger)
-        self.solver_ISTA.setDefaults(iter_sampling=1, flush_memory=True)
+        self.niter_linear = niter_linear
+        self.niter_lasso = niter_lasso
+        
+        if linear_solver == 'CG':
+            self.solver_linear = LCGsolver(BasicStopper(niter=self.niter_linear), steepest=False, logger=self.logger)
+        elif linear_solver == 'SD':
+            self.solver_linear = LCGsolver(BasicStopper(niter=self.niter_linear), steepest=True, logger=self.logger)
+        elif linear_solver == 'LSQR':
+            self.solver_linear = LSQRsolver(BasicStopper(niter=self.niter_linear), logger=self.logger)
+        else:
+            raise ValueError('ERROR! Solver has to be CG, SD or LSQR')
+        self.solver_linear.setDefaults(iter_sampling=1, flush_memory=True)
+        
+        self.solver_lasso = ISTAsolver(BasicStopper(niter=self.niter_lasso), fast=True, logger=self.logger)
+        self.solver_lasso.setDefaults(iter_sampling=1, flush_memory=True)
         self.use_prev_sol = use_prev_sol
 
         self.rho = rho          # ADMM penalty parameter
@@ -538,8 +555,8 @@ class ADMMsolver(Solver):
             if outer_iter == 0 and initial_guess is not None:
                 linear_problem.model = initial_guess.clone()
             
-            self.solver_LCG.setDefaults()
-            self.solver_LCG.run(linear_problem, verbose=inner_verbose)
+            self.solver_linear.setDefaults()
+            self.solver_linear.run(linear_problem, verbose=inner_verbose)
             
             admm_mdl = linear_problem.model.clone()
             
@@ -555,8 +572,8 @@ class ADMMsolver(Solver):
                 lambda_value=gamma / self.rho,
                 minBound=problem.minBound, maxBound=problem.maxBound, boundProj=problem.boundProj
             )
-            self.solver_ISTA.setDefaults()
-            self.solver_ISTA.run(lasso_problem, verbose=inner_verbose)
+            self.solver_lasso.setDefaults()
+            self.solver_lasso.run(lasso_problem, verbose=inner_verbose)
             y = lasso_problem.model.clone()
             
             # 3) update penalty parameter and scaled dual variable
@@ -703,7 +720,7 @@ def main():
         x.getNdArray()[nx // 2:3 * nx // 4] = -5
     
         Iop = pyOperator.IdentityOp(x)
-        TV = pyOperator.TotalVariation(x, iso=False)
+        TV = pyOperator.TotalVariation(x, iso=True)
         L = pyOperator.SecondDerivative(x)
         
         n = x.clone()
@@ -716,7 +733,7 @@ def main():
             plt.figure(figsize=(5, 4))
             plt.plot(x.getNdArray(), 'k', lw=1, label='x')
             plt.plot(y.getNdArray(), '.k', label='y=x+n')
-            plt.plot(derivative.getNdArray(), '.b', lw=3, label='dx')
+            plt.plot(derivative.getNdArray(), '.b', lw=2, label='dx')
             plt.legend()
             plt.title('Model, Data and Derivative')
             plt.show()
@@ -730,9 +747,23 @@ def main():
             plt.figure(figsize=(5, 4))
             plt.plot(x.getNdArray(), 'k', lw=1, label='x')
             plt.plot(y.getNdArray(), '.k', label='y=x+n')
-            plt.plot(problemLS.model.getNdArray(), 'r', lw=1, label='x_inv')
+            plt.plot(problemLS.model.getNdArray(), 'r', lw=2, label='x_inv')
             plt.legend()
-            plt.title('Least-Squares')
+            plt.title('Least-Squares CG')
+            plt.show()
+
+        # LSQR solver
+        problemLSQR = ProblemL2Linear(x.clone().zero(), y, Iop)
+        LSQR = LSQRsolver(BasicStopper(niter=1000))
+        LSQR.setDefaults()
+        LSQR.run(problemLSQR, verbose=True)
+        if PLOT:
+            plt.figure(figsize=(5, 4))
+            plt.plot(x.getNdArray(), 'k', lw=1, label='x')
+            plt.plot(y.getNdArray(), '.k', label='y=x+n')
+            plt.plot(problemLSQR.model.getNdArray(), 'r', lw=2, label='x_inv')
+            plt.legend()
+            plt.title('Least-Squares LSQR')
             plt.show()
 
         # CG solver with L2 regularization
@@ -744,13 +775,13 @@ def main():
             plt.figure(figsize=(5, 4))
             plt.plot(x.getNdArray(), 'k', lw=1, label='x')
             plt.plot(y.getNdArray(), '.k', label='y=x+n')
-            plt.plot(problemLSR.model.getNdArray(), 'r', lw=1, label='x_inv')
+            plt.plot(problemLSR.model.getNdArray(), 'r', lw=2, label='x_inv')
             plt.legend()
             plt.title('Least-Squares with Laplacian reg')
             plt.show()
             
         # FISTA
-        problemFISTA = ProblemL1Lasso(x.clone().zero(), y, Iop, lambda_value=5, op_norm=1)
+        problemFISTA = ProblemL1Lasso(x.clone().zero(), y, Iop, lambda_value=1, op_norm=1)
         FISTA = ISTAsolver(BasicStopper(niter=300), fast=True)
         FISTA.setDefaults()
         FISTA.run(problemFISTA, verbose=True)
@@ -758,24 +789,23 @@ def main():
             plt.figure(figsize=(5, 4))
             plt.plot(x.getNdArray(), 'k', lw=1, label='x')
             plt.plot(y.getNdArray(), '.k', label='y=x+n')
-            plt.plot(problemFISTA.model.getNdArray(), 'r', lw=1, label='x_inv')
+            plt.plot(problemFISTA.model.getNdArray(), 'r', lw=2, label='x_inv')
             plt.legend()
             plt.title('FISTA inversion')
             plt.show()
     
         # SplitBregman
-        # problemSB = ProblemLinearReg(x.clone().zero(), y, Iop, regsL1=TV, epsL1=.3, dfw=0.01)
-        problemSB = ProblemLinearReg(x.clone().zero(), y, Iop)
+        problemSB = ProblemLinearReg(x.clone().zero(), y, Iop, regsL1=TV, epsL1=30, dfw=1)
+        # problemSB = ProblemLinearReg(x.clone().zero(), y, Iop)  # as problemLS
         SB = SplitBregmanSolver(BasicStopper(niter=50), niter_inner=3, niter_solver=30,
-                                steepest=False, breg_weight=1, use_prev_sol=False)
+                                linear_solver='CG', breg_weight=1, use_prev_sol=False)
         SB.setDefaults()
-        # TODO at iter 02 it stops because obj didn't improve
         SB.run(problemSB, verbose=True, inner_verbose=False)
         if PLOT:
             plt.figure(figsize=(5, 4))
             plt.plot(x.getNdArray(), 'k', lw=1, label='x')
             plt.plot(y.getNdArray(), '.k', label='y=x+n')
-            plt.plot(problemSB.model.getNdArray(), 'r', lw=1, label='x_inv')
+            plt.plot(problemSB.model.getNdArray(), 'r', lw=2, label='x_inv')
             # plt.plot(derivative.getNdArray(), '.b', label='dx')
             plt.plot((TV * problemSB.model).getNdArray(), 'b', label='dx_inv')
             plt.legend()
@@ -783,9 +813,9 @@ def main():
             plt.show()
     
         # ADMM
-        problemADMM = ProblemLinearReg(x.clone().zero(), y, Iop, regsL1=TV, epsL1=1, dfw=0.01)
+        problemADMM = ProblemLinearReg(x.clone().zero(), y, Iop, regsL1=TV, epsL1=20, dfw=1.)
         
-        ADMM = ADMMsolver(BasicStopper(niter=30), niter_LCG=3, niter_ISTA=100)
+        ADMM = ADMMsolver(BasicStopper(niter=30), niter_linear=3, niter_lasso=10)
         ADMM.setDefaults()
         # TODO after iter 7 obj didn't reduce
         ADMM.run(problemADMM, verbose=True, inner_verbose=False)
@@ -793,7 +823,7 @@ def main():
             plt.figure(figsize=(5, 4))
             plt.plot(x.getNdArray(), 'k', lw=1, label='x')
             plt.plot(y.getNdArray(), '.k', label='y=x+n')
-            plt.plot(problemADMM.model.getNdArray(), 'r', lw=1, label='x_inv')
+            plt.plot(problemADMM.model.getNdArray(), 'r', lw=2, label='x_inv')
             # plt.plot(derivative.getNdArray(), '.b', label='dx')
             plt.plot((TV * problemADMM.model).getNdArray(), 'b', label='dx_inv')
             plt.legend()
@@ -859,7 +889,7 @@ def main():
         # ADMM
         problemADMM = ProblemLinearReg(x.clone().zero(), y, G, regsL1=I, epsL1=2., dfw=1.)
 
-        ADMM = ADMMsolver(BasicStopper(niter=10), niter_LCG=30, niter_ISTA=100)
+        ADMM = ADMMsolver(BasicStopper(niter=10), niter_linear=30, niter_lasso=100)
         ADMM.setDefaults()
         ADMM.run(problemADMM, verbose=True, inner_verbose=True)
         if PLOT:
@@ -942,7 +972,7 @@ def main():
         problemADMM = ProblemLinearReg(x.clone().zero(), y, Blurring, dfw=1.,
                                      regsL1=D, epsL1=.1)
 
-        ADMM = ADMMsolver(BasicStopper(niter=10), niter_LCG=30, niter_ISTA=10)
+        ADMM = ADMMsolver(BasicStopper(niter=10), niter_linear=30, niter_lasso=10)
         ADMM.setDefaults(save_obj=True, save_model=True)
         ADMM.run(problemADMM, verbose=True, inner_verbose=True)
         if PLOT:
