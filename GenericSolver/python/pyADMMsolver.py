@@ -167,7 +167,7 @@ class SplitBregmanSolver(Solver):
         :param niter_solver     : int; number of iterations for the internal linear solver [default 5]
         :param breg_weight      : float; coefficient for the Bregman update b += beta * (R*x - d) [1.]
         :param linear_solver    : str; linear solver to be used [CG, SD, LSQR]
-        :param use_prev_sol     : bool; linear solver uses previous solution [False]
+        :param use_prev_sol     : bool; linear solver restarts from previous solution [False]
         """
         # Calling parent construction
         super(SplitBregmanSolver, self).__init__()
@@ -197,13 +197,11 @@ class SplitBregmanSolver(Solver):
         self.iter_msg = "iter = %s, obj = %.5e, df_obj = %.2e, reg_obj = %.2e, resnorm = %.2e"
         
     def __del__(self):
-        print('Destructor called, Split-Bregman deleted')
+        print('Destructor called, Split-Bregman solver deleted')
         
     def run(self, problem, verbose=False, inner_verbose=False, restart=False, initial_guess=None):
         """Running SplitBregman solver"""
         assert type(problem) == ProblemLinearReg, 'problem has to be a ProblemLinearReg'
-        # if problem.nregsL1 == 0:
-        #     raise ValueError('ERROR! Provide at least one L1 regularizer!')
         
         verbose = True if inner_verbose else verbose
         self.create_msg = verbose or self.logger
@@ -642,7 +640,14 @@ def main():
     plt.style.use('ggplot')
 
     class ConvNDscipy(pyOperator.Operator):
-        """ND convolution operator upon a image"""
+        """
+        ND convolution square operator in the model space
+        
+        :param model    :  [no default] - vector class; domain vector
+        :param kernel   :  [no default] - vector class; kernel vector
+        :param method   : [auto] - str; how to compute the convolution [auto, direct, fft]
+        :return         : Convolution Operator
+        """
         def __init__(self, model, kernel, method='auto'):
             
             self.kernel = kernel.getNdArray()
@@ -720,7 +725,7 @@ def main():
         x.getNdArray()[nx // 2:3 * nx // 4] = -5
     
         Iop = pyOperator.IdentityOp(x)
-        TV = pyOperator.TotalVariation(x, iso=True)
+        TV = pyOperator.TotalVariation(x, iso=False)
         L = pyOperator.SecondDerivative(x)
         
         n = x.clone()
@@ -733,7 +738,7 @@ def main():
             plt.figure(figsize=(5, 4))
             plt.plot(x.getNdArray(), 'k', lw=1, label='x')
             plt.plot(y.getNdArray(), '.k', label='y=x+n')
-            plt.plot(derivative.getNdArray(), '.b', lw=2, label='dx')
+            plt.plot(derivative.getNdArray(), '.b', lw=2, label='∂x')
             plt.legend()
             plt.title('Model, Data and Derivative')
             plt.show()
@@ -796,9 +801,8 @@ def main():
     
         # SplitBregman
         problemSB = ProblemLinearReg(x.clone().zero(), y, Iop, regsL1=TV, epsL1=30, dfw=1)
-        # problemSB = ProblemLinearReg(x.clone().zero(), y, Iop)  # as problemLS
         SB = SplitBregmanSolver(BasicStopper(niter=50), niter_inner=3, niter_solver=30,
-                                linear_solver='CG', breg_weight=1, use_prev_sol=False)
+                                linear_solver='LSQR', breg_weight=1, use_prev_sol=False)
         SB.setDefaults()
         SB.run(problemSB, verbose=True, inner_verbose=False)
         if PLOT:
@@ -806,8 +810,7 @@ def main():
             plt.plot(x.getNdArray(), 'k', lw=1, label='x')
             plt.plot(y.getNdArray(), '.k', label='y=x+n')
             plt.plot(problemSB.model.getNdArray(), 'r', lw=2, label='x_inv')
-            # plt.plot(derivative.getNdArray(), '.b', label='dx')
-            plt.plot((TV * problemSB.model).getNdArray(), 'b', label='dx_inv')
+            plt.plot((TV * problemSB.model).getNdArray(), 'b', label='∂(x_inv)')
             plt.legend()
             plt.title('SB inversion')
             plt.show()
@@ -824,8 +827,7 @@ def main():
             plt.plot(x.getNdArray(), 'k', lw=1, label='x')
             plt.plot(y.getNdArray(), '.k', label='y=x+n')
             plt.plot(problemADMM.model.getNdArray(), 'r', lw=2, label='x_inv')
-            # plt.plot(derivative.getNdArray(), '.b', label='dx')
-            plt.plot((TV * problemADMM.model).getNdArray(), 'b', label='dx_inv')
+            plt.plot((TV * problemADMM.model).getNdArray(), 'b', label='∂(x_inv)')
             plt.legend()
             plt.title('ADMM inversion')
             plt.show()
