@@ -9,6 +9,7 @@ from pyStopper import BasicStopper
 from math import isnan
 
 
+# TODO make it accept L2 reg problems
 class ProblemLinearReg(Problem):
     def __init__(self, model, data, op, dfw=1., epsL1=None, regsL1=None, epsL2=None, regsL2=None, dataregsL2=None,
                  minBound=None, maxBound=None, boundProj=None):
@@ -53,7 +54,7 @@ class ProblemLinearReg(Problem):
             self.epsL1 = [self.epsL1]
         assert len(self.epsL1) == self.nregsL1, 'The number of L1 regs and related weights mismatch!'
         
-        # L2 Regularizations (not mandatory)
+        # L2 Regularizations
         self.regL2_op = None if regsL2 is None else pyOperator.Vstack(regsL2)
         self.nregsL2 = self.regL2_op.n if self.regL2_op is not None else 0
         self.epsL2 = epsL2 if epsL2 is not None else []
@@ -215,12 +216,14 @@ class SplitBregmanSolver(Solver):
         RL1x = breg_b.clone()  # store RegL1 * solution
         
         sb_mdl = problem.model.clone().zero() if initial_guess is None else initial_guess.clone()
+        if not problem.op.domain.checkSame(sb_mdl):
+            raise ValueError("ERROR! The initial guess and the operator domain mismatch.")
         
-        # reweight the eps according to dfw
+        # reweight the eps according to dfw TODO remove dfw
         epsL2 = [(e / problem.dfw)**.5 for e in problem.epsL2]
-        epsL1 = [(e / problem.dfw) ** .5 for e in problem.epsL1]
+        epsL1 = [(e / problem.dfw)**.5 for e in problem.epsL1]
         reg_op = pyOperator.Vstack(problem.regL2_op*epsL2 if problem.nregsL2 != 0 else [],
-                                   problem.regL1_op*epsL1 if problem.nregsL1 != 0 else [])  if (problem.nregsL2 + problem.nregsL1) != 0 else None
+                                   problem.regL1_op*epsL1 if problem.nregsL1 != 0 else []) if (problem.nregsL2 + problem.nregsL1) != 0 else None
         
         if restart:
             self.restart.read_restart()
@@ -307,14 +310,19 @@ class SplitBregmanSolver(Solver):
                 if outer_iter == 0 and initial_guess is not None:
                     linear_problem.model = initial_guess.clone()
                     
-                self.linear_solver.setDefaults()
+                # self.linear_solver.setDefaults()
                 self.linear_solver.run(linear_problem, verbose=inner_verbose)
 
-                sb_mdl = linear_problem.model.clone()
+                # sb_mdl = linear_problem.model.clone()
+                sb_mdl.copy(linear_problem.model)
                 
                 # compute RL1*x
                 if problem.nregsL1 != 0:
                     problem.regL1_op.forward(False, sb_mdl, RL1x)
+                
+                # update breg_a
+                if problem.nregsL1 != 0:
+                    breg_a.copy(_shrinkage(RL1x.clone() + breg_b, thresh=epsL1))
                 
                 if self.create_msg:
                     msg = "\t\tfinished inner iter %d with sb_mdl = %.2e, RL1x = %.2e"\
@@ -323,10 +331,6 @@ class SplitBregmanSolver(Solver):
                         print(msg)
                     if self.logger:
                         self.logger.addToLog("\n" + msg)
-                
-                # update breg_a
-                if problem.nregsL1 != 0:
-                    breg_a.copy(_shrinkage(RL1x.clone() + breg_b, thresh=epsL1))
                 
             # update breg_b
             if problem.nregsL1 != 0:
@@ -338,15 +342,15 @@ class SplitBregmanSolver(Solver):
             # problem.res_regsL1_already_computed = True
             # problem.res_data_already_computed = False
             obj1 = problem.get_obj(sb_mdl)
-            if obj1 >= obj0:
-                if self.create_msg:
-                    msg = "Objective function didn't reduce, will terminate solver:\n\t"\
-                          "obj_new = %.2e\tobj_cur = %.2e" % (obj1, obj0)
-                    if verbose:
-                        print(msg)
-                    if self.logger:
-                        self.logger.addToLog(msg)
-                break
+            # if obj1 >= obj0:  # TODO check theory for monotonic convergence
+            #     if self.create_msg:
+            #         msg = "Objective function didn't reduce, will terminate solver:\n\t"\
+            #               "obj_new = %.2e\tobj_cur = %.2e" % (obj1, obj0)
+            #         if verbose:
+            #             print(msg)
+            #         if self.logger:
+            #             self.logger.addToLog(msg)
+            #     break
             
             # iteration info
             if self.create_msg:
@@ -746,7 +750,6 @@ def main():
         # CG solver
         problemLS = ProblemL2Linear(x.clone().zero(), y, Iop)
         CG = LCGsolver(BasicStopper(niter=30))
-        CG.setDefaults()
         CG.run(problemLS, verbose=True)
         if PLOT:
             plt.figure(figsize=(5, 4))
@@ -760,7 +763,6 @@ def main():
         # LSQR solver
         problemLSQR = ProblemL2Linear(x.clone().zero(), y, Iop)
         LSQR = LSQRsolver(BasicStopper(niter=1000))
-        LSQR.setDefaults()
         LSQR.run(problemLSQR, verbose=True)
         if PLOT:
             plt.figure(figsize=(5, 4))
@@ -774,7 +776,6 @@ def main():
         # CG solver with L2 regularization
         problemLSR = ProblemL2LinearReg(x.clone().zero(), y, Iop, np.sqrt(50), L)
         CG = LCGsolver(BasicStopper(niter=30))
-        CG.setDefaults()
         CG.run(problemLSR, verbose=True)
         if PLOT:
             plt.figure(figsize=(5, 4))
@@ -788,7 +789,6 @@ def main():
         # FISTA
         problemFISTA = ProblemL1Lasso(x.clone().zero(), y, Iop, lambda_value=1, op_norm=1)
         FISTA = ISTAsolver(BasicStopper(niter=300), fast=True)
-        FISTA.setDefaults()
         FISTA.run(problemFISTA, verbose=True)
         if PLOT:
             plt.figure(figsize=(5, 4))
@@ -800,10 +800,9 @@ def main():
             plt.show()
     
         # SplitBregman
-        problemSB = ProblemLinearReg(x.clone().zero(), y, Iop, regsL1=TV, epsL1=30, dfw=1)
+        problemSB = ProblemLinearReg(x.clone().zero(), y, Iop, regsL1=TV, epsL1=300, dfw=1)
         SB = SplitBregmanSolver(BasicStopper(niter=50), niter_inner=3, niter_solver=30,
-                                linear_solver='LSQR', breg_weight=1, use_prev_sol=False)
-        SB.setDefaults()
+                                linear_solver='CG', breg_weight=1, use_prev_sol=False)
         SB.run(problemSB, verbose=True, inner_verbose=False)
         if PLOT:
             plt.figure(figsize=(5, 4))
