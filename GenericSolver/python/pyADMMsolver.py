@@ -11,20 +11,19 @@ from math import isnan
 
 # TODO make it accept L2 reg problems
 class ProblemLinearReg(Problem):
-    def __init__(self, model, data, op, dfw=1., epsL1=None, regsL1=None, epsL2=None, regsL2=None, dataregsL2=None,
+    def __init__(self, model, data, op, epsL1=None, regsL1=None, epsL2=None, regsL2=None, dataregsL2=None,
                  minBound=None, maxBound=None, boundProj=None):
         """
         Linear Problem with both L1 and L2 regularizers:
 
         .. math ::
-            dfw / 2 |Op m - d|_2^2 +
+            1 / 2 |Op m - d|_2^2 +
             \sum_i epsL2_i |R2_i m - dr|_2^2 +
             \sum_i epsL1_i |R1_i m|_1
 
         :param model        : vector; initial model
         :param data         : vector; data
         :param op           : LinearOperator; data fidelity operator
-        :param dfw          : float; weight of the data fidelity term
         :param epsL1        : list; weights of L1 regularizers [None]
         :param regsL1       : list; L1 regularizers of class LinearOperator [None]
         :param epsL2        : list; weights of L2 regularizers [None]
@@ -35,7 +34,6 @@ class ProblemLinearReg(Problem):
         :param boundProj    : Bounds; object with a method "apply(x)" to project x onto some convex set
         """
         super(ProblemLinearReg, self).__init__(minBound, maxBound, boundProj)
-        self.dfw = dfw
         self.model = model.clone()
         self.dmodel = model.clone().zero()
         self.grad = self.dmodel.clone()
@@ -96,7 +94,7 @@ class ProblemLinearReg(Problem):
         Compute objective function based on the residuals
         
         .. math ::
-            dfw / 2 |Op m - d|_2^2 +
+            1 / 2 |Op m - d|_2^2 +
             \sum_i epsL2_i |R2_i m - dr|_2^2 +
             \sum_i epsL1_i |R1_i m|_1
         
@@ -108,7 +106,7 @@ class ProblemLinearReg(Problem):
         else:
             res_regsL1 = None
         
-        self.obj_terms[0] = self.dfw*.5 * res_data.norm()**2  # data fidelity
+        self.obj_terms[0] = .5 * res_data.norm()**2  # data fidelity
         
         if res_regsL2 is not None:
             for idx in range(self.nregsL2):
@@ -219,11 +217,8 @@ class SplitBregmanSolver(Solver):
         if not problem.op.domain.checkSame(sb_mdl):
             raise ValueError("ERROR! The initial guess and the operator domain mismatch.")
         
-        # reweight the eps according to dfw TODO remove dfw
-        epsL2 = [(e / problem.dfw)**.5 for e in problem.epsL2]
-        epsL1 = [(e / problem.dfw)**.5 for e in problem.epsL1]
-        reg_op = pyOperator.Vstack(problem.regL2_op*epsL2 if problem.nregsL2 != 0 else [],
-                                   problem.regL1_op*epsL1 if problem.nregsL1 != 0 else []) if (problem.nregsL2 + problem.nregsL1) != 0 else None
+        reg_op = pyOperator.Vstack(problem.regL2_op*problem.epsL2 if problem.nregsL2 != 0 else [],
+                                   problem.regL1_op*problem.epsL1 if problem.nregsL1 != 0 else []) if (problem.nregsL2 + problem.nregsL1) != 0 else None
         
         if restart:
             self.restart.read_restart()
@@ -244,7 +239,6 @@ class SplitBregmanSolver(Solver):
                 msg += "\t\t\t\t\tSPLIT-BREGMAN ALGORITHM log file\n\n"
                 msg += "\tRestart folder: %s\n" % self.restart.restart_folder
                 msg += "\tModeling Operator:\t\t%s\n" % problem.op
-                msg += "\tData Fidelity weight:\t%.2e\n" % problem.dfw
                 if problem.nregsL2 != 0:
                     msg += "\tL2 Regularizer ops:\t\t" + ", ".join(["%s" % op for op in problem.regL2_op.ops]) + "\n"
                     msg += "\tL2 Regularizer weights:\t" + ", ".join(["{:.2e}".format(e) for e in problem.epsL2]) + "\n"
@@ -322,7 +316,7 @@ class SplitBregmanSolver(Solver):
                 
                 # update breg_a
                 if problem.nregsL1 != 0:
-                    breg_a.copy(_shrinkage(RL1x.clone() + breg_b, thresh=epsL1))
+                    breg_a.copy(_shrinkage(RL1x.clone() + breg_b, thresh=problem.epsL1))
                 
                 if self.create_msg:
                     msg = "\t\tfinished inner iter %d with sb_mdl = %.2e, RL1x = %.2e"\
@@ -396,7 +390,7 @@ class ADMMsolver(Solver):
         """
         Constructor for ADMM Solver
         .. math ::
-            dfw/2 |Op x - d|_2^2 + \sum_i epsL2_i |R2_i x - dr|_2^2 + \gamma |y|_1
+            1/2 |Op x - d|_2^2 + \sum_i epsL2_i |R2_i x - dr|_2^2 + \gamma |y|_1
                 subject to Ax + By = c
         Note: for now B=-I, c=0 (i.e., y=Ax)
         :param stopper          : stopper object
@@ -467,13 +461,11 @@ class ADMMsolver(Solver):
         self.create_msg = verbose or self.logger
         
         # I want to set dfw=1, so:
-        epsL2 = [e / problem.dfw for e in problem.epsL2]
-        epsL1 = [e / problem.dfw for e in problem.epsL1]
-        gamma = max(epsL1)
+        gamma = max(problem.epsL1)
 
         # A is the Vstack of the L1 reg operators, scaled by their respective eps
         # we divide by gamma as gamma becomes the lambda value for the FISTA problem
-        A = problem.regL1_op * [e / gamma for e in epsL1]
+        A = problem.regL1_op * [e / gamma for e in problem.epsL1]
         
         # initialize all others variables
         if self.rho is None:
@@ -502,7 +494,6 @@ class ADMMsolver(Solver):
                 msg += "\t\t\t\t\tADMM ALGORITHM log file\n\n"
                 msg += "\tRestart folder: %s\n" % self.restart.restart_folder
                 msg += "\tModeling Operator:\t\t%s\n" % problem.op
-                msg += "\tData Fidelity weight:\t%.2e\n" % problem.dfw
                 if problem.nregsL2 != 0:
                     msg += "\tL2 Regularizer ops:\t\t" + ", ".join(["%s" % op for op in problem.regL2_op.ops]) + "\n"
                     msg += "\tL2 Regularizer weights:\t" + ", ".join(["{:.2e}".format(e) for e in problem.epsL2]) + "\n"
@@ -549,7 +540,7 @@ class ADMMsolver(Solver):
                 model=admm_mdl.clone().zero() if not self.use_prev_sol else admm_mdl.clone(),
                 data=problem.data,
                 op=problem.op,
-                epsilon=epsL2 + [self.rho / 2] * A.n,
+                epsilon=problem.epsL2 + [self.rho / 2] * A.n,
                 reg_op=pyOperator.Vstack(problem.regL2_op, A),
                 prior_model=pyVector.superVector(problem.dataregsL2, y.clone() - u),
                 minBound=problem.minBound, maxBound=problem.maxBound, boundProj=problem.boundProj
@@ -589,14 +580,14 @@ class ADMMsolver(Solver):
             outer_iter += 1
             # check objective function
             obj1 = problem.get_obj(admm_mdl)
-            if obj1 >= obj0:
-                msg = "Objective function didn't reduce, will terminate solver:\n\t" \
-                      "obj_new = %.2e\tobj_cur = %.2e" % (obj1, obj0)
-                if verbose:
-                    print(msg)
-                if self.logger:
-                    self.logger.addToLog(msg)
-                break
+            # if obj1 >= obj0:
+            #     msg = "Objective function didn't reduce, will terminate solver:\n\t" \
+            #           "obj_new = %.2e\tobj_cur = %.2e" % (obj1, obj0)
+            #     if verbose:
+            #         print(msg)
+            #     if self.logger:
+            #         self.logger.addToLog(msg)
+            #     break
             
             # iteration info
             if self.create_msg:
@@ -800,7 +791,7 @@ def main():
             plt.show()
     
         # SplitBregman
-        problemSB = ProblemLinearReg(x.clone().zero(), y, Iop, regsL1=TV, epsL1=300, dfw=1)
+        problemSB = ProblemLinearReg(x.clone().zero(), y, Iop, regsL1=TV, epsL1=10)
         SB = SplitBregmanSolver(BasicStopper(niter=50), niter_inner=3, niter_solver=30,
                                 linear_solver='CG', breg_weight=1, use_prev_sol=False)
         SB.run(problemSB, verbose=True, inner_verbose=False)
@@ -815,11 +806,9 @@ def main():
             plt.show()
     
         # ADMM
-        problemADMM = ProblemLinearReg(x.clone().zero(), y, Iop, regsL1=TV, epsL1=20, dfw=1.)
+        problemADMM = ProblemLinearReg(x.clone().zero(), y, Iop, regsL1=TV, epsL1=20)
         
         ADMM = ADMMsolver(BasicStopper(niter=30), niter_linear=3, niter_lasso=10)
-        ADMM.setDefaults()
-        # TODO after iter 7 obj didn't reduce
         ADMM.run(problemADMM, verbose=True, inner_verbose=False)
         if PLOT:
             plt.figure(figsize=(5, 4))
