@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-import sys, os
+import sys
 
 sys.path.insert(0, "../../python")
 import pyVector as Vec
@@ -17,82 +17,6 @@ from pyNonLinearSolver import NLCGsolver as NLCG
 from pyNonLinearSolver import LBFGSsolver as BFGS
 
 
-class MatMult_incore(Op.Operator):
-    """Operator class to perform matrix-vector multiplication"""
-
-    def __init__(self, A, domain, range):
-        """Constructor for the class: A = matrix to use; domain = domain vector; range = range vector"""
-        if (not isinstance(domain, Vec.vector)): raise TypeError("ERROR! Domain vector not a vector object")
-        if (not isinstance(range, Vec.vector)): raise TypeError("ERROR! Range vector not a vector object")
-        # Setting domain and range of operator and matrix to use during application of the operator
-        self.setDomainRange(domain, range)
-        self.A = np.matrix(A)
-        return
-
-    def forward(self, add, model, data):
-        """Method to compute d = A m"""
-        self.checkDomainRange(model, data)
-        if (not isinstance(model, Vec.vector)): raise TypeError("ERROR! Model vector not a vector object")
-        if (not isinstance(data, Vec.vector)): raise TypeError("ERROR! Data vector not a vector object")
-        if (not add): data.zero()
-        model_arr = model.getNdArray()
-        data_arr = data.getNdArray()
-        data_arr += np.matmul(self.A, model_arr)
-        return
-
-    def adjoint(self, add, model, data):
-        """Method to compute m = A d"""
-        self.checkDomainRange(model, data)
-        if (not isinstance(model, Vec.vector)): raise TypeError("ERROR! Model vector not a vector object")
-        if (not isinstance(data, Vec.vector)): raise TypeError("ERROR! Data vector not a vector object")
-        if (not add): model.zero()
-        model_arr = model.getNdArray()
-        data_arr = data.getNdArray()
-        model_arr += np.matmul(self.A.H, data_arr)
-        return
-
-
-class MatMult_outcore(Op.Operator):
-    """Operator class to perform matrix-vector multiplication"""
-
-    def __init__(self, A, domain, range):
-        """Constructor for the class: A = matrix to use; domain = domain vector; range = range vector"""
-        if (not isinstance(domain, Vec.vector)): raise TypeError("ERROR! Domain vector not a vector object")
-        if (not isinstance(range, Vec.vector)): raise TypeError("ERROR! Range vector not a vector object")
-        # Setting domain and range of operator and matrix to use during application of the operator
-        self.setDomainRange(domain, range)
-        self.A = np.matrix(A)
-        return
-
-    def forward(self, add, model, data):
-        """Method to compute d = A m"""
-        self.checkDomainRange(model, data)
-        if (not isinstance(model, Vec.vectorOC)): raise TypeError("ERROR! Model vector not a vectorOC object")
-        if (not isinstance(data, Vec.vectorOC)): raise TypeError("ERROR! Data vector not a vectorOC object")
-        if (not add): data.zero()
-        # Reading model and data vector files
-        model_arr = model.getNdArray()
-        [data_arr, data_axis] = sep.read_file(data.vecfile)
-        data_arr += np.matmul(self.A, model_arr)
-        # writing data vector file
-        sep.write_file(data.vecfile, data_arr, data_axis)
-        return
-
-    def adjoint(self, add, model, data):
-        """Method to compute m = A d"""
-        self.checkDomainRange(model, data)
-        if (not isinstance(model, Vec.vectorOC)): raise TypeError("ERROR! Model vector not a vectorOC object")
-        if (not isinstance(data, Vec.vectorOC)): raise TypeError("ERROR! Data vector not a vectorOC object")
-        if (not add): model.zero()
-        # Reading model and data vector files
-        [model_arr, model_axis] = sep.read_file(model.vecfile)
-        data_arr = data.getNdArray()
-        model_arr += np.matmul(self.A.H, data_arr)
-        # writing data vector file
-        sep.write_file(model.vecfile, model_arr, model_axis)
-        return
-
-
 if __name__ == '__main__':
     # In-core run
     # Creating model vector
@@ -102,19 +26,20 @@ if __name__ == '__main__':
     data_vec = Vec.vectorIC(np.zeros((200, 1)))
     data_vec.rand()
     # Matrix to be inverted
-    A = np.matrix(np.random.rand(200, 100))
+    A = np.random.rand(200, 100)
     # Create operator
-    MatMult = MatMult_incore(A, model_vec, data_vec)
+    MatMult = Op.MatrixOp(A, model_vec, data_vec)
     # Create L2-norm linear problem
     L2Prob = Prblm.ProblemL2Linear(model_vec, data_vec, MatMult)
+    # L2ProbReg = Prblm.ProblemL2LinearReg(model_vec, data_vec, MatMult, 0.0001)
     # Create stopper
     niter = 2000
     Stop = Stopper(niter=niter)  # ,tolobjchng=1e-15)
     # Create solver
     LCGsolver = LCG(Stop)
-    LCGsolver.setDefaults(iter_sampling=10)
+    LCGsolver.setDefaults(iter_sampling=10,save_obj=True,save_model=True)
     # Running the solver
-    # LCGsolver.run(L2Prob,verbose=True)
+    LCGsolver.run(L2Prob,verbose=True)
 
     # Out-of-core run
     # Creating model vector
@@ -131,7 +56,7 @@ if __name__ == '__main__':
 
     # Testing inversion of a symmetric matrix (second-order derivative operator)
     n = 200
-    A = np.matrix(np.zeros((n, n), dtype=np.float64))
+    A = np.zeros((n, n), dtype=np.float64)
     np.fill_diagonal(A, -2)
     np.fill_diagonal(A[1:], 1)
     np.fill_diagonal(A[:, 1:], 1)
@@ -140,9 +65,9 @@ if __name__ == '__main__':
     # Constant derivative
     data_vec_sym.set(1.)
     # Create operator
-    MatMultSym = MatMult_incore(A, model_vec_sym, data_vec_sym)
+    MatMultSym = Op.MatrixOp(A, model_vec_sym, data_vec_sym)
     # Inverse of A as preconditioning
-    Prec = MatMult_incore(np.linalg.inv(A), model_vec_sym, data_vec_sym)
+    Prec = Op.MatrixOp(np.linalg.inv(A), model_vec_sym, data_vec_sym)
     # Computing max and min eigenvalues using power method
     # eg,vec=MatMultSym.powerMethod(verbose=False,eval_min=True,return_vec=True,tol=1e-18)
     # print("power",eg)

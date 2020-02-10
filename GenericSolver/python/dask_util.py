@@ -122,6 +122,7 @@ class DaskClient:
             self.cluster.scale(n_workers)
             # Creating dask Client
             self.client = daskD.Client(self.cluster)
+            self.WorkerIds = list(self.client.get_worker_logs().keys())
         else:
             raise ValueError("Either hostnames or pbs_params must be provided!")
         # Closing dask processes

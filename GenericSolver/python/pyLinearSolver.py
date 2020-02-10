@@ -273,7 +273,7 @@ class LCGsolver(pySolver.Solver):
             if obj1 >= obj0:
                 if self.create_msg:
                     msg = "Objective function didn't reduce, will terminate solver:\n\t" \
-                          "obj_new = %.2e\tobj_cur = %.2e" % (obj1, obj0)
+                          "obj_new = %.5e\tobj_cur = %.5e" % (obj1, obj0)
                     if verbose:
                         print(msg)
                     # Writing on log file
@@ -602,7 +602,7 @@ class LSQRsolver(pySolver.Solver):
             if obj1 >= obj0:
                 if self.create_msg:
                     msg = "Objective function didn't reduce, will terminate solver:\n\t" \
-                          "obj_new = %.2e\tobj_cur = %.2e" % (obj1, obj0)
+                          "obj_new = %.5e\tobj_cur = %.5e" % (obj1, obj0)
                     if verbose:
                         print(msg)
                     # Writing on log file
@@ -891,7 +891,7 @@ class SymLCGsolver(pySolver.Solver):
                 if not ((obj_old < obj0 < obj1) or (obj_old > obj0 > obj1)):
                     if self.create_msg:
                         msg = "Objective function variation not monotonic, will terminate solver:" \
-                              "obj_old=%.2e obj_cur=%.2e obj_new=%.2e" % (obj_old, obj0, obj1)
+                              "obj_old=%.5e obj_cur=%.5e obj_new=%.5e" % (obj_old, obj0, obj1)
                         if verbose:
                             print(msg)
                         # Writing on log file

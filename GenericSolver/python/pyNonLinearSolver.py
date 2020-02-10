@@ -328,7 +328,7 @@ class NLCGsolver(pySolver.Solver):
             if obj0 <= obj1:
                 if self.create_msg:
                     msg = "Objective function at new point greater or equal than previous one:\n\t" \
-                          "obj_new = %.2e\tobj_cur = %.2e\n" \
+                          "obj_new = %.5e\tobj_cur = %.5e\n" \
                           "Potential issue in the stepper or in revaluation of objective function! Solver will stop!" \
                           % (obj1, obj0)
                     if verbose:
