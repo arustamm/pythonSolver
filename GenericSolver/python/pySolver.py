@@ -164,7 +164,7 @@ class Solver:
         # Save if it is forced to or if the solver hits a sampled iteration number
         # The objective function is saved every iteration if requested
         if self.save_obj:
-            self.obj.append(objf_value)
+            self.obj.append(deepcopy(objf_value))
             # Checking if the objective function has multiple terms
             if "obj_terms" in dir(problem):
                 self.obj_terms.append(deepcopy(problem.obj_terms))
