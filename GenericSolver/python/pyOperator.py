@@ -57,9 +57,8 @@ class Operator:
         Stop = BasicStopper(niter=niter)
         P = ProblemL2Linear(model=self.domain.cloneSpace(), data=other, op=self)
         Solver = LCGsolver(Stop)
-        Solver.setDefaults()
         Solver.run(P, verbose=False)
-        
+
         return P.model
     
     # main function for all kinds of multiplication
