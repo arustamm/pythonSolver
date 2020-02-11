@@ -314,10 +314,10 @@ class vectorCupy(vector):
 if __name__ == '__main__':
     from pyOperator import scalingOp
     
-    x = vectorCupy(np.empy((100, 200)))
-    print('Working on device %s' % x.device)
-    x.set(1.)
-    y = x.clone().set(10)
+    x = vectorCupy(np.empty((100, 200))).set(1.)
+    print('Working on %s' % str(x.device).replace('<','').replace('>',''))
+    n = x.clone().rand()
+    y = x.clone().set(10) + 0.01 * n
     S = scalingOp(x, 10)
     xinv = S / y
-    print(0)
+    print('Error norm = %.2e' % (xinv.norm() - x.norm()))
