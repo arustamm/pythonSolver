@@ -141,6 +141,9 @@ class DaskOperator(Op.Operator):
                     raise TypeError("Provided spread_op_aux not a DaskSpreadOp class!")
                 self.tmp_aux = self.SprdAux.getRange().clone()
         return
+
+    def __str__(self):
+        return " DaskOp"
     
     def forward(self, add, model, data):
         """Forward Dask operator"""
@@ -218,6 +221,9 @@ class DaskSpreadOp(Op.Operator):
         self.chunks = chunks
         self.setDomainRange(domain, DaskVector(self.dask_client, vector_template=domain, chunks=chunks))
         return
+
+    def __str__(self):
+        return " DaskSpr"
     
     def forward(self, add, model, data):
         """Forward operator"""
