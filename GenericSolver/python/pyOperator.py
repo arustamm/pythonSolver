@@ -8,12 +8,6 @@ import numpy as np
 from pyVector import vector, superVector
 import sep_util
 
-# for __truediv__
-from pyLinearSolver import LCGsolver
-from pyProblem import ProblemL2Linear
-from pyStopper import BasicStopper
-
-
 class Operator:
     """Abstract python operator class"""
     
@@ -50,13 +44,16 @@ class Operator:
 
     def __truediv__(self, other, niter=2000):
         """x = A / y through CG"""
+        import pyLinearSolver
+        import pyProblem
+        import pyStopper
         
         if not self.range.checkSame(other):
             raise ValueError('Operator range and data domain mismatch')
         
-        Stop = BasicStopper(niter=niter)
-        P = ProblemL2Linear(model=self.domain.cloneSpace(), data=other, op=self)
-        Solver = LCGsolver(Stop)
+        Stop = pyStopper.BasicStopper(niter=niter)
+        P = pyProblem.ProblemL2Linear(model=self.domain.cloneSpace(), data=other, op=self)
+        Solver = pyLinearSolver.LCGsolver(Stop)
         Solver.run(P, verbose=False)
 
         return P.model
