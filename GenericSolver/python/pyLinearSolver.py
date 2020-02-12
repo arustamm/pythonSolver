@@ -48,14 +48,14 @@ class LCGsolver(pySolver.Solver):
             if self.create_msg:
                 msg = 90 * "#" + "\n"
                 msg += "\t\t\t\tPRECONDITIONED " if precond else "\t\t\t\t"
-                msg += "LINEAR %s SOLVER\n" % ("STEEPEST-DESCENT" if self.steepest else "CONJUGATE GRADIENT")
+                msg += "LINEAR %s SOLVER\n" % ("STEEPEST-DESCENT" if self.steepest else "CONJUGATE GRADIENT log file")
                 msg += "\tRestart folder: %s\n" % self.restart.restart_folder
                 msg += "\tModeling Operator:\t\t%s\n" % problem.op
                 msg += 90 * "#" + "\n"
                 if verbose:
-                    print(msg)
+                    print(msg.replace("log file", ""))
                 if self.logger:
-                    self.logger.addToLog(msg + " log file")
+                    self.logger.addToLog(msg)
 
             # Setting internal vectors (model and search direction vectors)
             prblm_mdl = problem.get_model()
@@ -420,14 +420,14 @@ class LSQRsolver(pySolver.Solver):
         if not restart:
             if self.create_msg:
                 msg = 90 * "#" + "\n"
-                msg += "\t\t\t\tLSQR SOLVER\n"
+                msg += "\t\t\t\tLSQR SOLVER log file\n"
                 msg += "\tRestart folder: %s\n" % self.restart.restart_folder
                 msg += "\tModeling Operator:\t\t%s\n" % problem.op
                 msg += 90 * "#" + "\n"
                 if verbose:
-                    print(msg)
+                    print(msg.replace("log file", ""))
                 if self.logger:
-                    self.logger.addToLog(msg + " log file")
+                    self.logger.addToLog(msg)
 
             # If initial model different than zero the solver will perform the following:
             # 1. Compute a residual vector ``r0 = b - A*x0``.
@@ -717,17 +717,14 @@ class SymLCGsolver(pySolver.Solver):
                 precond = True
         if not restart:
             if self.create_msg:
-                msg = "PRECONDITIONED " if precond else ""
-                msg += "LINEAR %s SOLVER FOR SYMMETRIC MATRIX" % (
+                msg = 90 * "#" + "\n"
+                msg += "PRECONDITIONED " if precond else ""
+                msg += "LINEAR %s SOLVER FOR SYMMETRIC MATRIX log file" % (
                     "STEEPEST-DESCENT" if self.steepest else "CONJUGATE GRADIENT")
+                msg += "Restart folder: %s\n" % self.restart.restart_folder
+                msg = 90 * "#" + "\n"
                 if verbose:
-                    print(msg)
-                if self.logger:
-                    self.logger.addToLog(msg + " log file")
-                # Printing restart folder
-                msg = "Restart folder: %s\n" % self.restart.restart_folder
-                if verbose:
-                    print(msg)
+                    print(msg.replace("log file", ""))
                 if self.logger:
                     self.logger.addToLog(msg)
             
@@ -936,9 +933,11 @@ class SymLCGsolver(pySolver.Solver):
         # Writing last inverted model
         self.save_results(iiter, problem, force_save=True, force_write=True)
         if self.create_msg:
-            msg = "PRECONDITIONED " if precond else ""
+            msg = 90 * "#" + "\n"
+            msg += "PRECONDITIONED " if precond else ""
             msg += "LINEAR %s SOLVER FOR SYMMETRIC MATRIX log file end" \
                    % ("STEEPEST-DESCENT" if self.steepest else "CONJUGATE GRADIENT")
+            msg += 90 * "#" + "\n"
             if verbose:
                 print(msg.replace("log file ", ""))
             if self.logger:

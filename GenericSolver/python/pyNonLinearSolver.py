@@ -565,13 +565,15 @@ class LBFGSsolver(pySolver.Solver):
             self.rho = []  # Scalar term necessary for Hessian inverse estimation
         
         if not restart:
+            msg = 90 * "#" + "\n"
             if self.m_steps is not None:
-                msg = "Limited-memory Broyden-Fletcher-Goldfarb-Shanno (L-BFGS) algorithm log file\n"
+                msg += "Limited-memory Broyden-Fletcher-Goldfarb-Shanno (L-BFGS) algorithm log file\n"
                 msg += "Maximum number of steps to be used for Hessian inverse estimation: %s \n" % self.m_steps
             else:
                 msg = "Broyden-Fletcher-Goldfarb-Shanno (BFGS) algorithm log file\n"
             # Printing restart folder
             msg += "Restart folder: %s\n" % self.restart.restart_folder
+            msg += 90 * "#" + "\n"
             if verbose:
                 print(msg.replace("log file", ""))
             if self.logger:
@@ -763,12 +765,16 @@ class LBFGSsolver(pySolver.Solver):
         
         # Writing last inverted model
         self.save_results(iiter, problem, force_save=True, force_write=True)
+        msg = 90 * "#" + "\n"
         if self.m_steps is not None:
-            if self.logger:
-                self.logger.addToLog("Limited-memory Broyden-Fletcher-Goldfarb-Shanno (L-BFGS) algorithm log file end")
+            msg += "Limited-memory Broyden-Fletcher-Goldfarb-Shanno (L-BFGS) algorithm log file end"
         else:
-            if self.logger:
-                self.logger.addToLog("Broyden-Fletcher-Goldfarb-Shanno (BFGS) algorithm log file end")
+            msg += "Broyden-Fletcher-Goldfarb-Shanno (BFGS) algorithm log file end"
+        msg += 90 * "#" + "\n"
+        if verbose:
+            print(msg.replace("log file ", ""))
+        if self.logger:
+            self.logger.addToLog(msg)
         self.restart.clear_restart()
         # Resetting inverse Hessian matrix
         self.H0 = None
