@@ -5,6 +5,7 @@ from __future__ import division, print_function, absolute_import
 import time
 from copy import deepcopy
 import numpy as np
+import cupy as cp
 from pyVector import vector, superVector
 import sep_util
 
@@ -42,7 +43,7 @@ class Operator:
         return self.dot(other)
     
     __rmul__ = __mul__  # other * self
-    
+
     def __truediv__(self, other, niter=2000):
         """x = A / y through CG"""
         import pyLinearSolver
@@ -56,7 +57,7 @@ class Operator:
         P = pyProblem.ProblemL2Linear(model=self.domain.cloneSpace(), data=other, op=self)
         Solver = pyLinearSolver.LCGsolver(Stop)
         Solver.run(P, verbose=False)
-        
+
         return P.model
     
     # main function for all kinds of multiplication
@@ -453,6 +454,7 @@ class _scaledOperator(Operator):
             raise ValueError('scalar expected as const')
         super(_scaledOperator, self).__init__(A.domain, A.range)
         self.const = const
+        self.constH = np.conj(self.const)
         self.op = A
     
     def __str__(self):
@@ -468,7 +470,7 @@ class _scaledOperator(Operator):
         self.op.forward(add, model.clone().scale(self.const), data)
     
     def adjoint(self, add, model, data):
-        self.op.adjoint(add, model, data.clone().scale(np.conj(self.const)))
+        self.op.adjoint(add, model, data.clone().scale(self.constH))
 
 
 class Vstack(Operator):
@@ -621,7 +623,7 @@ class DiagonalOp(Operator):
 
 class MatrixOp(Operator):
     """Operator built upon a matrix"""
-    
+
     def __init__(self, matrix, domain, range, outcore=False):
         """Class constructor
         :param matrix   : matrix to use
@@ -635,11 +637,12 @@ class MatrixOp(Operator):
             raise TypeError("ERROR! Range vector not a vector object")
         # Setting domain and range of operator and matrix to use during application of the operator
         self.setDomainRange(domain, range)
-        if not isinstance(matrix, np.ndarray):
-            raise ValueError("ERROR! matrix has to be a numpy ndarray")
+        if not (isinstance(matrix, np.ndarray) or isinstance(cp.ndarray)):
+            raise ValueError("ERROR! matrix has to be a numpy/cupy ndarray")
         self.M = matrix
         self.outcore = outcore
-    
+        self.arr_module = cp.get_array_module(matrix)
+        
     def __str__(self):
         return "MatrixOp"
     
@@ -651,13 +654,13 @@ class MatrixOp(Operator):
         model_arr = model.getNdArray()
         if self.outcore:
             [data_arr, data_axis] = sep_util.read_file(data.vecfile)
-            data_arr += np.matmul(self.M, model_arr.ravel()).reshape(data_arr.shape)
+            data_arr += self.arr_module.matmul(self.M, model_arr.ravel()).reshape(data_arr.shape)
             sep_util.write_file(data.vecfile, data_arr, data_axis)
         else:
             data_arr = data.getNdArray()
-            data_arr += np.matmul(self.M, model_arr.ravel()).reshape(data_arr.shape)
+            data_arr += self.arr_module.matmul(self.M, model_arr.ravel()).reshape(data_arr.shape)
         return
-    
+
     def adjoint(self, add, model, data):
         """m = A' * d"""
         self.checkDomainRange(model, data)
@@ -666,15 +669,15 @@ class MatrixOp(Operator):
         data_arr = data.getNdArray()
         if self.outcore:
             [model_arr, model_axis] = sep_util.read_file(model.vecfile)
-            model_arr += np.matmul(self.M.H, data_arr.ravel()).reshape(model_arr.shape)
+            model_arr += self.arr_module.matmul(self.M.T.conj(), data_arr.ravel()).reshape(model_arr.shape)
             sep_util.write_file(model.vecfile, model_arr, model_axis)
         else:
             model_arr = model.getNdArray()
-            model_arr += np.matmul(self.M.T.conj(), data_arr.ravel()).reshape(model_arr.shape)
+            model_arr += self.arr_module.matmul(self.M.T.conj(), data_arr.ravel()).reshape(model_arr.shape)
         return
     
     def getNdArray(self):
-        return np.array(self.M)
+        return self.arr_module.array(self.M)
 
 
 # for backward compatibility
@@ -769,13 +772,13 @@ class FirstDerivative(Operator):
         # Getting Ndarrays
         x = model.clone().getNdArray()
         if self.axis > 0:  # need to bring the dim. to derive to first dim
-            x = np.swapaxes(x, self.axis, 0)
-        y = np.zeros(x.shape)
+            x = cp.get_array_module(x).swapaxes(x, self.axis, 0)
+        y = cp.get_array_module(x).zeros(x.shape)
         
         y[:-1] = (x[1:] - x[:-1]) / self.sampling / 2
         
         if self.axis > 0:  # reset axis order
-            y = np.swapaxes(y, 0, self.axis)
+            y = cp.get_array_module(y).swapaxes(y, 0, self.axis)
         data.getNdArray()[:] = y
         if add:
             data.scaleAdd(self.data_tmp)
@@ -790,15 +793,15 @@ class FirstDerivative(Operator):
         # Getting Ndarrays
         y = data.clone().getNdArray().reshape(self.dims)
         if self.axis > 0:  # need to bring the dim. to derive to first dim
-            y = np.swapaxes(y, self.axis, 0)
-        x = np.zeros(y.shape)
+            y = cp.get_array_module(y).swapaxes(y, self.axis, 0)
+        x = cp.get_array_module(y).zeros(y.shape)
         
         x[0] = -y[0] / self.sampling / 2
         x[1:-1] = (-y[1:-1] + y[:-2]) / self.sampling / 2
         x[-1] = y[-2] / self.sampling / 2
         
         if self.axis > 0:
-            x = np.swapaxes(x, 0, self.axis)
+            x = cp.get_array_module(x).swapaxes(x, 0, self.axis)
         model.getNdArray()[:] = x
         if add:
             model.scaleAdd(self.data_tmp)
@@ -836,13 +839,13 @@ class SecondDerivative(Operator):
         # Getting Ndarrays
         x = model.clone().getNdArray()
         if self.axis > 0:  # need to bring the dim. to derive to first dim
-            x = np.swapaxes(x, self.axis, 0)
-        y = np.zeros(x.shape)
+            x = cp.get_array_module(x).swapaxes(x, self.axis, 0)
+        y = cp.get_array_module(x).zeros_like(x)
         
         y[1:-1] = (x[0:-2] - 2 * x[1:-1] + x[2:]) / self.sampling ** 2
         
         if self.axis > 0:  # reset axis order
-            y = np.swapaxes(y, 0, self.axis)
+            y = cp.get_array_module(y).swapaxes(y, 0, self.axis)
         data.getNdArray()[:] = y
         if add:
             data.scaleAdd(self.data_tmp)
@@ -858,15 +861,15 @@ class SecondDerivative(Operator):
         # Getting numpy arrays
         y = data.clone().getNdArray()
         if self.axis > 0:  # need to bring the dim. to derive to first dim
-            y = np.swapaxes(y, self.axis, 0)
-        x = np.zeros(y.shape)
+            y = cp.get_array_module(y).swapaxes(y, self.axis, 0)
+        x = cp.get_array_module(y).zeros_like(y)
         
-        x[0:-2] += (y[1:-1]) / self.sampling ** 2
-        x[1:-1] -= (2 * y[1:-1]) / self.sampling ** 2
-        x[2:] += (y[1:-1]) / self.sampling ** 2
+        x[0:-2] += y[1:-1] / self.sampling ** 2
+        x[1:-1] -= 2 * y[1:-1] / self.sampling ** 2
+        x[2:] += y[1:-1] / self.sampling ** 2
         
         if self.axis > 0:
-            x = np.swapaxes(x, 0, self.axis)
+            x = cp.get_array_module(x).swapaxes(x, 0, self.axis)
         model.getNdArray()[:] = x
         if add:
             model.scaleAdd(self.data_tmp)
@@ -912,7 +915,7 @@ class TotalVariation(Operator):
         if self.isotropic:
             self.checkDomainRange(model, data)
             if add:
-                self.data_tmp.copy(data)
+                data_tmp = data.clone()
             data.zero()
             for op in self.op:
                 temp = data.clone().zero()
@@ -920,7 +923,7 @@ class TotalVariation(Operator):
                 data.scaleAdd(temp.pow(2))
             data.pow(.5)
             if add:
-                data.scaleAdd(self.data_tmp)
+                data.scaleAdd(data_tmp)
             return
         else:
             return self.op.forward(add, model, data)
@@ -1194,7 +1197,7 @@ def main():
     yy = xx.clone().set(10)
     S = scalingOp(xx, 10)
     xx_inv = S / yy
-
+    
 
 if __name__ == '__main__':
     main()
