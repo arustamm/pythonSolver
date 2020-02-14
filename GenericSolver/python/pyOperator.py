@@ -8,6 +8,7 @@ import numpy as np
 from pyVector import vector, superVector
 import sep_util
 
+
 class Operator:
     """Abstract python operator class"""
     
@@ -41,7 +42,7 @@ class Operator:
         return self.dot(other)
     
     __rmul__ = __mul__  # other * self
-
+    
     def __truediv__(self, other, niter=2000):
         """x = A / y through CG"""
         import pyLinearSolver
@@ -55,7 +56,7 @@ class Operator:
         P = pyProblem.ProblemL2Linear(model=self.domain.cloneSpace(), data=other, op=self)
         Solver = pyLinearSolver.LCGsolver(Stop)
         Solver.run(P, verbose=False)
-
+        
         return P.model
     
     # main function for all kinds of multiplication
@@ -620,7 +621,7 @@ class DiagonalOp(Operator):
 
 class MatrixOp(Operator):
     """Operator built upon a matrix"""
-
+    
     def __init__(self, matrix, domain, range, outcore=False):
         """Class constructor
         :param matrix   : matrix to use
@@ -638,7 +639,7 @@ class MatrixOp(Operator):
             raise ValueError("ERROR! matrix has to be a numpy ndarray")
         self.M = matrix
         self.outcore = outcore
-        
+    
     def __str__(self):
         return "MatrixOp"
     
@@ -656,7 +657,7 @@ class MatrixOp(Operator):
             data_arr = data.getNdArray()
             data_arr += np.matmul(self.M, model_arr.ravel()).reshape(data_arr.shape)
         return
-
+    
     def adjoint(self, add, model, data):
         """m = A' * d"""
         self.checkDomainRange(model, data)
@@ -755,10 +756,10 @@ class FirstDerivative(Operator):
         self.dims = model.getNdArray().shape
         self.axis = axis if axis >= 0 else len(self.dims) + axis
         super(FirstDerivative, self).__init__(model, model)
-
+    
     def __str__(self):
         return "1stDer_%d" % self.axis
-
+    
     def forward(self, add, model, data):
         """Forward operator"""
         self.checkDomainRange(model, data)
@@ -770,16 +771,16 @@ class FirstDerivative(Operator):
         if self.axis > 0:  # need to bring the dim. to derive to first dim
             x = np.swapaxes(x, self.axis, 0)
         y = np.zeros(x.shape)
-    
+        
         y[:-1] = (x[1:] - x[:-1]) / self.sampling / 2
-    
+        
         if self.axis > 0:  # reset axis order
             y = np.swapaxes(y, 0, self.axis)
         data.getNdArray()[:] = y
         if add:
             data.scaleAdd(self.data_tmp)
         return
-
+    
     def adjoint(self, add, model, data):
         """Adjoint operator"""
         self.checkDomainRange(model, data)
@@ -791,11 +792,11 @@ class FirstDerivative(Operator):
         if self.axis > 0:  # need to bring the dim. to derive to first dim
             y = np.swapaxes(y, self.axis, 0)
         x = np.zeros(y.shape)
-    
+        
         x[0] = -y[0] / self.sampling / 2
         x[1:-1] = (-y[1:-1] + y[:-2]) / self.sampling / 2
         x[-1] = y[-2] / self.sampling / 2
-    
+        
         if self.axis > 0:
             x = np.swapaxes(x, 0, self.axis)
         model.getNdArray()[:] = x
@@ -821,49 +822,49 @@ class SecondDerivative(Operator):
         self.dims = model.getNdArray().shape
         self.axis = axis if axis >= 0 else len(self.dims) + axis
         super(SecondDerivative, self).__init__(model, model)
-
+    
     def __str__(self):
         return "2ndDer_%d" % self.axis
-
+    
     def forward(self, add, model, data):
         """Forward operator"""
         self.checkDomainRange(model, data)
         if add:
             self.data_tmp.copy(data)
         data.zero()
-    
+        
         # Getting Ndarrays
         x = model.clone().getNdArray()
         if self.axis > 0:  # need to bring the dim. to derive to first dim
             x = np.swapaxes(x, self.axis, 0)
         y = np.zeros(x.shape)
-    
+        
         y[1:-1] = (x[0:-2] - 2 * x[1:-1] + x[2:]) / self.sampling ** 2
-    
+        
         if self.axis > 0:  # reset axis order
             y = np.swapaxes(y, 0, self.axis)
         data.getNdArray()[:] = y
         if add:
             data.scaleAdd(self.data_tmp)
         return
-
+    
     def adjoint(self, add, model, data):
         """Adjoint operator"""
         self.checkDomainRange(model, data)
         if add:
             self.data_tmp.copy(model)
         model.zero()
-    
+        
         # Getting numpy arrays
         y = data.clone().getNdArray()
         if self.axis > 0:  # need to bring the dim. to derive to first dim
             y = np.swapaxes(y, self.axis, 0)
         x = np.zeros(y.shape)
-    
+        
         x[0:-2] += (y[1:-1]) / self.sampling ** 2
         x[1:-1] -= (2 * y[1:-1]) / self.sampling ** 2
         x[2:] += (y[1:-1]) / self.sampling ** 2
-    
+        
         if self.axis > 0:
             x = np.swapaxes(x, 0, self.axis)
         model.getNdArray()[:] = x
@@ -888,24 +889,25 @@ class TotalVariation(Operator):
         self.axis = axis if axis is not None else tuple(range(len(self.dims)))
         self.sampling = sampling if sampling is not None else tuple([1] * len(self.dims))
         self.weights = weights if weights is not None else tuple([1] * len(self.dims))
-
-        assert len(self.axis) == len(self.weights) == len(self.sampling) != 0,\
+        
+        assert len(self.axis) == len(self.weights) == len(self.sampling) != 0, \
             "There is something wrong with the dimensions"
-    
+        
         self.isotropic = iso
         
         if self.isotropic:  # self.op is a list of operators
-            self.op = [self.weights[d] * FirstDerivative(model, sampling=self.sampling[d], axis=self.axis[d]) for d in range(len(self.axis))]
+            self.op = [self.weights[d] * FirstDerivative(model, sampling=self.sampling[d], axis=self.axis[d]) for d in
+                       range(len(self.axis))]
         else:  # self.op is itself the final operator
             self.op = self.weights[0] * FirstDerivative(model, sampling=self.sampling[0], axis=self.axis[0])
             for d in range(1, len(self.axis)):
                 self.op += self.weights[d] * FirstDerivative(model, sampling=self.sampling[d], axis=self.axis[d])
-
+        
         super(TotalVariation, self).__init__(model, model)
     
     def __str__(self):
         return "TotalVar"
-
+    
     def forward(self, add, model, data):
         if self.isotropic:
             self.checkDomainRange(model, data)
@@ -922,7 +924,7 @@ class TotalVariation(Operator):
             return
         else:
             return self.op.forward(add, model, data)
-
+    
     def adjoint(self, add, model, data):
         if self.isotropic:
             raise ValueError("ERROR! The Isotropic Total Variation is nonlinear.")
@@ -943,25 +945,25 @@ class Laplacian(Operator):
         """
         self.dims = model.getNdArray().shape
         self.axis = axis if axis is not None else tuple(range(len(self.dims)))
-        self.sampling = sampling if sampling is not None else tuple([1]*len(self.dims))
-        self.weights = weights if weights is not None else tuple([1]*len(self.dims))
+        self.sampling = sampling if sampling is not None else tuple([1] * len(self.dims))
+        self.weights = weights if weights is not None else tuple([1] * len(self.dims))
         
-        assert len(self.axis) == len(self.weights) == len(self.sampling) != 0,\
+        assert len(self.axis) == len(self.weights) == len(self.sampling) != 0, \
             "There is something wrong with the dimensions"
-
+        
         self.data_tmp = model.clone().zero()
-
+        
         self.op = self.weights[0] * SecondDerivative(model, sampling=self.sampling[0], axis=self.axis[0])
         for d in range(1, len(self.axis)):
             self.op += self.weights[d] * SecondDerivative(model, sampling=self.sampling[d], axis=self.axis[d])
         super(Laplacian, self).__init__(model, model)
-
+    
     def __str__(self):
         return "Laplace "
-
+    
     def forward(self, add, model, data):
         return self.op.forward(add, model, data)
-
+    
     def adjoint(self, add, model, data):
         return self.op.adjoint(add, model, data)
 
@@ -1105,7 +1107,7 @@ def main():
     S = scalingOp(x, 10)
     S.forward(False, x, y)
     
-    # Tesst add operator
+    # Test add operator
     Z = ZeroOp(x, x)
     I = IdentityOp(x)
     sumOp = I + Z
@@ -1192,7 +1194,7 @@ def main():
     yy = xx.clone().set(10)
     S = scalingOp(xx, 10)
     xx_inv = S / yy
-    
+
 
 if __name__ == '__main__':
     main()
