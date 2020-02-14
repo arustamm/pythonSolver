@@ -102,6 +102,7 @@ class ISTAsolver(Solver):
                 # fista_mdl = self.restart.retrieve_vector("fista_mdl")
         
         ista_mdl0 = ista_mdl.clone()  # Previous model in case stepping procedure fails
+        early_stop = False
         
         # Inversion loop
         while True:
@@ -131,7 +132,6 @@ class ISTAsolver(Solver):
             
             # Saving results
             self.save_results(iiter, problem, force_save=False)
-            
             ista_mdl0.copy(ista_mdl)  # Saving model before updating it
 
             # Update model x = x + scale_precond * A' [y - Ax]
@@ -163,6 +163,7 @@ class ISTAsolver(Solver):
                         self.logger.addToLog(msg)
                 # Copying back to the previous solution
                 ista_mdl.copy(ista_mdl0)
+                early_stop = True
                 break
             
             # Saving current model in case of restart and other parameters
@@ -192,7 +193,10 @@ class ISTAsolver(Solver):
                 break
         
         # Writing last inverted model
-        self.save_results(iiter, problem, force_save=True, force_write=True)
+        if early_stop:
+            self._write_steps(force_write=True)
+        else:
+            self.save_results(iiter, problem, force_save=True, force_write=True)
         if self.create_msg:
             msg = 90 * "#" + "\n"
             msg += "\t\t\t\tFAST " if self.fast else "\t\t\t\t\t"
