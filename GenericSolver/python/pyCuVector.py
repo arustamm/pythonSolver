@@ -5,6 +5,13 @@ from copy import deepcopy
 import os
 from sys import version_info
 import numpy as np
+try:
+    from GPUtil import getFirstAvailable, getGPUs
+except ModuleNotFoundError:
+    import subprocess
+    import sys
+    subprocess.call([sys.executable, "-m", "pip", "install", "gputil"])
+    from GPUtil import getFirstAvailable, getGPUs
 
 # TODO check https://docs-cupy.chainer.org/en/stable/tutorial/basic.html#how-to-write-cpu-gpu-agnostic-code
 
@@ -57,6 +64,10 @@ class vectorCupy(vector):
     
     def setDevice(self, devID=0):
         cp.cuda.Device(devID).use()
+    
+    def printDevice(self):
+        name = getGPUs()[self.arr.device.id].name
+        print('GPU selected: %d - %s' % (self.arr.device.id, name))
         
     def getNdArray(self):
         """Function to return Ndarray of the vector"""
@@ -312,10 +323,11 @@ class vectorCupy(vector):
 
 
 if __name__ == '__main__':
-    from pyOperator import scalingOp
+    from pyCuOperator import scalingOp
     
     x = vectorCupy(np.empty((100, 200))).set(1.)
-    print('Working on %s' % str(x.device).replace('<','').replace('>',''))
+    x.printDevice()
+    
     n = x.clone().rand()
     y = x.clone().set(10) + 0.01 * n
     S = scalingOp(x, 10)
