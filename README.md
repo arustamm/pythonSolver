@@ -8,13 +8,14 @@ The prerequisites packages are the following:
 1. Numpy (https://numpy.org/) 
 2. Matplotlib (https://matplotlib.org/)
 3. Scipy (https://www.scipy.org/)
-4. Dask (https://dask.org/)
-5. Dask Distributed (https://distributed.dask.org/en/latest/)
-6. Dask Jobqueue (https://jobqueue.dask.org/en/latest/)
+4. Cupy (https://cupy.chainer.org/)
+5. Dask (https://dask.org/)
+6. Dask Distributed (https://distributed.dask.org/en/latest/)
+7. Dask Jobqueue (https://jobqueue.dask.org/en/latest/)
 
-The first three packages can be easily installed by running:
+The first four packages can be easily installed by running:
 ```
-pip install numpy matplotlib scipy
+pip install numpy matplotlib scipy cupy
 ``` 
 
 The last three packages are necessary to use the Dask interface. To install them run:
@@ -23,7 +24,7 @@ pip install dask
 pip install dask distributed --upgrade
 pip install dask-jobqueue --upgrade
 ```
-Add --user if the user does not have root privileges to all previous commands.
+Add `--user` if the user does not have root privileges to all previous commands.
 
 ## INSTALLATION
 The code runs on python3. All the library modules are contained in the folder named python.
