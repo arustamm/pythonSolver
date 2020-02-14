@@ -5,9 +5,15 @@ from __future__ import division, print_function, absolute_import
 import time
 from copy import deepcopy
 import numpy as np
-import cupy as cp
 from pyVector import vector, superVector
 import sep_util
+try:
+    import cupy as cp
+except ModuleNotFoundError:
+    import subprocess
+    import sys
+    subprocess.call([sys.executable, "-m", "pip", "install", "--user", "cupy==7.2.0"])
+    import cupy as cp
 
 
 class Operator:
