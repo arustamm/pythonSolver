@@ -89,6 +89,9 @@ class LCGsolver(pySolver.Solver):
         
         # Common variables unrelated to restart
         success = True
+        # Variables necessary to return inverted model if inversion stops earlier
+        prev_mdl = prblm_mdl.clone().zero()
+        early_stop = False
         if precond:
             cg_prec_grad = cg_dmodl.clone().zero()
         
@@ -125,6 +128,7 @@ class LCGsolver(pySolver.Solver):
             
             # Saving results
             self.save_results(iiter, problem, force_save=False)
+            prev_mdl.copy(prblm_mdl)  # Keeping the previous model
             
             # Computing alpha and beta coefficients
             if precond:
@@ -279,12 +283,8 @@ class LCGsolver(pySolver.Solver):
                     # Writing on log file
                     if self.logger:
                         self.logger.addToLog(msg)
-                # Stepping back to the previous solution
-                if precond:
-                    cg_mdl.scaleAdd(cg_dmodl, 1.0, -alpha)
-                else:
-                    cg_mdl.scaleAdd(cg_dmodl, 1.0, -1.0)
-                problem.set_model(cg_mdl)
+                problem.set_model(prev_mdl)
+                early_stop = True
                 break
             
             # Saving current model and previous search direction in case of restart
@@ -317,7 +317,10 @@ class LCGsolver(pySolver.Solver):
                 break
         
         # Writing last inverted model
-        self.save_results(iiter, problem, force_save=True, force_write=True)
+        if early_stop:
+            self._write_steps(force_write=True)
+        else:
+            self.save_results(iiter, problem, force_save=True, force_write=True)
         if self.create_msg:
             msg = 90 * "#" + "\n"
             msg += "\t\t\t\tPRECONDITIONED " if precond else "\t\t\t\t"
@@ -529,6 +532,9 @@ class LSQRsolver(pySolver.Solver):
         # Common variables unrelated to restart
         prblm_mdl = problem.get_model()
         inv_model = prblm_mdl.clone()  # Inverted model to be saved during the inversion
+        # Variables necessary to return inverted model if inversion stops earlier
+        prev_x = x.clone().zero()
+        early_stop =False
         
         # Iteration loop
         while True:
@@ -540,6 +546,8 @@ class LSQRsolver(pySolver.Solver):
             inv_model.copy(initial_mdl)
             inv_model.scaleAdd(x)  # x = x0 + dx; Updating inverted model
             self.save_results(iiter, problem, model=inv_model, force_save=False)
+            # Necessary to save previous iteration
+            prev_x.copy(x)
             
             """
                 %     Perform the next step of the bidiagonalization to obtain the
@@ -608,6 +616,7 @@ class LSQRsolver(pySolver.Solver):
                     # Writing on log file
                     if self.logger:
                         self.logger.addToLog(msg)
+                early_stop = True
                 break
 
             if self.est_cond:
@@ -659,8 +668,13 @@ class LSQRsolver(pySolver.Solver):
         
         # Writing last inverted model
         inv_model.copy(initial_mdl)
-        inv_model.scaleAdd(x)  # x = x0 + dx; Updating inverted model
-        self.save_results(iiter, problem, model=inv_model, force_save=True, force_write=True)
+        if early_stop:
+            x.copy(prev_x)
+            inv_model.scaleAdd(x)  # x = x0 + dx; Updating inverted model
+            self._write_steps(force_write=True)
+        else:
+            inv_model.scaleAdd(x)  # x = x0 + dx; Updating inverted model
+            self.save_results(iiter, problem, model=inv_model, force_save=True, force_write=True)
         prblm_mdl.copy(inv_model) # Setting inverted model to final one
         if self.create_msg:
             msg = 90 * "#" + "\n"
@@ -762,6 +776,8 @@ class SymLCGsolver(pySolver.Solver):
         # Common variables unrelated to restart
         success = True
         data_norm = problem.data.norm()
+        prev_mdl = prblm_mdl.clone().zero()
+        early_stop = False
         
         # Iteration loop
         while True:
@@ -787,6 +803,8 @@ class SymLCGsolver(pySolver.Solver):
             
             # Saving results
             self.save_results(iiter, problem, force_save=False)
+            # Copying current model in case of early stop
+            prev_mdl.copy(prev_mdl)
             
             # Applying preconditioning to gradient (first time)
             if iiter == 0 and precond:
@@ -894,9 +912,8 @@ class SymLCGsolver(pySolver.Solver):
                         # Writing on log file
                         if self.logger:
                             self.logger.addToLog(msg)
-                    # Stepping back to the previous solution
-                    cg_mdl.scaleAdd(cg_dmodl, 1.0, -alpha)
-                    problem.set_model(cg_mdl)
+                    early_stop = True
+                    problem.set_model(prev_mdl)
                     break
                 obj_old = obj0  # Saving objective function at iter-1
             
@@ -931,11 +948,14 @@ class SymLCGsolver(pySolver.Solver):
                 break
         
         # Writing last inverted model
-        self.save_results(iiter, problem, force_save=True, force_write=True)
+        if early_stop:
+            self._write_steps(force_write=True)
+        else:
+            self.save_results(iiter, problem, force_save=True, force_write=True)
         if self.create_msg:
             msg = 90 * "#" + "\n"
             msg += "PRECONDITIONED " if precond else ""
-            msg += "LINEAR %s SOLVER FOR SYMMETRIC MATRIX log file end" \
+            msg += "LINEAR %s SOLVER FOR SYMMETRIC MATRIX log file end\n" \
                    % ("STEEPEST-DESCENT" if self.steepest else "CONJUGATE GRADIENT")
             msg += 90 * "#" + "\n"
             if verbose:

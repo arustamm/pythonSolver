@@ -37,7 +37,7 @@ if __name__ == '__main__':
     Stop = Stopper(niter=niter)  # ,tolobjchng=1e-15)
     # Create solver
     LCGsolver = LCG(Stop)
-    LCGsolver.setDefaults(iter_sampling=1, save_obj=True, save_model=True, prefix="test_junk")
+    # LCGsolver.setDefaults(iter_sampling=1, save_obj=True, save_model=True, prefix="test_junk")
     # Running the solver
     LCGsolver.run(L2Prob, verbose=True)
 
@@ -86,7 +86,7 @@ if __name__ == '__main__':
     # LCGsolver.run(L2Prob_sym,True)
 
     L2Prob_sym = Prblm.ProblemL2Linear(model_vec_sym, data_vec_sym, MatMultSym, prec=Op.ChainOperator(Prec, Prec))
-    # LCGsolver.run(L2Prob_sym,True)
+    LCGsolver.run(L2Prob_sym,True)
 
     # Testing LCG with regularized problem
     L2Prob_reg = Prblm.ProblemL2LinearReg(model_vec_sym, data_vec_sym, MatMultSym, 0.0001)
@@ -107,7 +107,7 @@ if __name__ == '__main__':
     SymProb = Prblm.ProblemLinearSymmetric(model_vec_sym, data_vec_sym, MatMultSym)  # ,minBound=low_bound)
     SLCG = SymLCGsolver(Stop)
     # SLCG.setDefaults(iter_sampling=5,save_obj=True,save_res=True,save_grad=True,save_model=True,prefix="test")
-    # SLCG.run(SymProb,verbose=True)
+    SLCG.run(SymProb,verbose=True)
     # print(SymProb.model.arr)
 
     # Testing preconditioned CG

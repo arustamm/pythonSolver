@@ -261,7 +261,8 @@ class NLCGsolver(pySolver.Solver):
             problem.set_residual(self.restart.retrieve_vector("prblm_res"))
         
         # Common variables unrelated to restart
-        success = True
+        early_stop = False
+        prev_mdl = prblm_mdl.clone().zero()
         
         while True:
             # Computing objective function
@@ -294,6 +295,8 @@ class NLCGsolver(pySolver.Solver):
             
             # Saving results
             self.save_results(iiter, problem, force_save=False)
+            # Keeping current inverted model
+            prev_mdl.copy(prblm_mdl)
             
             if iiter >= 1:
                 beta = self.beta_func(prblm_grad, cg_grad0, cg_dmodl)
@@ -319,6 +322,8 @@ class NLCGsolver(pySolver.Solver):
                     # Writing on log file
                     if self.logger:
                         self.logger.addToLog(msg)
+                early_stop = True
+                problem.set_model(prev_mdl)
                 break
             
             # Increasing iteration counter
@@ -367,7 +372,10 @@ class NLCGsolver(pySolver.Solver):
                 break
         
         # Writing last inverted model
-        self.save_results(iiter, problem, force_save=True, force_write=True)
+        if early_stop:
+            self._write_steps(force_write=True)
+        else:
+            self.save_results(iiter, problem, force_save=True, force_write=True)
         if self.create_msg:
             msg = 90 * "#" + "\n"
             msg += "\t\t\tNON-LINEAR %s SOLVER log file end\n" % (
@@ -612,16 +620,17 @@ class LBFGSsolver(pySolver.Solver):
             for istep in range(iiter):
                 if self.m_steps is not None:
                     if istep < self.m_steps:
-                        self.grad_diff_files[istep] = self.restart.retrieve_vector("grad_diff_vectors%s.H" % istep)
+                        self.grad_diff_files[istep] = self.restart.retrieve_vector("grad_diff_vectors%s" % istep)
                         self.step_files[istep] = self.restart.retrieve_vector("step_vectors%s.H" % istep)
                 else:
-                    self.grad_diff_files.append(self.restart.retrieve_vector("grad_diff_vectors%s.H" % istep))
-                    self.step_files.append(self.restart.retrieve_vector("step_vectors%s.H" % istep))
+                    self.grad_diff_files.append(self.restart.retrieve_vector("grad_diff_vectors%s" % istep))
+                    self.step_files.append(self.restart.retrieve_vector("step_vectors%s" % istep))
         
         # Common variables unrelated to restart
-        success = True
         self.tmp_vector = bfgs_dmodl.clone()
         self.tmp_vector.zero()
+        early_stop = False
+        prev_mdl = prblm_mdl.clone().zero()
         
         # Inversion loop
         while True:
@@ -653,6 +662,8 @@ class LBFGSsolver(pySolver.Solver):
             
             # Saving results
             self.save_results(iiter, problem, force_save=False)
+            # Saving current inverted model
+            prev_mdl.copy(prblm_mdl)
             
             # Applying approximated Hessian inverse
             msg = "Appplying inverse Hessian estimate"
@@ -680,6 +691,8 @@ class LBFGSsolver(pySolver.Solver):
                 # Writing on log file
                 if self.logger:
                     self.logger.addToLog(msg)
+                early_stop = True
+                problem.set_model(prev_mdl)
                 break
             
             obj1 = problem.get_obj(bfgs_mdl)  # Compute objective function value
@@ -689,6 +702,8 @@ class LBFGSsolver(pySolver.Solver):
                       "Potential issue in the stepper or in revaluation of objective function!" % (obj0, obj1)
                 if self.logger:
                     self.logger.addToLog(msg)
+                early_stop = True
+                problem.set_model(prev_mdl)
                 raise ValueError(msg)
             
             # Compute new gradient
@@ -740,8 +755,8 @@ class LBFGSsolver(pySolver.Solver):
             self.restart.save_vector("bfgs_grad0", bfgs_grad0)
             # Saving Inverse Hessian estimate for restart
             self.restart.save_parameter("rho", self.rho)
-            self.restart.save_vector("grad_diff_vectors%s.H" % step_index, self.grad_diff_vectors[step_index])
-            self.restart.save_vector("step_vectors%s.H" % step_index, self.step_vectors[step_index])
+            self.restart.save_vector("grad_diff_vectors%s" % step_index, self.grad_diff_vectors[step_index])
+            self.restart.save_vector("step_vectors%s" % step_index, self.step_vectors[step_index])
             # Saving data space vectors
             self.restart.save_vector("prblm_res", prblm_res)
             
@@ -764,12 +779,15 @@ class LBFGSsolver(pySolver.Solver):
                 break
         
         # Writing last inverted model
-        self.save_results(iiter, problem, force_save=True, force_write=True)
+        if early_stop:
+            self._write_steps(force_write=True)
+        else:
+            self.save_results(iiter, problem, force_save=True, force_write=True)
         msg = 90 * "#" + "\n"
         if self.m_steps is not None:
-            msg += "Limited-memory Broyden-Fletcher-Goldfarb-Shanno (L-BFGS) algorithm log file end"
+            msg += "Limited-memory Broyden-Fletcher-Goldfarb-Shanno (L-BFGS) algorithm log file end\n"
         else:
-            msg += "Broyden-Fletcher-Goldfarb-Shanno (BFGS) algorithm log file end"
+            msg += "Broyden-Fletcher-Goldfarb-Shanno (BFGS) algorithm log file end\n"
         msg += 90 * "#" + "\n"
         if verbose:
             print(msg.replace("log file ", ""))
