@@ -1105,7 +1105,7 @@ def main():
     S = scalingOp(x, 10)
     S.forward(False, x, y)
     
-    # Test add operator
+    # Tesst add operator
     Z = ZeroOp(x, x)
     I = IdentityOp(x)
     sumOp = I + Z
@@ -1174,12 +1174,17 @@ def main():
     H = Hstack(I, I * 2)
     x = H.domain.clone().set(1.)  # x = 1, 1
     y = H.range.clone().zero()
+    y_test = y.clone().set(3.0)
     H.forward(False, x, y)  # y = 3
     x_hat = x.clone()
+    x_test = x.clone()
+    x_test.vecs[0].set(3.0)
+    x_test.vecs[1].set(6.0)
     H.adjoint(False, x_hat, y)  # x_hat = 3, 6
-    x_inv = H / y
-    if x.isDifferent(x_inv):
-        print('Hstack not working')
+    if y.isDifferent(y_test):
+        print('Hstack forward not working')
+    if x_hat.isDifferent(x_test):
+        print('Hstack adjoint not working')
     
     # test inversion on superVector
     x = pyVector.vectorIC(np.empty((100, 200)))
