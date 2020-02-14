@@ -58,6 +58,10 @@ class vectorCupy(vector):
     def setDevice(self, devID=0):
         cp.cuda.Device(devID).use()
         
+    def array2cpu(self):
+        return cp.asnumpy(self.arr)
+    plottable = property(array2cpu)
+    
     def getNdArray(self):
         """Function to return Ndarray of the vector"""
         return self.arr
@@ -312,12 +316,84 @@ class vectorCupy(vector):
 
 
 if __name__ == '__main__':
-    from pyOperator import scalingOp
+    from sys import path
+    path.insert(0, '.')
+    import pyOperator
+    from pyLinearSolver import LCGsolver
+    from pyProblem import ProblemL1Lasso, ProblemL2LinearReg, ProblemL2Linear
+    from pySparseSolver import ISTAsolver
+    from pyStopper import BasicStopper
+    import matplotlib.pyplot as plt
+    plt.style.use('ggplot')
+
+    PLOT = True
     
     x = vectorCupy(np.empty((100, 200))).set(1.)
     print('Working on %s' % str(x.device).replace('<','').replace('>',''))
     n = x.clone().rand()
     y = x.clone().set(10) + 0.01 * n
-    S = scalingOp(x, 10)
+    S = pyOperator.scalingOp(x, 10)
     xinv = S / y
     print('Error norm = %.2e' % (xinv.norm() - x.norm()))
+
+    cp.random.seed(1)
+    nx = 101
+    x = vectorCupy((nx,)).zero()
+
+    x.getNdArray()[:nx // 2] = 10
+    x.getNdArray()[nx // 2:3 * nx // 4] = -5
+
+    Iop = pyOperator.IdentityOp(x)
+    TV = pyOperator.TotalVariation(x, iso=False)
+    L = pyOperator.SecondDerivative(x)
+
+    n = x.clone()
+    n.getNdArray()[:] = cp.random.normal(0, 1, nx)
+    y = Iop * (x.clone() + n)
+
+    if PLOT:
+        plt.figure(figsize=(5, 4))
+        plt.plot(x.plottable, 'k', lw=1, label='x')
+        plt.plot(y.plottable, '.k', label='y=x+n')
+        plt.legend()
+        plt.title('Model, Data')
+        plt.show()
+
+    # CG solver
+    problemLS = ProblemL2Linear(x.clone().zero(), y, Iop)
+    CG = LCGsolver(BasicStopper(niter=30))
+    CG.run(problemLS, verbose=True)
+    if PLOT:
+        plt.figure(figsize=(5, 4))
+        plt.plot(x.plottable, 'k', lw=1, label='x')
+        plt.plot(y.plottable, '.k', label='y=x+n')
+        plt.plot(problemLS.model.plottable, 'r', lw=2, label='x_inv')
+        plt.legend()
+        plt.title('Least-Squares CG')
+        plt.show()
+
+    # CG solver with L2 regularization
+    problemLSR = ProblemL2LinearReg(x.clone().zero(), y, Iop, np.sqrt(50), L)
+    CG = LCGsolver(BasicStopper(niter=30))
+    CG.run(problemLSR, verbose=True)
+    if PLOT:
+        plt.figure(figsize=(5, 4))
+        plt.plot(x.plottable, 'k', lw=1, label='x')
+        plt.plot(y.plottable, '.k', label='y=x+n')
+        plt.plot(problemLSR.model.plottable, 'r', lw=2, label='x_inv')
+        plt.legend()
+        plt.title('Least-Squares with Laplacian reg')
+        plt.show()
+
+    # FISTA
+    problemFISTA = ProblemL1Lasso(x.clone().zero(), y, Iop, lambda_value=1, op_norm=1.01)
+    FISTA = ISTAsolver(BasicStopper(niter=300), fast=True)
+    FISTA.run(problemFISTA, verbose=True)
+    if PLOT:
+        plt.figure(figsize=(5, 4))
+        plt.plot(x.plottable, 'k', lw=1, label='x')
+        plt.plot(y.plottable, '.k', label='y=x+n')
+        plt.plot(problemFISTA.model.plottable, 'r', lw=2, label='x_inv')
+        plt.legend()
+        plt.title('FISTA inversion')
+        plt.show()
