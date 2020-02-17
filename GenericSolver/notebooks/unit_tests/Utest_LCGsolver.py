@@ -37,7 +37,7 @@ if __name__ == '__main__':
     Stop = Stopper(niter=niter)  # ,tolobjchng=1e-15)
     # Create solver
     LCGsolver = LCG(Stop)
-    # LCGsolver.setDefaults(iter_sampling=1, save_obj=True, save_model=True, prefix="test_junk")
+    LCGsolver.setDefaults(iter_sampling=1, save_obj=True, save_model=True, prefix="test_junk")
     # Running the solver
     LCGsolver.run(L2Prob, verbose=True)
 

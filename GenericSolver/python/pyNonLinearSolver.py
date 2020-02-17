@@ -261,7 +261,6 @@ class NLCGsolver(pySolver.Solver):
             problem.set_residual(self.restart.retrieve_vector("prblm_res"))
         
         # Common variables unrelated to restart
-        early_stop = False
         prev_mdl = prblm_mdl.clone().zero()
         
         while True:
@@ -322,7 +321,6 @@ class NLCGsolver(pySolver.Solver):
                     # Writing on log file
                     if self.logger:
                         self.logger.addToLog(msg)
-                early_stop = True
                 problem.set_model(prev_mdl)
                 break
             
@@ -340,8 +338,7 @@ class NLCGsolver(pySolver.Solver):
                         print(msg)
                     if self.logger:
                         self.logger.addToLog(msg)
-                cg_mdl.scaleAdd(cg_dmodl, 1.0, -alpha)
-                problem.set_model(cg_mdl)
+                problem.set_model(prev_mdl)
                 break
             
             # Saving current model and previous search direction in case of restart
@@ -372,10 +369,7 @@ class NLCGsolver(pySolver.Solver):
                 break
         
         # Writing last inverted model
-        if early_stop:
-            self._write_steps(force_write=True)
-        else:
-            self.save_results(iiter, problem, force_save=True, force_write=True)
+        self.save_results(iiter, problem, force_save=True, force_write=True)
         if self.create_msg:
             msg = 90 * "#" + "\n"
             msg += "\t\t\tNON-LINEAR %s SOLVER log file end\n" % (
@@ -629,7 +623,6 @@ class LBFGSsolver(pySolver.Solver):
         # Common variables unrelated to restart
         self.tmp_vector = bfgs_dmodl.clone()
         self.tmp_vector.zero()
-        early_stop = False
         prev_mdl = prblm_mdl.clone().zero()
         
         # Inversion loop
@@ -691,7 +684,6 @@ class LBFGSsolver(pySolver.Solver):
                 # Writing on log file
                 if self.logger:
                     self.logger.addToLog(msg)
-                early_stop = True
                 problem.set_model(prev_mdl)
                 break
             
@@ -702,7 +694,6 @@ class LBFGSsolver(pySolver.Solver):
                       "Potential issue in the stepper or in revaluation of objective function!" % (obj0, obj1)
                 if self.logger:
                     self.logger.addToLog(msg)
-                early_stop = True
                 problem.set_model(prev_mdl)
                 raise ValueError(msg)
             
@@ -779,10 +770,7 @@ class LBFGSsolver(pySolver.Solver):
                 break
         
         # Writing last inverted model
-        if early_stop:
-            self._write_steps(force_write=True)
-        else:
-            self.save_results(iiter, problem, force_save=True, force_write=True)
+        self.save_results(iiter, problem, force_save=True, force_write=True)
         msg = 90 * "#" + "\n"
         if self.m_steps is not None:
             msg += "Limited-memory Broyden-Fletcher-Goldfarb-Shanno (L-BFGS) algorithm log file end\n"
