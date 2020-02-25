@@ -6,7 +6,7 @@ from pyProblem import Problem, ProblemL1Lasso, ProblemL2LinearReg, ProblemL2Line
 from pySolver import Solver
 from pySparseSolver import ISTAsolver
 from pyStopper import BasicStopper
-from math import isnan
+from math import isnan, sqrt
 
 
 # TODO make it accept L2 reg problems
@@ -75,9 +75,11 @@ class ProblemLinearReg(Problem):
         # Last settings
         self.obj_terms = [None] * (1 + self.nregsL2 + self.nregsL1)
         self.linear = True
+        # store the "residuals" (for computing the objective function)
         self.res_data = self.op.range.clone().zero()
         self.res_regsL2 = self.regL2_op.range.clone().zero() if self.nregsL2 != 0 else None
         self.res_regsL1 = self.regL1_op.range.clone().zero() if self.nregsL1 != 0 else None
+        # this last superVector is instantiated with pointers to res_data and res_regs!
         self.res = pyVector.superVector(self.res_data, self.res_regsL2, self.res_regsL1)
         
         # flags for avoiding extra computations
@@ -91,7 +93,7 @@ class ProblemLinearReg(Problem):
     
     def objf(self, res):
         """
-        Compute objective function based on the residuals
+        Compute objective function based on the residual (super)vector
         
         .. math ::
             1 / 2 |Op m - d|_2^2 +
@@ -106,11 +108,11 @@ class ProblemLinearReg(Problem):
         else:
             res_regsL1 = None
         
-        self.obj_terms[0] = .5 * res_data.norm()**2  # data fidelity
+        self.obj_terms[0] = .5 * res_data.norm(2)**2  # data fidelity
         
         if res_regsL2 is not None:
             for idx in range(self.nregsL2):
-                self.obj_terms[1 + idx] = self.epsL2[idx] * res_regsL2.vecs[idx].norm()**2
+                self.obj_terms[1 + idx] = self.epsL2[idx] * res_regsL2.vecs[idx].norm(2)**2
         if res_regsL1 is not None:
             for idx in range(self.nregsL1):
                 self.obj_terms[1 + self.nregsL2 + idx] = self.epsL1[idx] * res_regsL1.vecs[idx].norm(1)
@@ -118,25 +120,28 @@ class ProblemLinearReg(Problem):
         return sum(self.obj_terms)
     
     def resf(self, model):
+        """Compute residuals from current model"""
+        
         # compute data residual: Op * m - d
         if model.norm() != 0:
-            self.op.forward(False, self.model, self.res_data)
+            self.op.forward(False, model, self.res_data)  # rd = Op * m
         else:
             self.res_data.zero()
-        self.res_data.scaleAdd(self.data, 1., -1.)
+        self.res_data.scaleAdd(self.data, 1., -1.)  # rd = rd - d
         
         # compute L2 reg residuals
         if self.res_regsL2 is not None:
-            if model.norm() != 0 and self.regL2_op is not None:
-                self.regL2_op.forward(False, self.model, self.res_regsL2)
-            
+            if model.norm() != 0:
+                self.regL2_op.forward(False, model, self.res_regsL2)
+            else:
+                self.res_regsL2.zero()
             if self.dataregsL2 is not None and self.dataregsL2.norm() != 0.:
                 self.res_regsL2.scaleAdd(self.dataregsL2, 1., -1.)
         
         # compute L1 reg residuals
         if self.res_regsL1 is not None:
             if model.norm() != 0. and self.regL1_op is not None:
-                self.regL1_op.forward(False, self.model, self.res_regsL1)
+                self.regL1_op.forward(False, model, self.res_regsL1)
             else:
                 self.res_regsL1.zero()
         
@@ -179,8 +184,10 @@ class SplitBregmanSolver(Solver):
 
         self.niter_inner = niter_inner  # number of iterations for the shrinkage
         self.niter_solver = niter_solver  # number of iterations for the internal problem
-        self.breg_weight = breg_weight
         self.use_prev_sol = use_prev_sol
+        if breg_weight > 1.:
+            raise ValueError("ERROR! Bregman update weight has to be <= 1")
+        self.breg_weight = float(breg_weight)
         
         if linear_solver == 'CG':
             self.linear_solver = LCGsolver(BasicStopper(niter=self.niter_solver), steepest=False, logger=self.logger)
@@ -201,6 +208,8 @@ class SplitBregmanSolver(Solver):
     def run(self, problem, verbose=False, inner_verbose=False, restart=False, initial_guess=None):
         """Running SplitBregman solver"""
         assert type(problem) == ProblemLinearReg, 'problem has to be a ProblemLinearReg'
+        if problem.regL1_op is None:
+            raise ValueError("ERROR! Problem has to include at least one L1 Regularizer")
         
         verbose = True if inner_verbose else verbose
         self.create_msg = verbose or self.logger
@@ -209,7 +218,7 @@ class SplitBregmanSolver(Solver):
         self.stopper.reset()
 
         # initialize all the vectors and operators for Split-Bregman
-        breg_b = problem.regL1_op.range.clone().zero() if problem.nregsL1 != 0 else problem.model.clone().zero()
+        breg_b = problem.regL1_op.range.clone().zero()
         breg_a = breg_b.clone()
         RL1x = breg_b.clone()  # store RegL1 * solution
         
@@ -217,9 +226,11 @@ class SplitBregmanSolver(Solver):
         if not problem.op.domain.checkSame(sb_mdl):
             raise ValueError("ERROR! The initial guess and the operator domain mismatch.")
         
-        reg_op = pyOperator.Vstack(problem.regL2_op*problem.epsL2 if problem.nregsL2 != 0 else [],
-                                   problem.regL1_op*problem.epsL1 if problem.nregsL1 != 0 else []) if (problem.nregsL2 + problem.nregsL1) != 0 else None
-        
+        # adjust regularizers and their weights
+        epsRs = [sqrt(problem.epsL2[ireg] / 2) / sqrt(1 / 2) for ireg in range(problem.nregsL2)] + \
+                [sqrt(problem.epsL1[ireg] / 2) / sqrt(1 / 2) for ireg in range(problem.nregsL1)]
+        reg_op = pyOperator.Vstack(problem.regL2_op, problem.regL1_op)
+
         if restart:
             self.restart.read_restart()
             outer_iter = self.restart.retrieve_parameter("iter")
@@ -290,14 +301,14 @@ class SplitBregmanSolver(Solver):
                         self.logger.addToLog("\n" + msg)
                 
                 # solve inner problem
-                prior = pyVector.superVector(problem.dataregsL2, breg_a.clone() - breg_b)
-                R = reg_op if reg_op is not None else pyOperator.Vstack([pyOperator.ZeroOp(v, v) for v in prior.vecs])
+                prior = pyVector.superVector(problem.dataregsL2, breg_a.clone().scaleAdd(breg_b, 1., -1.))
+                # R = reg_op if reg_op is not None else pyOperator.Vstack([pyOperator.ZeroOp(v, v) for v in prior.vecs])
                 linear_problem = ProblemL2LinearReg(
                     model=sb_mdl.clone().zero() if not self.use_prev_sol else sb_mdl.clone(),
                     data=problem.data,
                     op=problem.op,
-                    epsilon=1.,
-                    reg_op=R,
+                    epsilon=epsRs,
+                    reg_op=reg_op,
                     prior_model=prior,
                     minBound=problem.minBound, maxBound=problem.maxBound, boundProj=problem.boundProj
                 )
@@ -629,84 +640,9 @@ def main():
     from sys import path
     path.insert(0, '.')
     import numpy as np
-    from scipy.signal import convolve, correlate
-    from scipy.ndimage import gaussian_filter
     import matplotlib.pyplot as plt
     plt.style.use('ggplot')
-
-    class ConvNDscipy(pyOperator.Operator):
-        """
-        ND convolution square operator in the model space
-        
-        :param model    :  [no default] - vector class; domain vector
-        :param kernel   :  [no default] - vector class; kernel vector
-        :param method   : [auto] - str; how to compute the convolution [auto, direct, fft]
-        :return         : Convolution Operator
-        """
-        def __init__(self, model, kernel, method='auto'):
-            
-            self.kernel = kernel.getNdArray()
-            self.method = method
-            self.data_tmp = model.clone().zero()
-            super(ConvNDscipy, self).__init__(model, model)
-            
-        def __str__(self):
-            return "ConvScipy"
-        
-        def forward(self, add, model, data):
-            self.checkDomainRange(model, data)
-            if add:
-                self.data_tmp.copy(data)
-            data.zero()
-            data.getNdArray()[:] = convolve(model.getNdArray(), self.kernel,
-                                            mode='same', method=self.method)
-            if add:
-                data.scaleAdd(self.data_tmp)
-            return
-        
-        def adjoint(self, add, model, data):
-            self.checkDomainRange(model, data)
-            if add:
-                self.data_tmp.copy(model)
-            model.zero()
-            model.getNdArray()[:] = correlate(data.getNdArray(), self.kernel,
-                                              mode='same', method=self.method)
-            if add:
-                model.scaleAdd(self.data_tmp)
-            return
-
-    class Gauss_smooth_scipy(pyOperator.Operator):
-        def __init__(self, model, sigmax, sigmaz):
-            """
-            Gaussian 2D smoothing operator using scipy smoothing:
-            model    = [no default] - vector class; domain vector
-            sigmax   = [no default] - float; standard deviation along the x direction
-            sigmaz   = [no default] - float; standard deviation along the z direction
-            """
-            self.setDomainRange(model, model)
-            self.sigmax = sigmax
-            self.sigmaz = sigmaz
-            self.scaling = 2.0 * np.pi * sigmax * sigmaz  # in order to have the max amplitude 1
-            return
-    
-        def __str__(self):
-            return "GauSmoot"
-    
-        def forward(self, add, model, data):
-            """Forward operator"""
-            self.checkDomainRange(model, data)
-            if not add:
-                data.zero()
-            # Getting Ndarrays
-            model_arr = model.getNdArray()
-            data_arr = data.getNdArray()
-            data_arr[:] = self.scaling * gaussian_filter(model_arr, sigma=[self.sigmax, self.sigmaz])
-            return
-    
-        def adjoint(self, add, model, data):
-            """Self-adjoint operator"""
-            self.forward(add, data, model)
-            return
+    import pyNpOperator
     
     PLOT = True
     EXAMPLE = 'noisy'  # must be noisy, gaussian or python
@@ -720,8 +656,8 @@ def main():
         x.getNdArray()[nx // 2:3 * nx // 4] = -5
     
         Iop = pyOperator.IdentityOp(x)
-        TV = pyOperator.TotalVariation(x, iso=False)
-        L = pyOperator.SecondDerivative(x)
+        TV = pyNpOperator.FirstDerivative(x)
+        L = pyNpOperator.SecondDerivative(x)
         
         n = x.clone()
         n.getNdArray()[:] = np.random.normal(0,  1, nx)
@@ -729,71 +665,84 @@ def main():
         
         derivative = TV * x
     
-        if PLOT:
-            plt.figure(figsize=(5, 4))
-            plt.plot(x.getNdArray(), 'k', lw=1, label='x')
-            plt.plot(y.getNdArray(), '.k', label='y=x+n')
-            plt.plot(derivative.getNdArray(), '.b', lw=2, label='∂x')
-            plt.legend()
-            plt.title('Model, Data and Derivative')
-            plt.show()
-    
-        # CG solver
-        problemLS = ProblemL2Linear(x.clone().zero(), y, Iop)
-        CG = LCGsolver(BasicStopper(niter=30))
-        CG.run(problemLS, verbose=True)
-        if PLOT:
-            plt.figure(figsize=(5, 4))
-            plt.plot(x.getNdArray(), 'k', lw=1, label='x')
-            plt.plot(y.getNdArray(), '.k', label='y=x+n')
-            plt.plot(problemLS.model.getNdArray(), 'r', lw=2, label='x_inv')
-            plt.legend()
-            plt.title('Least-Squares CG')
-            plt.show()
-
-        # LSQR solver
-        problemLSQR = ProblemL2Linear(x.clone().zero(), y, Iop)
-        LSQR = LSQRsolver(BasicStopper(niter=1000))
-        LSQR.run(problemLSQR, verbose=True)
-        if PLOT:
-            plt.figure(figsize=(5, 4))
-            plt.plot(x.getNdArray(), 'k', lw=1, label='x')
-            plt.plot(y.getNdArray(), '.k', label='y=x+n')
-            plt.plot(problemLSQR.model.getNdArray(), 'r', lw=2, label='x_inv')
-            plt.legend()
-            plt.title('Least-Squares LSQR')
-            plt.show()
-
-        # CG solver with L2 regularization
-        problemLSR = ProblemL2LinearReg(x.clone().zero(), y, Iop, np.sqrt(50), L)
-        CG = LCGsolver(BasicStopper(niter=30))
-        CG.run(problemLSR, verbose=True)
-        if PLOT:
-            plt.figure(figsize=(5, 4))
-            plt.plot(x.getNdArray(), 'k', lw=1, label='x')
-            plt.plot(y.getNdArray(), '.k', label='y=x+n')
-            plt.plot(problemLSR.model.getNdArray(), 'r', lw=2, label='x_inv')
-            plt.legend()
-            plt.title('Least-Squares with Laplacian reg')
-            plt.show()
-            
-        # FISTA
-        problemFISTA = ProblemL1Lasso(x.clone().zero(), y, Iop, lambda_value=1, op_norm=1)
-        FISTA = ISTAsolver(BasicStopper(niter=300), fast=True)
-        FISTA.run(problemFISTA, verbose=True)
-        if PLOT:
-            plt.figure(figsize=(5, 4))
-            plt.plot(x.getNdArray(), 'k', lw=1, label='x')
-            plt.plot(y.getNdArray(), '.k', label='y=x+n')
-            plt.plot(problemFISTA.model.getNdArray(), 'r', lw=2, label='x_inv')
-            plt.legend()
-            plt.title('FISTA inversion')
-            plt.show()
+        # if PLOT:
+        #     plt.figure(figsize=(5, 4))
+        #     plt.plot(x.getNdArray(), 'k', lw=1, label='x')
+        #     plt.plot(y.getNdArray(), '.k', label='y=x+n')
+        #     plt.plot(derivative.getNdArray(), '.b', lw=2, label='∂x')
+        #     plt.legend()
+        #     plt.title('Model, Data and Derivative')
+        #     plt.show()
+        #
+        # # CG solver
+        # problemLS = ProblemL2Linear(x.clone().zero(), y, Iop)
+        # CG = LCGsolver(BasicStopper(niter=30))
+        # CG.run(problemLS, verbose=True)
+        # if PLOT:
+        #     plt.figure(figsize=(5, 4))
+        #     plt.plot(x.getNdArray(), 'k', lw=1, label='x')
+        #     plt.plot(y.getNdArray(), '.k', label='y=x+n')
+        #     plt.plot(problemLS.model.getNdArray(), 'r', lw=2, label='x_inv')
+        #     plt.legend()
+        #     plt.title('Least-Squares CG')
+        #     plt.show()
+        #
+        # # LSQR solver
+        # problemLSQR = ProblemL2Linear(x.clone().zero(), y, Iop)
+        # LSQR = LSQRsolver(BasicStopper(niter=30))
+        # LSQR.run(problemLSQR, verbose=True)
+        # if PLOT:
+        #     plt.figure(figsize=(5, 4))
+        #     plt.plot(x.getNdArray(), 'k', lw=1, label='x')
+        #     plt.plot(y.getNdArray(), '.k', label='y=x+n')
+        #     plt.plot(problemLSQR.model.getNdArray(), 'r', lw=2, label='x_inv')
+        #     plt.legend()
+        #     plt.title('Least-Squares LSQR')
+        #     plt.show()
+        #
+        # # CG solver with L2 regularization
+        # problemLSR = ProblemL2LinearReg(x.clone().zero(), y, Iop, np.sqrt(50), L)
+        # CG = LCGsolver(BasicStopper(niter=30))
+        # CG.run(problemLSR, verbose=True)
+        # if PLOT:
+        #     plt.figure(figsize=(5, 4))
+        #     plt.plot(x.getNdArray(), 'k', lw=1, label='x')
+        #     plt.plot(y.getNdArray(), '.k', label='y=x+n')
+        #     plt.plot(problemLSR.model.getNdArray(), 'r', lw=2, label='x_inv')
+        #     plt.legend()
+        #     plt.title('CG with Laplacian reg')
+        #     plt.show()
+        #
+        # # LSQR solver with L2 regularization
+        # problemLSR_1 = ProblemL2LinearReg(x.clone().zero(), y, Iop, np.sqrt(50), L)
+        # LSQR = LSQRsolver(BasicStopper(niter=30))
+        # LSQR.run(problemLSR_1, verbose=True)
+        # if PLOT:
+        #     plt.figure(figsize=(5, 4))
+        #     plt.plot(x.getNdArray(), 'k', lw=1, label='x')
+        #     plt.plot(y.getNdArray(), '.k', label='y=x+n')
+        #     plt.plot(problemLSR_1.model.getNdArray(), 'r', lw=2, label='x_inv')
+        #     plt.legend()
+        #     plt.title('LSQR with Laplacian reg')
+        #     plt.show()
+        #
+        # # FISTA
+        # problemFISTA = ProblemL1Lasso(x.clone().zero(), y, Iop, lambda_value=1, op_norm=1)
+        # FISTA = ISTAsolver(BasicStopper(niter=300), fast=True)
+        # FISTA.run(problemFISTA, verbose=True)
+        # if PLOT:
+        #     plt.figure(figsize=(5, 4))
+        #     plt.plot(x.getNdArray(), 'k', lw=1, label='x')
+        #     plt.plot(y.getNdArray(), '.k', label='y=x+n')
+        #     plt.plot(problemFISTA.model.getNdArray(), 'r', lw=2, label='x_inv')
+        #     plt.legend()
+        #     plt.title('FISTA inversion')
+        #     plt.show()
     
         # SplitBregman
-        problemSB = ProblemLinearReg(x.clone().zero(), y, Iop, regsL1=TV, epsL1=10)
+        problemSB = ProblemLinearReg(x.clone().zero(), y, Iop, regsL1=TV, epsL1=3.)
         SB = SplitBregmanSolver(BasicStopper(niter=50), niter_inner=3, niter_solver=30,
-                                linear_solver='CG', breg_weight=1, use_prev_sol=False)
+                                linear_solver='LSQR', breg_weight=1., use_prev_sol=False)
         SB.run(problemSB, verbose=True, inner_verbose=False)
         if PLOT:
             plt.figure(figsize=(5, 4))
@@ -831,7 +780,7 @@ def main():
             plt.title('Model')
             plt.show()
 
-        G = Gauss_smooth_scipy(x, 25, 15)
+        G = pyNpOperator.Gauss_smooth_scipy(x, 25, 15)
         y = G * x
         # y.scale(1./y.norm())
         if PLOT:
@@ -907,7 +856,7 @@ def main():
             plt.imshow(h, aspect='equal'), plt.colorbar()
             plt.title('Blurring Kernel')
             plt.show()
-        Blurring = ConvNDscipy(model=x, kernel=pyVector.vectorIC(h))
+        Blurring = pyNpOperator.ConvNDscipy(model=x, kernel=pyVector.vectorIC(h))
         
         y = Blurring * x
         if PLOT:
