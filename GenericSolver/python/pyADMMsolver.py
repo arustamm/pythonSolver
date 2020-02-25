@@ -226,11 +226,13 @@ class SplitBregmanSolver(Solver):
         if not problem.op.domain.checkSame(sb_mdl):
             raise ValueError("ERROR! The initial guess and the operator domain mismatch.")
         
-        # adjust regularizers and their weights
-        epsRs = [sqrt(problem.epsL2[ireg] / 2) / sqrt(1 / 2) for ireg in range(problem.nregsL2)] + \
-                [sqrt(problem.epsL1[ireg] / 2) / sqrt(1 / 2) for ireg in range(problem.nregsL1)]
-        reg_op = pyOperator.Vstack(problem.regL2_op, problem.regL1_op)
-
+        # TODO linear_solver accepts only one regularizer and one epsilon:
+        #  we must convert reg_op to a scaled version and epsilon to 1.
+        regL2_op_scaled_list = [sqrt(problem.epsL2[i]/2)/sqrt(1/2) * problem.regL2_op.ops[i] for i in range(problem.nregsL2)]
+        regL1_op_scaled_list = [sqrt(problem.epsL1[i]/2)/sqrt(1/2) * problem.regL1_op.ops[i] for i in range(problem.nregsL1)]
+        reg_op = pyOperator.Vstack(pyOperator.Vstack(regL2_op_scaled_list) if len(regL2_op_scaled_list) != 0 else None,
+                                   pyOperator.Vstack(regL1_op_scaled_list) if len(regL1_op_scaled_list) != 0 else None)
+        
         if restart:
             self.restart.read_restart()
             outer_iter = self.restart.retrieve_parameter("iter")
@@ -292,22 +294,22 @@ class SplitBregmanSolver(Solver):
             
             for iter_inner in range(self.niter_inner):
 
-                if self.create_msg:
-                    msg = "\t\tstarting inner iter %d with a = %.2e, b = %.2e"\
-                          % (iter_inner, breg_a.norm(), breg_b.norm())
-                    if verbose:
-                        print(msg)
-                    if self.logger:
-                        self.logger.addToLog("\n" + msg)
+                # if self.create_msg:
+                #     msg = "\t\tstarting inner iter %d with a = %.2e, b = %.2e"\
+                #           % (iter_inner, breg_a.norm(), breg_b.norm())
+                #     if verbose:
+                #         print(msg)
+                #     if self.logger:
+                #         self.logger.addToLog("\n" + msg)
                 
                 # solve inner problem
                 prior = pyVector.superVector(problem.dataregsL2, breg_a.clone().scaleAdd(breg_b, 1., -1.))
-                # R = reg_op if reg_op is not None else pyOperator.Vstack([pyOperator.ZeroOp(v, v) for v in prior.vecs])
+
                 linear_problem = ProblemL2LinearReg(
                     model=sb_mdl.clone().zero() if not self.use_prev_sol else sb_mdl.clone(),
                     data=problem.data,
                     op=problem.op,
-                    epsilon=epsRs,
+                    epsilon=1.,
                     reg_op=reg_op,
                     prior_model=prior,
                     minBound=problem.minBound, maxBound=problem.maxBound, boundProj=problem.boundProj
@@ -329,13 +331,13 @@ class SplitBregmanSolver(Solver):
                 if problem.nregsL1 != 0:
                     breg_a.copy(_shrinkage(RL1x.clone() + breg_b, thresh=problem.epsL1))
                 
-                if self.create_msg:
-                    msg = "\t\tfinished inner iter %d with sb_mdl = %.2e, RL1x = %.2e"\
-                          % (iter_inner, sb_mdl.norm(), RL1x.norm())
-                    if verbose:
-                        print(msg)
-                    if self.logger:
-                        self.logger.addToLog("\n" + msg)
+                # if self.create_msg:
+                #     msg = "\t\tfinished inner iter %d with sb_mdl = %.2e, RL1x = %.2e"\
+                #           % (iter_inner, sb_mdl.norm(), RL1x.norm())
+                #     if verbose:
+                #         print(msg)
+                #     if self.logger:
+                #         self.logger.addToLog("\n" + msg)
                 
             # update breg_b
             if problem.nregsL1 != 0:
@@ -547,13 +549,22 @@ class ADMMsolver(Solver):
             # 1) update x
             # Linear Problem:       1/2 | Op x - d| + epsL2   | R2 x -  dr  |
             #                                         rho/2   | A  x - (y-u)|
+            regL2_op_scaled_list = [sqrt(problem.epsL2[i] / 2) / sqrt(1 / 2) * problem.regL2_op.ops[i] for i in
+                                    range(problem.nregsL2)]
+            regL1_op_scaled_list = [sqrt(problem.epsL1[i] / 2) / sqrt(1 / 2) * problem.regL1_op.ops[i] for i in
+                                    range(problem.nregsL1)]
+            reg_op = pyOperator.Vstack(
+                pyOperator.Vstack(regL2_op_scaled_list) if len(regL2_op_scaled_list) != 0 else None,
+                pyOperator.Vstack(regL1_op_scaled_list) if len(regL1_op_scaled_list) != 0 else None)
+            prior = pyVector.superVector(problem.dataregsL2, y.clone().scaleAdd(u, 1., -1.))
+            
             linear_problem = ProblemL2LinearReg(
                 model=admm_mdl.clone().zero() if not self.use_prev_sol else admm_mdl.clone(),
                 data=problem.data,
                 op=problem.op,
-                epsilon=problem.epsL2 + [self.rho / 2] * A.n,
-                reg_op=pyOperator.Vstack(problem.regL2_op, A),
-                prior_model=pyVector.superVector(problem.dataregsL2, y.clone() - u),
+                reg_op=reg_op,  # pyOperator.Vstack(problem.regL2_op, A),
+                epsilon=1.,     # problem.epsL2 + [self.rho / 2] * A.n,
+                prior_model=prior,
                 minBound=problem.minBound, maxBound=problem.maxBound, boundProj=problem.boundProj
             )
             if outer_iter == 0 and initial_guess is not None:
@@ -645,7 +656,7 @@ def main():
     import pyNpOperator
     
     PLOT = True
-    EXAMPLE = 'noisy'  # must be noisy, gaussian or python
+    EXAMPLE = 'noisy'  # must be noisy, gaussian or medical
     
     if EXAMPLE == 'noisy':
         # data examples
@@ -740,31 +751,33 @@ def main():
         #     plt.show()
     
         # SplitBregman
-        problemSB = ProblemLinearReg(x.clone().zero(), y, Iop, regsL1=TV, epsL1=3.)
-        SB = SplitBregmanSolver(BasicStopper(niter=50), niter_inner=3, niter_solver=30,
-                                linear_solver='LSQR', breg_weight=1., use_prev_sol=False)
-        SB.run(problemSB, verbose=True, inner_verbose=False)
-        if PLOT:
-            plt.figure(figsize=(5, 4))
-            plt.plot(x.getNdArray(), 'k', lw=1, label='x')
-            plt.plot(y.getNdArray(), '.k', label='y=x+n')
-            plt.plot(problemSB.model.getNdArray(), 'r', lw=2, label='x_inv')
-            plt.plot((TV * problemSB.model).getNdArray(), 'b', label='∂(x_inv)')
-            plt.legend()
-            plt.title('SB inversion')
-            plt.show()
+        # problemSB = ProblemLinearReg(x.clone().zero(), y, Iop, regsL1=TV, epsL1=3.)
+        # SB = SplitBregmanSolver(BasicStopper(niter=50), niter_inner=10, niter_solver=10,
+        #                         linear_solver='LSQR', breg_weight=1., use_prev_sol=False)
+        # SB.run(problemSB, verbose=True, inner_verbose=False)
+        # if PLOT:
+        #     plt.figure(figsize=(5, 4))
+        #     plt.plot(x.getNdArray(), 'k', lw=1, label='x')
+        #     plt.plot(y.getNdArray(), '.k', label='y=x+n')
+        #     plt.plot(derivative.getNdArray(), ':k', lw=1, label='∂x')
+        #     plt.plot(problemSB.model.getNdArray(), 'r', lw=2, label='x_inv')
+        #     plt.plot((TV * problemSB.model).getNdArray(), ':r', lw=2, label='∂(x_inv)')
+        #     plt.legend()
+        #     plt.title('SB inversion')
+        #     plt.show()
     
         # ADMM
-        problemADMM = ProblemLinearReg(x.clone().zero(), y, Iop, regsL1=TV, epsL1=20)
+        problemADMM = ProblemLinearReg(x.clone().zero(), y, Iop, regsL1=TV, epsL1=3.)
         
-        ADMM = ADMMsolver(BasicStopper(niter=30), niter_linear=3, niter_lasso=10)
+        ADMM = ADMMsolver(BasicStopper(niter=30), niter_linear=10, niter_lasso=10)
         ADMM.run(problemADMM, verbose=True, inner_verbose=False)
         if PLOT:
             plt.figure(figsize=(5, 4))
             plt.plot(x.getNdArray(), 'k', lw=1, label='x')
             plt.plot(y.getNdArray(), '.k', label='y=x+n')
+            plt.plot(derivative.getNdArray(), ':k', lw=1, label='∂x')
             plt.plot(problemADMM.model.getNdArray(), 'r', lw=2, label='x_inv')
-            plt.plot((TV * problemADMM.model).getNdArray(), 'b', label='∂(x_inv)')
+            plt.plot((TV * problemADMM.model).getNdArray(), ':r', lw=2, label='∂(x_inv)')
             plt.legend()
             plt.title('ADMM inversion')
             plt.show()
@@ -813,10 +826,10 @@ def main():
 
         # SplitBregman
         I = pyOperator.IdentityOp(x)
-        problemSB = ProblemLinearReg(x.clone().zero(), y, G, regsL1=I, epsL1=10., dfw=1.)
+        problemSB = ProblemLinearReg(x.clone().zero(), y, G, regsL1=I, epsL1=10.)
 
         SB = SplitBregmanSolver(BasicStopper(niter=50), niter_inner=3, niter_solver=30,
-                                steepest=False, breg_weight=1, use_prev_sol=False)
+                                linear_solver='LSQR', breg_weight=1., use_prev_sol=False)
         SB.setDefaults()
         SB.run(problemSB, verbose=True, inner_verbose=False)
         if PLOT:
@@ -826,7 +839,7 @@ def main():
             plt.show()
 
         # ADMM
-        problemADMM = ProblemLinearReg(x.clone().zero(), y, G, regsL1=I, epsL1=2., dfw=1.)
+        problemADMM = ProblemLinearReg(x.clone().zero(), y, G, regsL1=I, epsL1=2.)
 
         ADMM = ADMMsolver(BasicStopper(niter=10), niter_linear=30, niter_lasso=100)
         ADMM.setDefaults()
@@ -837,15 +850,15 @@ def main():
             plt.title('ADMM')
             plt.show()
     
-    elif EXAMPLE == 'python':
-        x = pyVector.vectorIC(np.load('../../python.npy', allow_pickle=True)[::5, ::5, 0].astype(np.float32))
+    elif EXAMPLE == 'medical':
+        x = pyVector.vectorIC(np.load('../testdata/shepp_logan_phantom.npy', allow_pickle=True).astype(np.float32))
         if PLOT:
             plt.figure(figsize=(5, 4))
-            plt.imshow(x.getNdArray()), plt.colorbar()
+            plt.imshow(x.getNdArray(), cmap='bone'), plt.colorbar()
             plt.title('Model')
             plt.show()
             
-        nh = [15, 25]
+        nh = [5, 10]
         hz = np.exp(-0.1 * np.linspace(-(nh[0] // 2), nh[0] // 2, nh[0]) ** 2)
         hx = np.exp(-0.03 * np.linspace(-(nh[1] // 2), nh[1] // 2, nh[1]) ** 2)
         hz /= np.trapz(hz)  # normalize the integral to 1
@@ -861,54 +874,50 @@ def main():
         y = Blurring * x
         if PLOT:
             plt.figure(figsize=(5, 4))
-            plt.imshow(y.getNdArray()), plt.colorbar()
+            plt.imshow(y.getNdArray(), cmap='bone'), plt.colorbar()
             plt.title('Data')
             plt.show()
             
         # CG solver
         problemLS = ProblemL2Linear(x.clone().zero(), y, Blurring)
         CG = LCGsolver(BasicStopper(niter=50))
-        CG.setDefaults()
         CG.run(problemLS, verbose=True)
         if PLOT:
             plt.figure(figsize=(5, 4))
-            plt.imshow(problemLS.model.getNdArray()), plt.colorbar()
+            plt.imshow(problemLS.model.getNdArray(), cmap='bone'), plt.colorbar()
             plt.title('CG, %d iter' % CG.stopper.niter)
             plt.show()
 
         # FISTA
-        problemFISTA = ProblemL1Lasso(x.clone().zero(), y, Blurring, lambda_value=.1, op_norm=1.)
+        problemFISTA = ProblemL1Lasso(x.clone().zero(), y, Blurring, lambda_value=1, op_norm=1.25)
         FISTA = ISTAsolver(BasicStopper(niter=100), fast=True)
-        FISTA.setDefaults()
         FISTA.run(problemFISTA, verbose=True)
         if PLOT:
             plt.figure(figsize=(5, 4))
-            plt.imshow(problemFISTA.model.getNdArray()), plt.colorbar()
+            plt.imshow(problemFISTA.model.getNdArray(), cmap='bone'), plt.colorbar()
             plt.title(r'FISTA, $\lambda$=%.2e, %d iter'
                       % (problemFISTA.lambda_value, FISTA.stopper.niter))
             plt.show()
 
         # SplitBregman
         # the gradient of the image is 6e3
-        D = pyOperator.FirstDerivative(x, axis=0) + pyOperator.FirstDerivative(x, axis=1)
+        D = pyNpOperator.TotalVariation(x)
         I = pyOperator.IdentityOp(x)
 
-        problemSB = ProblemLinearReg(x.clone().zero(), y, Blurring, dfw=1,
-                                     regsL1=D, epsL1=.01)
+        problemSB = ProblemLinearReg(x.clone().zero(), y, Blurring, regsL1=D, epsL1=.01)
         
         SB = SplitBregmanSolver(BasicStopper(niter=10), niter_inner=10, niter_solver=50,
-                                steepest=False, breg_weight=1, use_prev_sol=False)
-        SB.setDefaults(save_obj=True, save_model=True)
+                                linear_solver='LSQR', breg_weight=1, use_prev_sol=False)
         SB.run(problemSB, verbose=True, inner_verbose=False)
         if PLOT:
             plt.figure(figsize=(5, 4))
-            plt.imshow(problemSB.model.getNdArray()), plt.colorbar()
+            plt.imshow(problemSB.model.getNdArray(), cmap='bone'), plt.colorbar()
             plt.title(r'SB TV, $\varepsilon=%.2e$, %d iter'
                       % (problemSB.epsL1[0], SB.stopper.niter))
             plt.show()
 
         # ADMM
-        problemADMM = ProblemLinearReg(x.clone().zero(), y, Blurring, dfw=1.,
+        problemADMM = ProblemLinearReg(x.clone().zero(), y, Blurring,
                                      regsL1=D, epsL1=.1)
 
         ADMM = ADMMsolver(BasicStopper(niter=10), niter_linear=30, niter_lasso=10)
@@ -916,13 +925,13 @@ def main():
         ADMM.run(problemADMM, verbose=True, inner_verbose=True)
         if PLOT:
             plt.figure(figsize=(5, 4))
-            plt.imshow(problemADMM.model.getNdArray()), plt.colorbar()
+            plt.imshow(problemADMM.model.getNdArray(), cmap='bone'), plt.colorbar()
             plt.title(r'ADMM TV, $\varepsilon=%.2e$, %d iter'
                       % (problemADMM.epsL1[0], ADMM.stopper.niter))
             plt.show()
         
     else:
-        raise ValueError("EXAMPLE has to be one of noisy, gaussian, python")
+        raise ValueError("EXAMPLE has to be one of noisy, gaussian, medical")
 
     return 0
 
