@@ -1,12 +1,14 @@
-# Module containing the definition of the operator necessary for the solver class
-# It takes vector objects from the pyVector class
+# Module containing the definition of numpy-based operators
 
 from __future__ import division, print_function, absolute_import
 import time
 from copy import deepcopy
 import numpy as np
 from pyVector import vector
+from pyOperator import Operator
 import sep_util
+from scipy.signal import convolve, correlate
+from scipy.ndimage import gaussian_filter
 
 
 class MatrixOp(Operator):
@@ -80,7 +82,6 @@ class FirstDerivative(Operator):
         :param axis     : int; axis along which to compute the derivative [0]
         """
         self.sampling = sampling
-        self.data_tmp = model.clone().zero()
         self.dims = model.getNdArray().shape
         self.axis = axis if axis >= 0 else len(self.dims) + axis
         super(FirstDerivative, self).__init__(model, model)
@@ -92,7 +93,7 @@ class FirstDerivative(Operator):
         """Forward operator"""
         self.checkDomainRange(model, data)
         if add:
-            self.data_tmp.copy(data)
+            data_tmp = data.clone()
         data.zero()
         # Getting Ndarrays
         x = model.clone().getNdArray()
@@ -100,36 +101,36 @@ class FirstDerivative(Operator):
             x = np.swapaxes(x, self.axis, 0)
         y = np.zeros(x.shape)
         
-        y[:-1] = (x[1:] - x[:-1]) / self.sampling / 2
-        
+        y[:-1] = (x[1:] - x[:-1]) / self.sampling
+        y[-1] = 0
         if self.axis > 0:  # reset axis order
             y = np.swapaxes(y, 0, self.axis)
         data.getNdArray()[:] = y
         if add:
-            data.scaleAdd(self.data_tmp)
+            data.scaleAdd(data_tmp)
         return
     
     def adjoint(self, add, model, data):
         """Adjoint operator"""
         self.checkDomainRange(model, data)
         if add:
-            self.data_tmp.copy(model)
+            model_temp = model.clone()
         model.zero()
         # Getting Ndarrays
-        y = data.clone().getNdArray().reshape(self.dims)
+        y = data.clone().getNdArray()
         if self.axis > 0:  # need to bring the dim. to derive to first dim
             y = np.swapaxes(y, self.axis, 0)
         x = np.zeros(y.shape)
         
-        x[0] = -y[0] / self.sampling / 2
-        x[1:-1] = (-y[1:-1] + y[:-2]) / self.sampling / 2
-        x[-1] = y[-2] / self.sampling / 2
+        x[0] = -y[0] / self.sampling
+        x[1:-1] = (-y[1:-1] + y[:-2]) / self.sampling
+        x[-1] = y[-2] / self.sampling
         
         if self.axis > 0:
             x = np.swapaxes(x, 0, self.axis)
         model.getNdArray()[:] = x
         if add:
-            model.scaleAdd(self.data_tmp)
+            model.scaleAdd(model_temp)
         return
 
 
@@ -294,3 +295,82 @@ class Laplacian(Operator):
     
     def adjoint(self, add, model, data):
         return self.op.adjoint(add, model, data)
+
+
+# TODO Fix ConvND scipy for Matching Filters
+class ConvNDscipy(Operator):
+    """
+    ND convolution square operator in the model space
+
+    :param model    :  [no default] - vector class; domain vector
+    :param kernel   :  [no default] - vector class; kernel vector
+    :param method   : [auto] - str; how to compute the convolution [auto, direct, fft]
+    :return         : Convolution Operator
+    """
+
+    def __init__(self, model, kernel, method='auto'):
+    
+        self.kernel = kernel.getNdArray()
+        self.method = method
+        self.data_tmp = model.clone().zero()
+        super(ConvNDscipy, self).__init__(model, model)
+
+    def __str__(self):
+        return "ConvScipy"
+
+    def forward(self, add, model, data):
+        self.checkDomainRange(model, data)
+        if add:
+            self.data_tmp.copy(data)
+        data.zero()
+        data.getNdArray()[:] = convolve(model.getNdArray(), self.kernel,
+                                        mode='same', method=self.method)
+        if add:
+            data.scaleAdd(self.data_tmp)
+        return
+
+    def adjoint(self, add, model, data):
+        self.checkDomainRange(model, data)
+        if add:
+            self.data_tmp.copy(model)
+        model.zero()
+        model.getNdArray()[:] = correlate(data.getNdArray(), self.kernel,
+                                          mode='same', method=self.method)
+        if add:
+            model.scaleAdd(self.data_tmp)
+        return
+
+
+# TODO test and rename
+class Gauss_smooth_scipy(Operator):
+    def __init__(self, model, sigmax, sigmaz):
+        """
+        Gaussian 2D smoothing operator using scipy smoothing:
+        model    = [no default] - vector class; domain vector
+        sigmax   = [no default] - float; standard deviation along the x direction
+        sigmaz   = [no default] - float; standard deviation along the z direction
+        """
+        self.setDomainRange(model, model)
+        self.sigmax = sigmax
+        self.sigmaz = sigmaz
+        self.scaling = 2.0 * np.pi * sigmax * sigmaz  # in order to have the max amplitude 1
+        return
+
+    def __str__(self):
+        return "GauSmoot"
+
+    def forward(self, add, model, data):
+        """Forward operator"""
+        self.checkDomainRange(model, data)
+        if not add:
+            data.zero()
+        # Getting Ndarrays
+        model_arr = model.getNdArray()
+        data_arr = data.getNdArray()
+        data_arr[:] = self.scaling * gaussian_filter(model_arr, sigma=[self.sigmax, self.sigmaz])
+        return
+
+    def adjoint(self, add, model, data):
+        """Self-adjoint operator"""
+        self.forward(add, data, model)
+        return
