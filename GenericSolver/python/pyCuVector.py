@@ -323,13 +323,14 @@ class vectorCupy(vector):
 
 
 if __name__ == '__main__':
-    from pyCuOperator import scalingOp
+    import pyCuOperator
     
-    x = vectorCupy(np.empty((100, 200))).set(1.)
+    x = vectorCupy(np.empty((1000, 20000))).set(1.)
     x.printDevice()
     
+    D = pyCuOperator.FirstDerivative(x)
     n = x.clone().rand()
     y = x.clone().set(10) + 0.01 * n
-    S = scalingOp(x, 10)
+    S = pyCuOperator.scalingOp(x, 10)
     xinv = S / y
     print('Error norm = %.2e' % (xinv.norm() - x.norm()))

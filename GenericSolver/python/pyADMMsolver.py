@@ -86,6 +86,8 @@ class ProblemLinearReg(Problem):
         self.res_data_already_computed = False
         self.res_regsL1_already_computed = False
         self.res_regsL2_already_computed = False
+        
+        # TODO add compatibility with L2 problems and Lasso
 
     def __del__(self):
         """Default destructor"""
@@ -147,7 +149,7 @@ class ProblemLinearReg(Problem):
         
         return self.res
     
-
+    
 def _shrinkage(x, thresh, eps=1e-10):
     """
     Shrinkage function Gamma
@@ -549,15 +551,13 @@ class ADMMsolver(Solver):
             # 1) update x
             # Linear Problem:       1/2 | Op x - d| + epsL2   | R2 x -  dr  |
             #                                         rho/2   | A  x - (y-u)|
-            regL2_op_scaled_list = [sqrt(problem.epsL2[i] / 2) / sqrt(1 / 2) * problem.regL2_op.ops[i] for i in
-                                    range(problem.nregsL2)]
-            regL1_op_scaled_list = [sqrt(problem.epsL1[i] / 2) / sqrt(1 / 2) * problem.regL1_op.ops[i] for i in
-                                    range(problem.nregsL1)]
+            regL2_op_scaled_list = [problem.epsL2[i] * problem.regL2_op.ops[i] for i in range(problem.nregsL2)]
+            regA_op_scaled_list = [self.rho / 2 * A.ops[i] for i in range(A.n)]
             reg_op = pyOperator.Vstack(
                 pyOperator.Vstack(regL2_op_scaled_list) if len(regL2_op_scaled_list) != 0 else None,
-                pyOperator.Vstack(regL1_op_scaled_list) if len(regL1_op_scaled_list) != 0 else None)
+                pyOperator.Vstack(regA_op_scaled_list) if len(regA_op_scaled_list) != 0 else None,
+            )
             prior = pyVector.superVector(problem.dataregsL2, y.clone().scaleAdd(u, 1., -1.))
-            
             linear_problem = ProblemL2LinearReg(
                 model=admm_mdl.clone().zero() if not self.use_prev_sol else admm_mdl.clone(),
                 data=problem.data,
@@ -570,7 +570,6 @@ class ADMMsolver(Solver):
             if outer_iter == 0 and initial_guess is not None:
                 linear_problem.model = initial_guess.clone()
             
-            self.solver_linear.setDefaults()
             self.solver_linear.run(linear_problem, verbose=inner_verbose)
             
             admm_mdl = linear_problem.model.clone()
@@ -749,22 +748,22 @@ def main():
         #     plt.legend()
         #     plt.title('FISTA inversion')
         #     plt.show()
-    
+        
         # SplitBregman
-        # problemSB = ProblemLinearReg(x.clone().zero(), y, Iop, regsL1=TV, epsL1=3.)
-        # SB = SplitBregmanSolver(BasicStopper(niter=50), niter_inner=10, niter_solver=10,
-        #                         linear_solver='LSQR', breg_weight=1., use_prev_sol=False)
-        # SB.run(problemSB, verbose=True, inner_verbose=False)
-        # if PLOT:
-        #     plt.figure(figsize=(5, 4))
-        #     plt.plot(x.getNdArray(), 'k', lw=1, label='x')
-        #     plt.plot(y.getNdArray(), '.k', label='y=x+n')
-        #     plt.plot(derivative.getNdArray(), ':k', lw=1, label='∂x')
-        #     plt.plot(problemSB.model.getNdArray(), 'r', lw=2, label='x_inv')
-        #     plt.plot((TV * problemSB.model).getNdArray(), ':r', lw=2, label='∂(x_inv)')
-        #     plt.legend()
-        #     plt.title('SB inversion')
-        #     plt.show()
+        problemSB = ProblemLinearReg(x.clone().zero(), y, Iop, regsL1=TV, epsL1=3.)
+        SB = SplitBregmanSolver(BasicStopper(niter=50), niter_inner=10, niter_solver=10,
+                                linear_solver='LSQR', breg_weight=1., use_prev_sol=False)
+        SB.run(problemSB, verbose=True, inner_verbose=False)
+        if PLOT:
+            plt.figure(figsize=(5, 4))
+            plt.plot(x.getNdArray(), 'k', lw=1, label='x')
+            plt.plot(y.getNdArray(), '.k', label='y=x+n')
+            plt.plot(derivative.getNdArray(), ':k', lw=1, label='∂x')
+            plt.plot(problemSB.model.getNdArray(), 'r', lw=2, label='x_inv')
+            plt.plot((TV * problemSB.model).getNdArray(), ':r', lw=2, label='∂(x_inv)')
+            plt.legend()
+            plt.title('SB inversion')
+            plt.show()
     
         # ADMM
         problemADMM = ProblemLinearReg(x.clone().zero(), y, Iop, regsL1=TV, epsL1=3.)
