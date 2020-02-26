@@ -4,6 +4,7 @@ import sys
 sys.path.insert(0, "../../python")
 import pyVector as Vec
 import pyOperator as Op
+from pyNpOperator import MatrixOp
 from pyLinearSolver import LCGsolver as LCG
 from pyLinearSolver import SymLCGsolver as SymLCGsolver
 import pyProblem as Prblm
@@ -28,7 +29,7 @@ if __name__ == '__main__':
     # Matrix to be inverted
     A = np.random.rand(200, 100)
     # Create operator
-    MatMult = Op.MatrixOp(A, model_vec, data_vec)
+    MatMult = MatrixOp(A, model_vec, data_vec)
     # Create L2-norm linear problem
     L2Prob = Prblm.ProblemL2Linear(model_vec, data_vec, MatMult)
     # L2ProbReg = Prblm.ProblemL2LinearReg(model_vec, data_vec, MatMult, 0.0001)
@@ -65,9 +66,9 @@ if __name__ == '__main__':
     # Constant derivative
     data_vec_sym.set(1.)
     # Create operator
-    MatMultSym = Op.MatrixOp(A, model_vec_sym, data_vec_sym)
+    MatMultSym = MatrixOp(A, model_vec_sym, data_vec_sym)
     # Inverse of A as preconditioning
-    Prec = Op.MatrixOp(np.linalg.inv(A), model_vec_sym, data_vec_sym)
+    Prec = MatrixOpOp(np.linalg.inv(A), model_vec_sym, data_vec_sym)
     # Computing max and min eigenvalues using power method
     # eg,vec=MatMultSym.powerMethod(verbose=False,eval_min=True,return_vec=True,tol=1e-18)
     # print("power",eg)

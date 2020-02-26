@@ -122,6 +122,14 @@ class DaskClient:
             self.cluster.scale(n_workers)
             # Creating dask Client
             self.client = daskD.Client(self.cluster)
+            workers = 0
+            t0 = time.time()
+            while workers < n_workers:
+                workers = len(self.client.get_worker_logs().keys())
+                # If the number of workers is not reached in 5 minutes raise exception
+                if time.time() - t0 > 300.0:
+                    raise SystemError(
+                        "Dask could not start the requested workers within 5 minutes! Try different hostnames.")
             self.WorkerIds = list(self.client.get_worker_logs().keys())
         else:
             raise ValueError("Either hostnames or pbs_params must be provided!")
