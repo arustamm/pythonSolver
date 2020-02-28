@@ -466,15 +466,12 @@ def ZeroPad(domain, pad):
 
 
 def _pad_vectorIC(vec, pad):
-    if not isinstance(vec, vector):
-        raise ValueError("ERROR! Provided vector must be of vector type")
+    if not isinstance(vec, vectorIC):
+        raise ValueError("ERROR! Provided vector must be of vectorIC type")
     assert len(vec.shape) == len(pad), "Dimensions of vector and padding mismatch!"
 
     vec_new_shape = tuple(np.asarray(vec.shape) + [sum(pad[_]) for _ in range(len(pad))])
-    if isinstance(vec, vectorIC):
-        return vectorIC(np.empty(vec_new_shape, dtype=vec.getNdArray().dtype))
-    else:
-        raise ValueError("ERROR! For now only vectorIC is supported!")
+    return vectorIC(np.empty(vec_new_shape, dtype=vec.getNdArray().dtype))
 
 
 class _ZeroPadIC(Operator):
@@ -505,9 +502,7 @@ class _ZeroPadIC(Operator):
         self.checkDomainRange(model, data)
         if add:
             temp = data.clone()
-        y = data.getNdArray()
-        x = model.getNdArray()
-        y = np.pad(x, self.pad, mode='constant')
+        y = np.pad(model.arr, self.pad, mode='constant')
         data.arr = y
         if add:
             data.scaleAdd(temp, 1., 1.)
@@ -532,10 +527,10 @@ if __name__ == '__main__':
     # pad = ((2,2), (3,3))
     # P = ZeroPad(x, pad)
     # P.dotTest()
-    #
     # xx = superVector(x, x)
     # PP = ZeroPad(xx, pad)
     # PP.dotTest()
+    
     np.random.seed(1)
     y = vectorIC(np.random.rand(301, 601))
     F = FourierTransform(y, nffts=[512, 1024])
@@ -547,4 +542,3 @@ if __name__ == '__main__':
     yyfft = FF * yy
     FF.dotTest(True)
     print(0)
- 
