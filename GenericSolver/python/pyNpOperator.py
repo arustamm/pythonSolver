@@ -1,14 +1,19 @@
 # Module containing the definition of numpy-based operators
 
 from __future__ import division, print_function, absolute_import
-import time
-from copy import deepcopy
 import numpy as np
-from pyVector import vector
-from pyOperator import Operator
+from pyVector import *
+from pyOperator import Operator, Dstack
 import sep_util
 from scipy.signal import convolve, correlate
 from scipy.ndimage import gaussian_filter
+try:
+    import pywt
+except ModuleNotFoundError:
+    import subprocess
+    import sys
+    subprocess.call([sys.executable, "-m", "pip", "install", "PyWavelets"])
+    import pywt
 
 
 class MatrixOp(Operator):
@@ -297,23 +302,55 @@ class Laplacian(Operator):
         return self.op.adjoint(add, model, data)
 
 
-# TODO Fix ConvND scipy for Matching Filters
+class GaussianFilter(Operator):
+    def __init__(self, model, sigma):
+        """
+        Gaussian smoothing operator using scipy smoothing:
+        model    = [no default] - vector class; domain vector
+        sigma   = [no default] - scalar or sequence of scalars; standard deviation along the model directions
+        """
+        self.setDomainRange(model, model)
+        self.sigma = sigma
+        self.scaling = 2.0 * np.pi * np.prod(self.sigma)  # in order to have the max amplitude 1
+        return
+
+    def __str__(self):
+        return "GausFilt"
+
+    def forward(self, add, model, data):
+        """Forward operator"""
+        self.checkDomainRange(model, data)
+        if not add:
+            data.zero()
+        # Getting Ndarrays
+        model_arr = model.getNdArray()
+        data_arr = data.getNdArray()
+        data_arr[:] = self.scaling * gaussian_filter(model_arr, sigma=self.sigma)
+        return
+
+    def adjoint(self, add, model, data):
+        """Self-adjoint operator"""
+        self.forward(add, data, model)
+        return
+
+
+# TODO Fix ConvNDscipy for Matching Filters applications
 class ConvNDscipy(Operator):
     """
-    ND convolution square operator in the model space
+    ND convolution square operator in the domain space
 
-    :param model    :  [no default] - vector class; domain vector
-    :param kernel   :  [no default] - vector class; kernel vector
+    :param domain   : [no default] - vector class; domain vector
+    :param kernel   : [no default] - vector class; kernel vector
     :param method   : [auto] - str; how to compute the convolution [auto, direct, fft]
     :return         : Convolution Operator
     """
 
-    def __init__(self, model, kernel, method='auto'):
+    def __init__(self, domain, kernel, method='auto'):
     
         self.kernel = kernel.getNdArray()
         self.method = method
-        self.data_tmp = model.clone().zero()
-        super(ConvNDscipy, self).__init__(model, model)
+        self.data_tmp = domain.clone().zero()
+        super(ConvNDscipy, self).__init__(domain, domain)
 
     def __str__(self):
         return "ConvScipy"
@@ -341,36 +378,173 @@ class ConvNDscipy(Operator):
         return
 
 
-# TODO test and rename
-class Gauss_smooth_scipy(Operator):
-    def __init__(self, model, sigmax, sigmaz):
-        """
-        Gaussian 2D smoothing operator using scipy smoothing:
-        model    = [no default] - vector class; domain vector
-        sigmax   = [no default] - float; standard deviation along the x direction
-        sigmaz   = [no default] - float; standard deviation along the z direction
-        """
-        self.setDomainRange(model, model)
-        self.sigmax = sigmax
-        self.sigmaz = sigmaz
-        self.scaling = 2.0 * np.pi * sigmax * sigmaz  # in order to have the max amplitude 1
-        return
+def FourierTransform(domain, dirs=None, nffts=None, sampling=1., dtype=np.complex128):
+    if isinstance(domain, vectorIC):
+        return _FFT_IC(domain, dirs, nffts, sampling, dtype)
+    elif isinstance(domain, superVector):
+        # TODO add the possibility to have different settings for each sub-vector
+        return Dstack([_FFT_IC(v, dirs, nffts, sampling, dtype) for v in domain.vecs])
+    else:
+        raise ValueError("ERROR! Provided domain has to be either vector or superVector")
 
+
+class _FFT_IC(Operator):
+    
+    def __init__(self, domain, dirs=None, nffts=None, sampling=1., dtype=np.complex128):
+        """
+        :param domain   : vector class; domain vector
+        :param dirs     : scalar of sequence of scalars
+                            directions along which to compute the FFT
+        :param nffts    : scalar or sequence of scalars
+                            number of FFT points
+        :param sampling : scalar or sequence of scalars
+                            sampling step for FFT computation
+        :return         : FFT Operator
+        """
+        assert isinstance(domain, vectorIC), "Domain has to be a vectorIC object (for now)"
+        self.dims = domain.shape
+        if dirs is None:
+            self.dirs = list(range(len(self.dims)))
+        else:
+            self.dirs = [int(dirs[_]) for _ in range(len(dirs))]
+            assert len(self.dirs) <= len(self.dims), "The number of FFT directions is greater than the domain dimensionality"
+        
+        if nffts is None:
+            self.nffts = self.dims
+        else:
+            self.nffts = [int(nffts[_]) for _ in range(len(nffts))]
+            assert len(self.nffts) <= len(self.dims), "The number of FFT points is greater than the domain dimensionality"
+        
+        if np.isscalar(sampling):
+            self.sampling = [sampling] * len(self.nffts)
+        else:
+            self.sampling = list(sampling)
+            assert len(self.sampling) <= len(self.nffts), "The number of FFT samplings is greater than the domain dimensionality"
+        
+        assert len(self.nffts) == len(self.sampling) == len(self.dirs), "Provided parameters dimensions mismatch"
+        
+        super(_FFT_IC, self).__init__(domain, vectorIC(np.zeros(self.nffts, dtype=dtype)))
+        
+        # store vectors of frequency bins
+        self.weight = np.sqrt(np.prod(self.nffts))
+        self.sampling_frequencies = [np.fft.fftfreq(nfft, d=samp) for nfft, samp in zip(self.nffts, self.sampling)]
+    
     def __str__(self):
-        return "GauSmoot"
-
+        return "Fourier "
+    
     def forward(self, add, model, data):
-        """Forward operator"""
+        """Compute FFT on model and save to data"""
         self.checkDomainRange(model, data)
         if not add:
             data.zero()
-        # Getting Ndarrays
-        model_arr = model.getNdArray()
-        data_arr = data.getNdArray()
-        data_arr[:] = self.scaling * gaussian_filter(model_arr, sigma=[self.sigmax, self.sigmaz])
+        data.arr += 1./self.weight * np.fft.fftn(model.getNdArray(), s=self.nffts, axes=self.dirs)
         return
 
     def adjoint(self, add, model, data):
-        """Self-adjoint operator"""
-        self.forward(add, data, model)
+        """Compute IFFT on data and save to model"""
+        self.checkDomainRange(model, data)
+        if add:
+            temp = model.clone()
+        model_arr = self.weight * np.fft.ifftn(data.getNdArray(), s=self.nffts, axes=self.dirs)
+        for direction in self.dirs:
+            model_arr = np.take(model_arr, range(self.dims[direction]), axis=direction)
+        
+        model.arr = model_arr
+        if add:
+            model.scaleAdd(temp, 1., 1.)
         return
+
+
+def ZeroPad(domain, pad):
+    if isinstance(domain, vectorIC):
+        return _ZeroPadIC(domain, pad)
+    elif isinstance(domain, superVector):
+        # TODO add the possibility to have different padding for each sub-vector
+        return Dstack([_ZeroPadIC(v, pad) for v in domain.vecs])
+    else:
+        raise ValueError("ERROR! Provided domain has to be either vector or superVector")
+
+
+def _pad_vectorIC(vec, pad):
+    if not isinstance(vec, vector):
+        raise ValueError("ERROR! Provided vector must be of vector type")
+    assert len(vec.shape) == len(pad), "Dimensions of vector and padding mismatch!"
+
+    vec_new_shape = tuple(np.asarray(vec.shape) + [sum(pad[_]) for _ in range(len(pad))])
+    if isinstance(vec, vectorIC):
+        return vectorIC(np.empty(vec_new_shape, dtype=vec.getNdArray().dtype))
+    else:
+        raise ValueError("ERROR! For now only vectorIC is supported!")
+
+
+class _ZeroPadIC(Operator):
+
+    def __init__(self, domain, pad):
+        """ Zero Pad operator.
+        
+        To pad 2 values to each side of the first dim, and 3 values to each side of the second dim, use:
+            pad=((2,2), (3,3))
+        :param domain: vectorIC class
+        :param pad: scalar or sequence of scalars
+            Number of samples to pad in each dimension.
+            If a single scalar is provided, it is assigned to every dimension.
+        """
+        if isinstance(domain, vectorIC):
+            self.dims = domain.shape
+            pad = [(pad, pad)] * len(self.dims) if pad is np.isscalar else list(pad)
+            if (np.array(pad) < 0).any():
+                raise ValueError('Padding must be positive or zero')
+            self.pad = pad
+            super(_ZeroPadIC, self).__init__(domain, _pad_vectorIC(domain, self.pad))
+
+    def __str__(self):
+        return "ZeroPad "
+    
+    def forward(self, add, model, data):
+        """Zero padding"""
+        self.checkDomainRange(model, data)
+        if add:
+            temp = data.clone()
+        y = data.getNdArray()
+        x = model.getNdArray()
+        y = np.pad(x, self.pad, mode='constant')
+        data.arr = y
+        if add:
+            data.scaleAdd(temp, 1., 1.)
+        return
+
+    def adjoint(self, add, model, data):
+        """Extract non-zero subsequence"""
+        self.checkDomainRange(model, data)
+        if add:
+            temp = model.clone()
+        x = data.clone().arr
+        for ax, pad in enumerate(self.pad):
+            x = np.take(x, pad[0] + np.arange(self.dims[ax]), axis=ax)
+        model.arr = x
+        if add:
+            model.scaleAdd(temp, 1., 1.)
+        return
+
+
+if __name__ == '__main__':
+    # x = vectorIC(np.arange(9).reshape((3, 3)))
+    # pad = ((2,2), (3,3))
+    # P = ZeroPad(x, pad)
+    # P.dotTest()
+    #
+    # xx = superVector(x, x)
+    # PP = ZeroPad(xx, pad)
+    # PP.dotTest()
+    np.random.seed(1)
+    y = vectorIC(np.random.rand(301, 601))
+    F = FourierTransform(y, nffts=[512, 1024])
+    yfft = F * y
+    F.dotTest(True)
+    
+    yy = superVector(y, y)
+    FF = FourierTransform(yy, nffts=[512, 1024])
+    yyfft = FF * yy
+    FF.dotTest(True)
+    print(0)
+ 
