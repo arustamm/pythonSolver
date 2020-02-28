@@ -258,10 +258,10 @@ class Operator:
         dt2 = r1.dot(r2)
         
         # Dot-product testing
+        err_rel = (abs(dt1) - abs(dt2)) / abs(dt2)
         if verbose:
             print("Dot products add=False: domain=%.2e range=%.2e " % (abs(dt1), abs(dt2)))
             print("Absolute error: %.2e" % (abs(dt1) - abs(dt2)))
-            err_rel = (abs(dt1) - abs(dt2)) / abs(dt2)
             print("Relative error: %.2e \n" % err_rel)
         if err_rel > tol:
             # Deleting temporary vectors
@@ -286,11 +286,10 @@ class Operator:
         # Computing dot products
         dt1 = d1.dot(d2)
         dt2 = r1.dot(r2)
-        
+        err_rel = (abs(dt1) - abs(dt2)) / abs(dt2)
         if verbose:
             print("Dot products add=True: domain=%.2e range=%.2e " % (abs(dt1), abs(dt2)))
             print("Absolute error: %.2e" % (abs(dt1) - abs(dt2)))
-            err_rel = (abs(dt1) - abs(dt2)) / abs(dt2)
             print("Relative error: %.2e \n" % err_rel)
         if err_rel > tol:
             # Deleting temporary vectors
