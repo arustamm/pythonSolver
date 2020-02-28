@@ -85,6 +85,10 @@ class vector:
     def getNdArray(self):
         """Function to return Ndarray of the vector"""
         raise NotImplementedError("getNdArray must be overwritten")
+    
+    @property
+    def shape(self):
+        return self.getNdArray().shape
 
     def norm(self, N=2):
         """Function to compute vector N-norm"""
@@ -266,7 +270,11 @@ class superVector(vector):
     def getNdArray(self):
         """Function to return Ndarray of the vector"""
         return [self.vecs[idx].getNdArray() for idx in range(self.n)]
-
+    
+    @property
+    def shape(self):
+        return [self.vecs[idx].shape for idx in range(self.n)]
+    
     def norm(self, N=2):
         """Function to compute vector N-norm"""
         norm = np.power([self.vecs[idx].norm(N) for idx in range(self.n)], N)
