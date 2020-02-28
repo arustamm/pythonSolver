@@ -575,6 +575,57 @@ class Hstack(Operator):
             self.ops[idx].adjoint(add, model.vecs[idx], data)
 
 
+class Dstack(Operator):
+    """
+    Diagonal stack of operators
+    y1 = | A  0 |  x1
+    y2   | 0  B |  x2
+    """
+
+    def __init__(self, *args):
+        """Constructor for the stacked operator"""
+    
+        self.ops = []
+        for _, arg in enumerate(args):
+            if arg is None:
+                continue
+            elif isinstance(arg, Operator):
+                self.ops.append(arg)
+            elif isinstance(arg, list):
+                for op in arg:
+                    if op is None:
+                        continue
+                    elif isinstance(op, Operator):
+                        self.ops.append(op)
+            else:
+                raise TypeError('Argument must be either Operator or list of Operators')
+    
+        # build domain and range
+        self.n = len(self.ops)
+        op_range = []
+        op_domain = []
+        for idx in range(self.n):
+            op_domain += [self.ops[idx].domain]
+            op_range += [self.ops[idx].range]
+    
+        super(Dstack, self).__init__(domain=superVector(op_domain), range=superVector(op_range))
+
+    def __str__(self):
+        return " DStack "
+
+    def forward(self, add, model, data):
+        """Forward operator"""
+        self.checkDomainRange(model, data)
+        for idx in range(self.n):
+            self.ops[idx].forward(add, model.vecs[idx], data.vecs[idx])
+
+    def adjoint(self, add, model, data):
+        """Adjoint operator"""
+        self.checkDomainRange(model, data)
+        for idx in range(self.n):
+            self.ops[idx].adjoint(add, model.vecs[idx], data.vecs[idx])
+
+
 # for backward compatibility
 Transpose = Operator.H
 sumOperator = _sumOperator
