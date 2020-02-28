@@ -259,10 +259,11 @@ class Operator:
         
         # Dot-product testing
         if verbose:
-            print("Dot products add=False: domain=%.2e range=%.2e " % (dt1, dt2))
-            print("Absolute error: %.2e" % (abs(dt1 - dt2)))
-            print("Relative error: %.2e \n" % (abs((dt1 - dt2) / dt2)))
-        if abs((dt1 - dt2) / dt1) > tol:
+            print("Dot products add=False: domain=%.2e range=%.2e " % (abs(dt1), abs(dt2)))
+            print("Absolute error: %.2e" % (abs(dt1) - abs(dt2)))
+            err_rel = (abs(dt1) - abs(dt2)) / abs(dt2)
+            print("Relative error: %.2e \n" % err_rel)
+        if err_rel > tol:
             # Deleting temporary vectors
             del d1, d2, r1, r2
             raise Warning("Dot products failure add=False; relative error greater than tolerance of %.2e" % tol)
@@ -287,10 +288,11 @@ class Operator:
         dt2 = r1.dot(r2)
         
         if verbose:
-            print("Dot products add=True: domain=%.2e range=%.2e " % (dt1, dt2))
-            print("Absolute error: %.2e" % (abs(dt1 - dt2)))
-            print("Relative error: %.2e \n" % (abs((dt1 - dt2) / dt2)))
-        if abs((dt1 - dt2) / dt1) > tol:
+            print("Dot products add=True: domain=%.2e range=%.2e " % (abs(dt1), abs(dt2)))
+            print("Absolute error: %.2e" % (abs(dt1) - abs(dt2)))
+            err_rel = (abs(dt1) - abs(dt2)) / abs(dt2)
+            print("Relative error: %.2e \n" % err_rel)
+        if err_rel > tol:
             # Deleting temporary vectors
             del d1, d2, r1, r2
             raise Warning("Dot products failure add=True; relative error greater than tolerance of %.2e" % tol)
