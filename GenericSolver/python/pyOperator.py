@@ -23,7 +23,7 @@ class Operator:
         return
     
     def __str__(self):
-        return "ParentOp"
+        return "Operator"
     
     # unary operators
     def __add__(self, other):  # self + other
