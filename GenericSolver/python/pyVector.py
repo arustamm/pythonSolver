@@ -85,7 +85,7 @@ class vector:
     def getNdArray(self):
         """Function to return Ndarray of the vector"""
         raise NotImplementedError("getNdArray must be overwritten")
-    
+
     @property
     def shape(self):
         return self.getNdArray().shape
@@ -270,11 +270,11 @@ class superVector(vector):
     def getNdArray(self):
         """Function to return Ndarray of the vector"""
         return [self.vecs[idx].getNdArray() for idx in range(self.n)]
-    
+
     @property
     def shape(self):
         return [self.vecs[idx].shape for idx in range(self.n)]
-    
+
     def norm(self, N=2):
         """Function to compute vector N-norm"""
         norm = np.power([self.vecs[idx].norm(N) for idx in range(self.n)], N)
@@ -615,14 +615,15 @@ class vectorIC(vector):
                     fid.write("n%s=%s o%s=0.0 d%s=1.0 \n" % (append_dim, n_vec + 1, append_dim, append_dim))
                 fid.close()
         # Writing binary file
-        format = '>f' if self.getNdArray().dtype != np.complex64 else '>c8'
+        fmt = '>f' if self.getNdArray().dtype != np.complex64 else '>c8'
         with open(binfile, mode + 'b') as fid:
             # Writing big-ending floating point number
             if np.isfortran(self.getNdArray()):  # Forcing column-wise binary writing
-                self.getNdArray().flatten('F').tofile(fid,format=format)
+                self.getNdArray().flatten('F').astype(fmt).tofile(fid)
+                # self.getNdArray().flatten('F').tofile(fid,format=fmt)
             else:
-                # self.getNdArray().astype(format).tofile(fid)
-                self.getNdArray().tofile(fid,format=format)
+                self.getNdArray().astype(fmt).tofile(fid)
+                # self.getNdArray().tofile(fid,format=fmt)
         fid.close()
         return
 
