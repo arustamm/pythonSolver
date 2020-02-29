@@ -9,10 +9,10 @@ from scipy.signal import convolve, correlate
 from scipy.ndimage import gaussian_filter
 try:
     import pywt
-except ModuleNotFoundError:
+except ImportError:
     import subprocess
     import sys
-    subprocess.call([sys.executable, "-m", "pip", "install", "PyWavelets"])
+    subprocess.call([sys.executable, "-m", "pip", "install", "PyWavelets","--user"])
     import pywt
 
 

@@ -254,7 +254,7 @@ class LCGsolver(pySolver.Solver):
                 if precond:
                     cg_dmodl.scale(1.0 / alpha)  # Unscaling the search direction
                 else:
-                    # copying previos residuals dres = res_old
+                    # copying previous residuals dres = res_old
                     cg_dres.copy(prblm_res)
                     # Computing actual change in the residual vector dres = res_new - res_old
                     prblm_res = problem.get_res(cg_mdl)  # New residual vector

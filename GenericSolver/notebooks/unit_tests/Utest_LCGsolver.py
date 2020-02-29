@@ -52,7 +52,7 @@ if __name__ == '__main__':
     # Create L2-norm linear problem
     # L2Prob_outcore = Prblm.ProblemL2Linear(model_vecOC,data_vecOC,MatMultOC)
     # Running the solver
-    LCGsolver.setDefaults()
+    # LCGsolver.setDefaults()
     # LCGsolver.run(L2Prob_outcore,True)
 
     # Testing inversion of a symmetric matrix (second-order derivative operator)
@@ -68,7 +68,7 @@ if __name__ == '__main__':
     # Create operator
     MatMultSym = MatrixOp(A, model_vec_sym, data_vec_sym)
     # Inverse of A as preconditioning
-    Prec = MatrixOpOp(np.linalg.inv(A), model_vec_sym, data_vec_sym)
+    Prec = MatrixOp(np.linalg.inv(A), model_vec_sym, data_vec_sym)
     # Computing max and min eigenvalues using power method
     # eg,vec=MatMultSym.powerMethod(verbose=False,eval_min=True,return_vec=True,tol=1e-18)
     # print("power",eg)
