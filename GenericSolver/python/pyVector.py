@@ -619,10 +619,10 @@ class vectorIC(vector):
         with open(binfile, mode + 'b') as fid:
             # Writing big-ending floating point number
             if np.isfortran(self.getNdArray()):  # Forcing column-wise binary writing
-                self.getNdArray().flatten('F').astype(fmt).tofile(fid)
+                self.getNdArray().flatten('F').astype(fmt,copy=False).tofile(fid)
                 # self.getNdArray().flatten('F').tofile(fid,format=fmt)
             else:
-                self.getNdArray().astype(fmt).tofile(fid)
+                self.getNdArray().astype(fmt,copy=False).tofile(fid)
                 # self.getNdArray().tofile(fid,format=fmt)
         fid.close()
         return
