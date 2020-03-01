@@ -598,7 +598,7 @@ class vectorIC(vector):
                 if self.getNdArray().dtype == np.complex64:
                     esize = "esize=8\n"
                 fid.write(esize)
-                fid.write("data_format=\"xdr_float\"\n")
+                fid.write("data_format=\"native_float\"\n")
             fid.close()
         else:
             binfile = sep_util.get_binary(filename)
@@ -619,11 +619,11 @@ class vectorIC(vector):
         with open(binfile, mode + 'b') as fid:
             # Writing big-ending floating point number
             if np.isfortran(self.getNdArray()):  # Forcing column-wise binary writing
-                self.getNdArray().flatten('F').astype(fmt,copy=False).tofile(fid)
-                # self.getNdArray().flatten('F').tofile(fid,format=fmt)
+                # self.getNdArray().flatten('F').astype(fmt,copy=False).tofile(fid)
+                self.getNdArray().flatten('F').tofile(fid,format=fmt)
             else:
-                self.getNdArray().astype(fmt,copy=False).tofile(fid)
-                # self.getNdArray().tofile(fid,format=fmt)
+                # self.getNdArray().astype(fmt,order='C',subok=False,copy=False).tofile(fid)
+                self.getNdArray().tofile(fid,format=fmt)
         fid.close()
         return
 
