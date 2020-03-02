@@ -7,13 +7,6 @@ from pyOperator import Operator, Dstack
 import sep_util
 from scipy.signal import convolve, correlate
 from scipy.ndimage import gaussian_filter
-try:
-    import pywt
-except ImportError:
-    import subprocess
-    import sys
-    subprocess.call([sys.executable, "-m", "pip", "install", "PyWavelets","--user"])
-    import pywt
 
 
 class MatrixOp(Operator):
@@ -72,7 +65,7 @@ class MatrixOp(Operator):
     
     def getNdArray(self):
         return np.array(self.M)
-    
+
 
 class FirstDerivative(Operator):
     def __init__(self, model, sampling=1., axis=0):
@@ -313,10 +306,10 @@ class GaussianFilter(Operator):
         self.sigma = sigma
         self.scaling = 2.0 * np.pi * np.prod(self.sigma)  # in order to have the max amplitude 1
         return
-
+    
     def __str__(self):
         return "GausFilt"
-
+    
     def forward(self, add, model, data):
         """Forward operator"""
         self.checkDomainRange(model, data)
@@ -327,7 +320,7 @@ class GaussianFilter(Operator):
         data_arr = data.getNdArray()
         data_arr[:] = self.scaling * gaussian_filter(model_arr, sigma=self.sigma)
         return
-
+    
     def adjoint(self, add, model, data):
         """Self-adjoint operator"""
         self.forward(add, data, model)
@@ -344,17 +337,17 @@ class ConvNDscipy(Operator):
     :param method   : [auto] - str; how to compute the convolution [auto, direct, fft]
     :return         : Convolution Operator
     """
-
-    def __init__(self, domain, kernel, method='auto'):
     
+    def __init__(self, domain, kernel, method='auto'):
+        
         self.kernel = kernel.getNdArray()
         self.method = method
         self.data_tmp = domain.clone().zero()
         super(ConvNDscipy, self).__init__(domain, domain)
-
+    
     def __str__(self):
         return "ConvScipy"
-
+    
     def forward(self, add, model, data):
         self.checkDomainRange(model, data)
         if add:
@@ -365,7 +358,7 @@ class ConvNDscipy(Operator):
         if add:
             data.scaleAdd(self.data_tmp)
         return
-
+    
     def adjoint(self, add, model, data):
         self.checkDomainRange(model, data)
         if add:
@@ -407,19 +400,22 @@ class _FFT_IC(Operator):
             self.dirs = list(range(len(self.dims)))
         else:
             self.dirs = [int(dirs[_]) for _ in range(len(dirs))]
-            assert len(self.dirs) <= len(self.dims), "The number of FFT directions is greater than the domain dimensionality"
+            assert len(self.dirs) <= len(
+                self.dims), "The number of FFT directions is greater than the domain dimensionality"
         
         if nffts is None:
             self.nffts = self.dims
         else:
             self.nffts = [int(nffts[_]) for _ in range(len(nffts))]
-            assert len(self.nffts) <= len(self.dims), "The number of FFT points is greater than the domain dimensionality"
+            assert len(self.nffts) <= len(
+                self.dims), "The number of FFT points is greater than the domain dimensionality"
         
         if np.isscalar(sampling):
             self.sampling = [sampling] * len(self.nffts)
         else:
             self.sampling = list(sampling)
-            assert len(self.sampling) <= len(self.nffts), "The number of FFT samplings is greater than the domain dimensionality"
+            assert len(self.sampling) <= len(
+                self.nffts), "The number of FFT samplings is greater than the domain dimensionality"
         
         assert len(self.nffts) == len(self.sampling) == len(self.dirs), "Provided parameters dimensions mismatch"
         
@@ -437,9 +433,9 @@ class _FFT_IC(Operator):
         self.checkDomainRange(model, data)
         if not add:
             data.zero()
-        data.arr += 1./self.weight * np.fft.fftn(model.getNdArray(), s=self.nffts, axes=self.dirs)
+        data.arr += 1. / self.weight * np.fft.fftn(model.getNdArray(), s=self.nffts, axes=self.dirs)
         return
-
+    
     def adjoint(self, add, model, data):
         """Compute IFFT on data and save to model"""
         self.checkDomainRange(model, data)
@@ -469,13 +465,13 @@ def _pad_vectorIC(vec, pad):
     if not isinstance(vec, vectorIC):
         raise ValueError("ERROR! Provided vector must be of vectorIC type")
     assert len(vec.shape) == len(pad), "Dimensions of vector and padding mismatch!"
-
+    
     vec_new_shape = tuple(np.asarray(vec.shape) + [sum(pad[_]) for _ in range(len(pad))])
     return vectorIC(np.empty(vec_new_shape, dtype=vec.getNdArray().dtype))
 
 
 class _ZeroPadIC(Operator):
-
+    
     def __init__(self, domain, pad):
         """ Zero Pad operator.
         
@@ -493,7 +489,7 @@ class _ZeroPadIC(Operator):
                 raise ValueError('Padding must be positive or zero')
             self.pad = pad
             super(_ZeroPadIC, self).__init__(domain, _pad_vectorIC(domain, self.pad))
-
+    
     def __str__(self):
         return "ZeroPad "
     
@@ -507,7 +503,7 @@ class _ZeroPadIC(Operator):
         if add:
             data.scaleAdd(temp, 1., 1.)
         return
-
+    
     def adjoint(self, add, model, data):
         """Extract non-zero subsequence"""
         self.checkDomainRange(model, data)
@@ -532,13 +528,14 @@ if __name__ == '__main__':
     # PP.dotTest()
     
     np.random.seed(1)
-    y = vectorIC(np.random.rand(301, 601))
-    F = FourierTransform(y, nffts=[512, 1024])
-    yfft = F * y
-    F.dotTest(True)
+    # y = vectorIC(np.random.rand(301, 601))
+    # F = FourierTransform(y, nffts=[512, 1024])
+    # yfft = F * y
+    # F.dotTest(True)
+    #
+    # yy = superVector(y, y)
+    # FF = FourierTransform(yy, nffts=[512, 1024])
+    # yyfft = FF * yy
+    # FF.dotTest(True)
     
-    yy = superVector(y, y)
-    FF = FourierTransform(yy, nffts=[512, 1024])
-    yyfft = FF * yy
-    FF.dotTest(True)
     print(0)
