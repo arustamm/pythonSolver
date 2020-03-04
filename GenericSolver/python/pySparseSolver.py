@@ -509,7 +509,7 @@ class SplitBregmanSolver(Solver):
         self.create_msg = verbose or self.logger
 
         # overriding save_grad variable
-        problem.save_grad = False
+        self.save_grad = False
         
         # reset stopper before running the inversion
         self.stopper.reset()
