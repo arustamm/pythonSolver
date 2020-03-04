@@ -13,6 +13,9 @@ from sys_util import logger
 import sep_util as sep
 import numpy as np
 
+# Importing scipy to compare CG behavior
+from scipy.sparse.linalg import cg
+
 # Testing the NLCG to solver a regularized linear problem treated as if it was non linear
 from pyNonLinearSolver import NLCGsolver as NLCG
 from pyNonLinearSolver import LBFGSsolver as BFGS
@@ -40,7 +43,7 @@ if __name__ == '__main__':
     LCGsolver = LCG(Stop)
     LCGsolver.setDefaults(iter_sampling=1, save_obj=True, save_model=True, prefix="test_junk")
     # Running the solver
-    LCGsolver.run(L2Prob, verbose=True)
+    # LCGsolver.run(L2Prob, verbose=True)
 
     # Out-of-core run
     # Creating model vector
@@ -87,11 +90,11 @@ if __name__ == '__main__':
     # LCGsolver.run(L2Prob_sym,True)
 
     L2Prob_sym = Prblm.ProblemL2Linear(model_vec_sym, data_vec_sym, MatMultSym, prec=Op.ChainOperator(Prec, Prec))
-    LCGsolver.run(L2Prob_sym,True)
+    # LCGsolver.run(L2Prob_sym,True)
 
     # Testing LCG with regularized problem
     L2Prob_reg = Prblm.ProblemL2LinearReg(model_vec_sym, data_vec_sym, MatMultSym, 0.0001)
-    L2Prob_reg.estimate_epsilon(True)
+    # L2Prob_reg.estimate_epsilon(True)
     # Running the solver
     # LCGsolver.setDefaults(iter_sampling=100,iter_buffer_size=1,save_obj=True,save_model=True,save_grad=True,save_res=True,prefix="lin_test")
     # LCGsolver.run(L2Prob_reg,verbose=True)
@@ -99,17 +102,29 @@ if __name__ == '__main__':
     # Testing estimate_epsilon when initial model different than zero
     model_vec_sym.rand()
     L2Prob_reg1 = Prblm.ProblemL2LinearReg(model_vec_sym, data_vec_sym, MatMultSym, 0.0001)
-    L2Prob_reg1.estimate_epsilon(True)
+    # L2Prob_reg1.estimate_epsilon(True)
     model_vec_sym.zero()
 
     # Testing LCG for symmetric systems
     low_bound = model_vec_sym.clone()
-    # low_bound.set(-2000.)
+    low_bound.set(-2000.)
     SymProb = Prblm.ProblemLinearSymmetric(model_vec_sym, data_vec_sym, MatMultSym)  # ,minBound=low_bound)
     SLCG = SymLCGsolver(Stop)
     # SLCG.setDefaults(iter_sampling=5,save_obj=True,save_res=True,save_grad=True,save_model=True,prefix="test")
     SLCG.run(SymProb,verbose=True)
-    # print(SymProb.model.arr)
+    print('CG result: \t',SymProb.model.getNdArray())
+
+    # Testing LCG solving A'A
+    SymProb_squared = Prblm.ProblemLinearSymmetric(model_vec_sym, MatMultSym*data_vec_sym, MatMultSym*MatMultSym)
+    SLCG.run(SymProb_squared, verbose=True)
+    print('CG result squared: \t', SymProb_squared.model.getNdArray())
+
+
+    # Testing LCG from scipy
+    # b = data_vec_sym.getNdArray()
+    # scipy_res = cg(A, b)[0]
+    # print('scipy result: \t', scipy_res)
+    # quit(0)
 
     # Testing preconditioned CG
     SymProbPrec = Prblm.ProblemLinearSymmetric(model_vec_sym, data_vec_sym, MatMultSym, prec=Prec)
@@ -127,7 +142,7 @@ if __name__ == '__main__':
     L2NLRegProb.estimate_epsilon()
     NLCGsolver = NLCG(Stop)
     # NLCGsolver.setDefaults(iter_sampling=5, save_obj=True, save_res=True, save_grad=True, save_model=True, prefix="test_nl")
-    NLCGsolver.run(L2NLRegProb, verbose=True)
+    # NLCGsolver.run(L2NLRegProb, verbose=True)
 
     # Testing non-linear bounded problem with NLCG
     L2NLProb = Prblm.ProblemL2NonLinear(model_vec_sym, data_vec_sym, non_lin_op, minBound=low_bound)
@@ -146,9 +161,9 @@ if __name__ == '__main__':
     model_vec_sym.zero()
     # Create L2-norm linear problem
     L2Prob_sym = Prblm.ProblemL2Linear(model_vec_sym, data_vec_sym, MatMultSym, minBound=low_bound)
-# L2Prob_sym = Prblm.ProblemL2Linear(model_vec_sym,data_vec_sym,MatMultSym)
-# Running the solver
-# LCGsolver.run(L2Prob_sym,verbose=False)
-# print(L2Prob_sym.model.arr)
+    # L2Prob_sym = Prblm.ProblemL2Linear(model_vec_sym,data_vec_sym,MatMultSym)
+    # Running the solver
+    # LCGsolver.run(L2Prob_sym,verbose=False)
+    # print(L2Prob_sym.model.arr)
 
 #
