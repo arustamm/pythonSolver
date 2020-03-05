@@ -1,25 +1,13 @@
 # Module containing the definition of inverse problems where the ADMM method is used
-import pyOperator
-import pyVector
+import pyOperator as pyOp
+import pyVector as pyVec
 from pyLinearSolver import LCGsolver, LSQRsolver
+from pySparseSolver import ISTAsolver
 from pyProblem import Problem, ProblemL1Lasso, ProblemL2LinearReg, ProblemL2Linear, ProblemLinearReg
 from pySolver import Solver
 from pySparseSolver import *
 from pyStopper import BasicStopper
-from math import isnan, sqrt
-from sys_util import logger
-
-    
-def _soft_thresh(x, thresh):
-    """
-    Soft-thresholding function:
-        y = sign(x) * max(abs(x) - thresh, 0)
-
-    :param x        : vector, input values
-    :param thresh   : float, soft threshold
-    :return         : vector, output clipped values
-    """
-    return x.clone().sign() * x.clone().abs().addbias(-thresh).maximum(0.)
+from math import isnan
 
 
 class ADMMsolver(Solver):
@@ -178,16 +166,16 @@ class ADMMsolver(Solver):
             #                                         rho/2   | A  x - (y-u)|
             regL2_op_scaled_list = [problem.epsL2[i] * problem.regL2_op.ops[i] for i in range(problem.nregsL2)]
             regA_op_scaled_list = [self.rho / 2 * A.ops[i] for i in range(A.n)]
-            reg_op = pyOperator.Vstack(
-                pyOperator.Vstack(regL2_op_scaled_list) if len(regL2_op_scaled_list) != 0 else None,
-                pyOperator.Vstack(regA_op_scaled_list) if len(regA_op_scaled_list) != 0 else None,
+            reg_op = pyOp.Vstack(
+                pyOp.Vstack(regL2_op_scaled_list) if len(regL2_op_scaled_list) != 0 else None,
+                pyOp.Vstack(regA_op_scaled_list) if len(regA_op_scaled_list) != 0 else None,
             )
-            prior = pyVector.superVector(problem.dataregsL2, y.clone().scaleAdd(u, 1., -1.))
+            prior = pyVec.superVector(problem.dataregsL2, y.clone().scaleAdd(u, 1., -1.))
             linear_problem = ProblemL2LinearReg(
                 model=admm_mdl.clone().zero() if not self.use_prev_sol else admm_mdl.clone(),
                 data=problem.data,
                 op=problem.op,
-                reg_op=reg_op,  # pyOperator.Vstack(problem.regL2_op, A),
+                reg_op=reg_op,  # pyOp.Vstack(problem.regL2_op, A),
                 epsilon=1.,     # problem.epsL2 + [self.rho / 2] * A.n,
                 prior_model=prior,
                 minBound=problem.minBound, maxBound=problem.maxBound, boundProj=problem.boundProj
@@ -206,7 +194,7 @@ class ADMMsolver(Solver):
             lasso_problem = ProblemL1Lasso(     # TODO it stops at the second iteration
                 model=y.clone().zero(),
                 data=Ax.clone() + u,
-                op=pyOperator.IdentityOp(y),
+                op=pyOp.IdentityOp(y),
                 op_norm=1.,
                 lambda_value=gamma / self.rho,
                 minBound=problem.minBound, maxBound=problem.maxBound, boundProj=problem.boundProj
@@ -276,21 +264,22 @@ def main():
     path.insert(0, '.')
     import numpy as np
     import matplotlib.pyplot as plt
-    plt.style.use('ggplot')
+    # plt.style.use('ggplot')
     import pyNpOperator
+    from pyProblem import ProblemLinearReg
     
     PLOT = True
-    EXAMPLE = 'noisy'  # must be noisy, gaussian or medical
+    EXAMPLE = 'monarch'  # must be noisy, gaussian, medical or monarch
     
     if EXAMPLE == 'noisy':
         # data examples
         np.random.seed(1)
         nx = 101
-        x = pyVector.vectorIC((nx,)).zero()
+        x = pyVec.vectorIC((nx,)).zero()
         x.getNdArray()[:nx // 2] = 10
         x.getNdArray()[nx // 2:3 * nx // 4] = -5
     
-        Iop = pyOperator.IdentityOp(x)
+        Iop = pyOp.IdentityOp(x)
         TV = pyNpOperator.FirstDerivative(x)
         L = pyNpOperator.SecondDerivative(x)
         
@@ -374,40 +363,40 @@ def main():
         #     plt.title('FISTA inversion')
         #     plt.show()
         
-        # SplitBregman
-        problemSB = ProblemLinearReg(x.clone().zero(), y, Iop, regsL1=TV, epsL1=2.0)
-        SB = SplitBregmanSolver(BasicStopper(niter=50), niter_inner=5, niter_solver=5,
-                                linear_solver='LSQR', breg_weight=1., use_prev_sol=False, logger=logger("test_SB.txt"))
-        SB.run(problemSB, verbose=True, inner_verbose=False)
-        if PLOT:
-            plt.figure(figsize=(5, 4))
-            plt.plot(x.getNdArray(), 'k', lw=1, label='x')
-            plt.plot(y.getNdArray(), '.k', label='y=x+n')
-            plt.plot(derivative.getNdArray(), ':k', lw=1, label='∂x')
-            plt.plot(problemSB.model.getNdArray(), 'r', lw=2, label='x_inv')
-            plt.plot((TV * problemSB.model).getNdArray(), ':r', lw=2, label='∂(x_inv)')
-            plt.legend()
-            plt.title('SB inversion')
-            plt.show()
-    
-        # ADMM
-        # problemADMM = ProblemLinearReg(x.clone().zero(), y, Iop, regsL1=TV, epsL1=3.)
-        #
-        # ADMM = ADMMsolver(BasicStopper(niter=30), niter_linear=10, niter_lasso=10)
-        # ADMM.run(problemADMM, verbose=True, inner_verbose=False)
+        # # SplitBregman
+        # problemSB = ProblemLinearReg(x.clone().zero(), y, Iop, regsL1=TV, epsL1=2.0)
+        # SB = SplitBregmanSolver(BasicStopper(niter=50), niter_inner=5, niter_solver=5,
+        #                         linear_solver='LSQR', breg_weight=1., use_prev_sol=False, logger=logger("test_SB.txt"))
+        # SB.run(problemSB, verbose=True, inner_verbose=False)
         # if PLOT:
         #     plt.figure(figsize=(5, 4))
         #     plt.plot(x.getNdArray(), 'k', lw=1, label='x')
         #     plt.plot(y.getNdArray(), '.k', label='y=x+n')
         #     plt.plot(derivative.getNdArray(), ':k', lw=1, label='∂x')
-        #     plt.plot(problemADMM.model.getNdArray(), 'r', lw=2, label='x_inv')
-        #     plt.plot((TV * problemADMM.model).getNdArray(), ':r', lw=2, label='∂(x_inv)')
+        #     plt.plot(problemSB.model.getNdArray(), 'r', lw=2, label='x_inv')
+        #     plt.plot((TV * problemSB.model).getNdArray(), ':r', lw=2, label='∂(x_inv)')
         #     plt.legend()
-        #     plt.title('ADMM inversion')
+        #     plt.title('SB inversion')
         #     plt.show()
     
+        # ADMM
+        problemADMM = ProblemLinearReg(x.clone().zero(), y, Iop, regsL1=TV, epsL1=3.)
+
+        ADMM = ADMMsolver(BasicStopper(niter=30), niter_linear=10, niter_lasso=50)
+        ADMM.run(problemADMM, verbose=True, inner_verbose=False)
+        if PLOT:
+            plt.figure(figsize=(5, 4))
+            plt.plot(x.getNdArray(), 'k', lw=1, label='x')
+            plt.plot(y.getNdArray(), '.k', label='y=x+n')
+            plt.plot(derivative.getNdArray(), ':k', lw=1, label='∂x')
+            plt.plot(problemADMM.model.getNdArray(), 'r', lw=2, label='x_inv')
+            plt.plot((TV * problemADMM.model).getNdArray(), ':r', lw=2, label='∂(x_inv)')
+            plt.legend()
+            plt.title('ADMM inversion')
+            plt.show()
+    
     elif EXAMPLE == 'gaussian':
-        x = pyVector.vectorIC(np.empty((301, 601))).set(0)
+        x = pyVec.vectorIC(np.empty((301, 601))).set(0)
         x.getNdArray()[150, 300] = 1.0
         # x.getNdArray()[100, 200] = -5.0
         # x.getNdArray()[280, 400] = 1.0
@@ -449,7 +438,7 @@ def main():
             plt.show()
 
         # SplitBregman
-        I = pyOperator.IdentityOp(x)
+        I = pyOp.IdentityOp(x)
         problemSB = ProblemLinearReg(x.clone().zero(), y, G, regsL1=I, epsL1=10.)
 
         SB = SplitBregmanSolver(BasicStopper(niter=50), niter_inner=3, niter_solver=30,
@@ -475,7 +464,7 @@ def main():
             plt.show()
     
     elif EXAMPLE == 'medical':
-        x = pyVector.vectorIC(np.load('../testdata/shepp_logan_phantom.npy', allow_pickle=True).astype(np.float32))
+        x = pyVec.vectorIC(np.load('../testdata/shepp_logan_phantom.npy', allow_pickle=True).astype(np.float32))
         if PLOT:
             plt.figure(figsize=(5, 4))
             plt.imshow(x.getNdArray(), cmap='bone'), plt.colorbar()
@@ -493,7 +482,7 @@ def main():
             plt.imshow(h, aspect='equal'), plt.colorbar()
             plt.title('Blurring Kernel')
             plt.show()
-        Blurring = pyNpOperator.ConvNDscipy(model=x, kernel=pyVector.vectorIC(h))
+        Blurring = pyNpOperator.ConvNDscipy(model=x, kernel=pyVec.vectorIC(h))
         
         y = Blurring * x
         if PLOT:
@@ -526,7 +515,7 @@ def main():
         # SplitBregman
         # the gradient of the image is 6e3
         D = pyNpOperator.TotalVariation(x)
-        I = pyOperator.IdentityOp(x)
+        I = pyOp.IdentityOp(x)
 
         problemSB = ProblemLinearReg(x.clone().zero(), y, Blurring, regsL1=D, epsL1=.01)
         
@@ -553,9 +542,40 @@ def main():
             plt.title(r'ADMM TV, $\varepsilon=%.2e$, %d iter'
                       % (problemADMM.epsL1[0], ADMM.stopper.niter))
             plt.show()
+
+    elif EXAMPLE == 'monarch':
+        x = pyVec.vectorIC(np.load('../testdata/monarch.npy', allow_pickle=True).astype(np.float32))
+        np.random.seed(12345)
+        sigma = 0.05
+        y = x.clone()
+        y.getNdArray()[:] += np.random.normal(0.0, sigma, y.shape)
+        Op = pyOp.IdentityOp(x)
+        TV = pyNpOperator.TotalVariation(x)
+        
+        if PLOT:
+            plt.figure(figsize=(5, 4))
+            plt.imshow(x.arr, cmap='gray'), plt.colorbar()
+            plt.title('Model')
+            plt.show()
+
+            plt.figure(figsize=(5, 4))
+            plt.imshow(y.arr, cmap='gray'), plt.colorbar()
+            plt.title('Data, std=%.2f' % sigma)
+            plt.show()
+        
+        problemADMM = ProblemLinearReg(x.clone().zero(), y, Op, regsL1=TV, epsL1=.04)
+    
+        ADMM = ADMMsolver(BasicStopper(niter=200), niter_linear=30, niter_lasso=10)
+        ADMM.run(problemADMM, verbose=True, inner_verbose=False)
+        if PLOT:
+            plt.figure(figsize=(5, 4))
+            plt.imshow(problemADMM.model.getNdArray(), cmap='gray'), plt.colorbar()
+            plt.title(r'ADMM TV, $\varepsilon=%.2e$, %d iter'
+                      % (problemADMM.epsL1[0], ADMM.stopper.niter))
+            plt.show()
         
     else:
-        raise ValueError("EXAMPLE has to be one of noisy, gaussian, medical")
+        raise ValueError("EXAMPLE has to be one of noisy, gaussian, medical or monarch")
 
     return 0
 
