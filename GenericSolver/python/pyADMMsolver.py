@@ -4,9 +4,10 @@ import pyVector
 from pyLinearSolver import LCGsolver, LSQRsolver
 from pyProblem import Problem, ProblemL1Lasso, ProblemL2LinearReg, ProblemL2Linear, ProblemLinearReg
 from pySolver import Solver
-from pySparseSolver import ISTAsolver
+from pySparseSolver import *
 from pyStopper import BasicStopper
 from math import isnan, sqrt
+from sys_util import logger
 
     
 def _soft_thresh(x, thresh):
@@ -278,8 +279,8 @@ def main():
     plt.style.use('ggplot')
     import pyNpOperator
     
-    PLOT = False
-    EXAMPLE = 'gaussian'  # must be noisy, gaussian or medical
+    PLOT = True
+    EXAMPLE = 'noisy'  # must be noisy, gaussian or medical
     
     if EXAMPLE == 'noisy':
         # data examples
@@ -374,9 +375,9 @@ def main():
         #     plt.show()
         
         # SplitBregman
-        problemSB = ProblemLinearReg(x.clone().zero(), y, Iop, regsL1=TV, epsL1=3.)
-        SB = SplitBregmanSolver(BasicStopper(niter=50), niter_inner=10, niter_solver=10,
-                                linear_solver='LSQR', breg_weight=1., use_prev_sol=False)
+        problemSB = ProblemLinearReg(x.clone().zero(), y, Iop, regsL1=TV, epsL1=2.0)
+        SB = SplitBregmanSolver(BasicStopper(niter=50), niter_inner=5, niter_solver=5,
+                                linear_solver='LSQR', breg_weight=1., use_prev_sol=False, logger=logger("test_SB.txt"))
         SB.run(problemSB, verbose=True, inner_verbose=False)
         if PLOT:
             plt.figure(figsize=(5, 4))
@@ -390,20 +391,20 @@ def main():
             plt.show()
     
         # ADMM
-        problemADMM = ProblemLinearReg(x.clone().zero(), y, Iop, regsL1=TV, epsL1=3.)
-        
-        ADMM = ADMMsolver(BasicStopper(niter=30), niter_linear=10, niter_lasso=10)
-        ADMM.run(problemADMM, verbose=True, inner_verbose=False)
-        if PLOT:
-            plt.figure(figsize=(5, 4))
-            plt.plot(x.getNdArray(), 'k', lw=1, label='x')
-            plt.plot(y.getNdArray(), '.k', label='y=x+n')
-            plt.plot(derivative.getNdArray(), ':k', lw=1, label='∂x')
-            plt.plot(problemADMM.model.getNdArray(), 'r', lw=2, label='x_inv')
-            plt.plot((TV * problemADMM.model).getNdArray(), ':r', lw=2, label='∂(x_inv)')
-            plt.legend()
-            plt.title('ADMM inversion')
-            plt.show()
+        # problemADMM = ProblemLinearReg(x.clone().zero(), y, Iop, regsL1=TV, epsL1=3.)
+        #
+        # ADMM = ADMMsolver(BasicStopper(niter=30), niter_linear=10, niter_lasso=10)
+        # ADMM.run(problemADMM, verbose=True, inner_verbose=False)
+        # if PLOT:
+        #     plt.figure(figsize=(5, 4))
+        #     plt.plot(x.getNdArray(), 'k', lw=1, label='x')
+        #     plt.plot(y.getNdArray(), '.k', label='y=x+n')
+        #     plt.plot(derivative.getNdArray(), ':k', lw=1, label='∂x')
+        #     plt.plot(problemADMM.model.getNdArray(), 'r', lw=2, label='x_inv')
+        #     plt.plot((TV * problemADMM.model).getNdArray(), ':r', lw=2, label='∂(x_inv)')
+        #     plt.legend()
+        #     plt.title('ADMM inversion')
+        #     plt.show()
     
     elif EXAMPLE == 'gaussian':
         x = pyVector.vectorIC(np.empty((301, 601))).set(0)

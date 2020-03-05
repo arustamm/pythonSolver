@@ -673,9 +673,9 @@ class LSQRsolver(pySolver.Solver):
             msg += "\t\t\t\tLSQR SOLVER log file end\n"
             msg += 90 * "#" + "\n"
             if verbose:
-                print(msg)
+                print(msg.replace("log file ", ""))
             if self.logger:
-                self.logger.addToLog(msg + " log file")
+                self.logger.addToLog(msg)
         # Clear restart object
         self.restart.clear_restart()
         return
