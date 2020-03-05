@@ -2,14 +2,15 @@
 
 from __future__ import division, print_function, absolute_import
 import numpy as np
-from pyVector import *
-from pyOperator import Operator, Dstack
+import pyVector as pyVec
+import pyOperator as pyOp
+
 import sep_util
 from scipy.signal import convolve, correlate
 from scipy.ndimage import gaussian_filter
 
 
-class MatrixOp(Operator):
+class MatrixOp(pyOp.Operator):
     """Operator built upon a matrix"""
     
     def __init__(self, matrix, domain, range, outcore=False):
@@ -19,9 +20,9 @@ class MatrixOp(Operator):
         :param range    : range vector
         :param outcore  : use outcore sep operators
         """
-        if not isinstance(domain, vector):
+        if not isinstance(domain, pyVec.vector):
             raise TypeError("ERROR! Domain vector not a vector object")
-        if not isinstance(range, vector):
+        if not isinstance(range, pyVec.vector):
             raise TypeError("ERROR! Range vector not a vector object")
         # Setting domain and range of operator and matrix to use during application of the operator
         self.setDomainRange(domain, range)
@@ -67,7 +68,7 @@ class MatrixOp(Operator):
         return np.array(self.M)
 
 
-class FirstDerivative(Operator):
+class FirstDerivative(pyOp.Operator):
     def __init__(self, model, sampling=1., axis=0):
         r"""
         Compute 2nd order centered first derivative
@@ -132,7 +133,7 @@ class FirstDerivative(Operator):
         return
 
 
-class SecondDerivative(Operator):
+class SecondDerivative(pyOp.Operator):
     def __init__(self, model, sampling=1., axis=0):
         r"""
         Compute 2nd order second derivative
@@ -200,7 +201,7 @@ class SecondDerivative(Operator):
         return
 
 
-class TotalVariation(Operator):
+class TotalVariation(pyOp.Operator):
     def __init__(self, model, axis=None, weights=None, sampling=None, iso=False):
         r"""
         (An)isotropic Total Variation operator.
@@ -259,7 +260,7 @@ class TotalVariation(Operator):
             return self.op.adjoint(add, model, data)
 
 
-class Laplacian(Operator):
+class Laplacian(pyOp.Operator):
     def __init__(self, model, axis=None, weights=None, sampling=None):
         r"""
         Laplacian operator.
@@ -295,7 +296,7 @@ class Laplacian(Operator):
         return self.op.adjoint(add, model, data)
 
 
-class GaussianFilter(Operator):
+class GaussianFilter(pyOp.Operator):
     def __init__(self, model, sigma):
         """
         Gaussian smoothing operator using scipy smoothing:
@@ -328,7 +329,7 @@ class GaussianFilter(Operator):
 
 
 # TODO Fix ConvNDscipy for Matching Filters applications
-class ConvNDscipy(Operator):
+class ConvNDscipy(pyOp.Operator):
     """
     ND convolution square operator in the domain space
 
@@ -372,16 +373,16 @@ class ConvNDscipy(Operator):
 
 
 def FourierTransform(domain, dirs=None, nffts=None, sampling=1., dtype=np.complex128):
-    if isinstance(domain, vectorIC):
+    if isinstance(domain, pyVec.vectorIC):
         return _FFT_IC(domain, dirs, nffts, sampling, dtype)
-    elif isinstance(domain, superVector):
+    elif isinstance(domain, pyVec.superVector):
         # TODO add the possibility to have different settings for each sub-vector
-        return Dstack([_FFT_IC(v, dirs, nffts, sampling, dtype) for v in domain.vecs])
+        return pyOp.Dstack([_FFT_IC(v, dirs, nffts, sampling, dtype) for v in domain.vecs])
     else:
         raise ValueError("ERROR! Provided domain has to be either vector or superVector")
 
 
-class _FFT_IC(Operator):
+class _FFT_IC(pyOp.Operator):
     
     def __init__(self, domain, dirs=None, nffts=None, sampling=1., dtype=np.complex128):
         """
@@ -394,7 +395,7 @@ class _FFT_IC(Operator):
                             sampling step for FFT computation
         :return         : FFT Operator
         """
-        assert isinstance(domain, vectorIC), "Domain has to be a vectorIC object (for now)"
+        assert isinstance(domain, pyVec.vectorIC), "Domain has to be a vectorIC object (for now)"
         self.dims = domain.shape
         if dirs is None:
             self.dirs = list(range(len(self.dims)))
@@ -419,7 +420,7 @@ class _FFT_IC(Operator):
         
         assert len(self.nffts) == len(self.sampling) == len(self.dirs), "Provided parameters dimensions mismatch"
         
-        super(_FFT_IC, self).__init__(domain, vectorIC(np.zeros(self.nffts, dtype=dtype)))
+        super(_FFT_IC, self).__init__(domain, pyVec.vectorIC(np.zeros(self.nffts, dtype=dtype)))
         
         # store vectors of frequency bins
         self.weight = np.sqrt(np.prod(self.nffts))
@@ -452,25 +453,25 @@ class _FFT_IC(Operator):
 
 
 def ZeroPad(domain, pad):
-    if isinstance(domain, vectorIC):
+    if isinstance(domain, pyVec.vectorIC):
         return _ZeroPadIC(domain, pad)
-    elif isinstance(domain, superVector):
+    elif isinstance(domain, pyVec.superVector):
         # TODO add the possibility to have different padding for each sub-vector
-        return Dstack([_ZeroPadIC(v, pad) for v in domain.vecs])
+        return pyOp.Dstack([_ZeroPadIC(v, pad) for v in domain.vecs])
     else:
         raise ValueError("ERROR! Provided domain has to be either vector or superVector")
 
 
 def _pad_vectorIC(vec, pad):
-    if not isinstance(vec, vectorIC):
+    if not isinstance(vec, pyVec.vectorIC):
         raise ValueError("ERROR! Provided vector must be of vectorIC type")
     assert len(vec.shape) == len(pad), "Dimensions of vector and padding mismatch!"
     
     vec_new_shape = tuple(np.asarray(vec.shape) + [sum(pad[_]) for _ in range(len(pad))])
-    return vectorIC(np.empty(vec_new_shape, dtype=vec.getNdArray().dtype))
+    return pyVec.vectorIC(np.empty(vec_new_shape, dtype=vec.getNdArray().dtype))
 
 
-class _ZeroPadIC(Operator):
+class _ZeroPadIC(pyOp.Operator):
     
     def __init__(self, domain, pad):
         """ Zero Pad operator.
@@ -482,7 +483,7 @@ class _ZeroPadIC(Operator):
             Number of samples to pad in each dimension.
             If a single scalar is provided, it is assigned to every dimension.
         """
-        if isinstance(domain, vectorIC):
+        if isinstance(domain, pyVec.vectorIC):
             self.dims = domain.shape
             pad = [(pad, pad)] * len(self.dims) if pad is np.isscalar else list(pad)
             if (np.array(pad) < 0).any():
@@ -519,21 +520,21 @@ class _ZeroPadIC(Operator):
 
 
 if __name__ == '__main__':
-    # x = vectorIC(np.arange(9).reshape((3, 3)))
+    # x = pyVec.vectorIC(np.arange(9).reshape((3, 3)))
     # pad = ((2,2), (3,3))
     # P = ZeroPad(x, pad)
     # P.dotTest()
-    # xx = superVector(x, x)
+    # xx = pyVec.superVector(x, x)
     # PP = ZeroPad(xx, pad)
     # PP.dotTest()
     
     np.random.seed(1)
-    # y = vectorIC(np.random.rand(301, 601))
+    # y = pyVec.vectorIC(np.random.rand(301, 601))
     # F = FourierTransform(y, nffts=[512, 1024])
     # yfft = F * y
     # F.dotTest(True)
     #
-    # yy = superVector(y, y)
+    # yy = pyVec.superVector(y, y)
     # FF = FourierTransform(yy, nffts=[512, 1024])
     # yyfft = FF * yy
     # FF.dotTest(True)
