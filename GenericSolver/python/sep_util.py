@@ -2,7 +2,6 @@
 import re
 import os
 import numpy as np
-# other modules
 try:
     import sys_util
 except ImportError:
@@ -12,7 +11,7 @@ except ImportError:
 HOME = os.environ["HOME"]
 datapath = None
 # Checking environment definition first
-if ("DATAPATH" in os.environ):
+if "DATAPATH" in os.environ:
     datapath = os.environ["DATAPATH"]
 # Checking local directory
 elif os.path.isfile('.datapath'):
@@ -24,12 +23,12 @@ else:
         out = sys_util.RunShellCmd("cat $HOME/.datapath | grep $HOST", check_code=False, get_stat=False)[0]
         if len(out) == 0:
             out = (
-            sys_util.RunShellCmd("cat $HOME/.datapath | head -n 1", check_code=False, get_stat=False)[0]).rstrip()
+                sys_util.RunShellCmd("cat $HOME/.datapath | head -n 1", check_code=False, get_stat=False)[0]).rstrip()
         datapath = out.split("=")[1]
 
 # Checking if datapath was found
-if (datapath == None):
-    if (os.path.isdir("/tmp/")):
+if datapath is None:
+    if os.path.isdir("/tmp/"):
         datapath = "/tmp/"
         print("WARNING! DATAPATH not found. The folder /tmp will be used to write binary files")
     else:
@@ -50,22 +49,21 @@ def get_par(filename, par):
     """ Function to obtain a header parameter within the passed header file"""
     info = None
     # Checking if label is requested
-    if ("label" in par):
-        reg_prog = re.compile("%s=(\'(.*?)\'|\"(.*?)\")" % (par))
+    if "label" in par:
+        reg_prog = re.compile("%s=(\'(.*?)\'|\"(.*?)\")" % par)
     else:
-        reg_prog = re.compile("%s=([^\s]+)" % (par))
-    if (not os.path.isfile(filename)):
-        raise OSError("ERROR! No %s file found!" % (filename))
+        reg_prog = re.compile("%s=([^\s]+)" % par)
+    if not os.path.isfile(filename):
+        raise OSError("ERROR! No %s file found!" % filename)
     for line in reversed(open(filename).readlines()):
-        if (info == None):
+        if info is None:
             find = reg_prog.search(line)
             if find:
                 info = find.group(1)
-    if (info == None):
+    if info is None:
         raise IOError("%s parameter not found in file %s" % (filename, par))
-        return
     # Removing extra characters from found parameter
-    if (info != None):
+    if info is not None:
         info = info.replace('"', '')
         info = info.replace('\'', '')
     return info
@@ -85,7 +83,7 @@ def get_axes(filename):
         try:
             axis_n = int(get_par(filename, par="n%s" % (iaxis + 1)))
         except IOError as exc:
-            if (iaxis == 0):
+            if iaxis == 0:
                 print(exc.args)
                 print("ERROR! First axis parameters must be found! Returning None")
                 return None
@@ -96,7 +94,7 @@ def get_axes(filename):
         try:
             axis_o = float(get_par(filename, par="o%s" % (iaxis + 1)))
         except IOError as exc:
-            if (iaxis == 0):
+            if iaxis == 0:
                 print(exc.args)
                 print("ERROR! First axis parameters must be found! Returning None")
                 return None
@@ -107,7 +105,7 @@ def get_axes(filename):
         try:
             axis_d = float(get_par(filename, par="d%s" % (iaxis + 1)))
         except IOError as exc:
-            if (iaxis == 0):
+            if iaxis == 0:
                 print(exc.args)
                 print("ERROR! First axis parameters must be found! Returning None")
                 return None
@@ -143,15 +141,15 @@ def read_file(filename, formatting='>f', mem_order="C"):
     n_axis = get_num_axes(filename)
     shape = [ii[0] for ii in axis_info]
     shape = shape[:n_axis]
-    if (mem_order == "C"):
+    if mem_order == "C":
         shape = tuple(reversed(shape))
-    elif (mem_order != "F"):
-        raise ValueError("ERROR! %s not an supported array order" % (mem_order))
+    elif mem_order != "F":
+        raise ValueError("ERROR! %s not an supported array order" % mem_order)
     fid = open(get_binary(filename), 'r+b')
     # Default formatting big-ending floating point number
     data = np.fromfile(fid, dtype=formatting)
     # Reshaping array and forcing memory continuity
-    if (mem_order == "C"):
+    if mem_order == "C":
         data = np.ascontiguousarray(np.reshape(data, shape, order=mem_order))
     else:
         data = np.asfortranarray(np.reshape(data, shape, order=mem_order))
@@ -166,24 +164,25 @@ def write_file(filename, data, axis_info=None, formatting='>f'):
     binfile = datapath + filename.split('/')[-1] + '@'
     with open(binfile, 'w+b') as fid:
         # Default formatting big-ending floating point number
-        if (np.isfortran(data)):  # Forcing column-wise binary writing
+        if np.isfortran(data):  # Forcing column-wise binary writing
             data.flatten('F').astype(formatting).tofile(fid)
         else:
             data.astype(formatting).tofile(fid)
     fid.close()
     # If axis_info is not provided all the present axis are set to d=1.0 o=0.0 label='Undefined'
-    if (axis_info == None):
+    if axis_info is None:
         naxis = data.shape
-        if (not np.isfortran(data)): naxis = tuple(reversed(naxis))  # If C last axis is the "fastest"
+        if not np.isfortran(data):
+            naxis = tuple(reversed(naxis))  # If C last axis is the "fastest"
         axis_info = [[naxis[ii], 0.0, 1.0, 'Undefined'] for ii in range(0, len(naxis))]
     # writing header/pointer file
     with open(filename, 'w') as fid:
         # Writing axis info
         for ii, ax_info in enumerate(axis_info):
             ax_id = ii + 1
-            fid.write("n%s=%s o%s=%s d%s=%s label%s='%s'\n" % (
-            ax_id, ax_info[0], ax_id, ax_info[1], ax_id, ax_info[2], ax_id, ax_info[3]))
-        fid.write("in='%s'\n" % (binfile))
+            fid.write("n%s=%s o%s=%s d%s=%s label%s='%s'\n"
+                      % (ax_id, ax_info[0], ax_id, ax_info[1], ax_id, ax_info[2], ax_id, ax_info[3]))
+        fid.write("in='%s'\n" % binfile)
         fid.write("data_format='xdr_float'\n")
         fid.write("esize=4\n")
     fid.close()
