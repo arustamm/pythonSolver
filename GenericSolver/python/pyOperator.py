@@ -225,6 +225,22 @@ class Operator:
         :param verbose  : boolean; Flag to print information to screen as the method is being run [False]
         :param tol      : float; The function throws a Warning if the relative error is greater than maxError [1e-4]
         """
+        
+        def _testing(add, dt1, dt2, tol, verbose=False):
+            if isinstance(dt2, np.complex):
+                dt2 = np.conj(dt2)
+            abs_err = dt1 - dt2
+            err_rel = abs_err / abs(dt2)
+            if verbose:
+                print("Dot products add=%s: domain=%.2e range=%.2e " % (str(add), abs(dt1), abs(dt2)))
+                print("Absolute error: %.2e" % abs(abs_err))
+                print("Relative error: %.2e \n" % abs(err_rel))
+            if err_rel > tol:
+                # Deleting temporary vectors
+                del d1, d2, r1, r2
+                raise Warning("\tDot products failure add=%s; relative error %.2e is greater than tolerance %.2e"
+                              % (str(add), err_rel, tol))
+    
         if verbose:
             print("Dot-product test of forward and adjoint operators")
             print('-' * 49)
@@ -256,21 +272,11 @@ class Operator:
         # Computing dot products
         dt1 = d1.dot(d2)
         dt2 = r1.dot(r2)
-        
-        # Dot-product testing
-        err_rel = (abs(dt1) - abs(dt2)) / abs(dt2)
-        if verbose:
-            print("Dot products add=False: domain=%.2e range=%.2e " % (abs(dt1), abs(dt2)))
-            print("Absolute error: %.2e" % (abs(dt1) - abs(dt2)))
-            print("Relative error: %.2e \n" % err_rel)
-        if err_rel > tol:
-            # Deleting temporary vectors
-            del d1, d2, r1, r2
-            raise Warning("Dot products failure add=False; relative error greater than tolerance of %.2e" % tol)
+        _testing(False, dt1, dt2, tol, verbose)
         
         # Applying forward and adjoint operators with add=True
         if verbose:
-            print("\nApplying forward operator add=True")
+            print("Applying forward operator add=True")
         start = time.time()
         self.forward(True, d1, r2)
         end = time.time()
@@ -286,15 +292,7 @@ class Operator:
         # Computing dot products
         dt1 = d1.dot(d2)
         dt2 = r1.dot(r2)
-        err_rel = (abs(dt1) - abs(dt2)) / abs(dt2)
-        if verbose:
-            print("Dot products add=True: domain=%.2e range=%.2e " % (abs(dt1), abs(dt2)))
-            print("Absolute error: %.2e" % (abs(dt1) - abs(dt2)))
-            print("Relative error: %.2e \n" % err_rel)
-        if err_rel > tol:
-            # Deleting temporary vectors
-            del d1, d2, r1, r2
-            raise Warning("Dot products failure add=True; relative error greater than tolerance of %.2e" % tol)
+        _testing(True, dt1, dt2, tol, verbose)
         
         if verbose:
             print("-" * 49)
