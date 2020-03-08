@@ -8,6 +8,7 @@ from pySolver import Solver
 from pySparseSolver import *
 from pyStopper import BasicStopper
 from math import isnan
+from sys_util import logger
 
 
 class ADMMsolver(Solver):
@@ -269,7 +270,7 @@ def main():
     from pyProblem import ProblemLinearReg
     
     PLOT = True
-    EXAMPLE = 'monarch'  # must be noisy, gaussian, medical or monarch
+    EXAMPLE = 'medical'  # must be noisy, gaussian, medical or monarch
     
     if EXAMPLE == 'noisy':
         # data examples
@@ -284,7 +285,7 @@ def main():
         L = pyNpOperator.SecondDerivative(x)
         
         n = x.clone()
-        n.getNdArray()[:] = np.random.normal(0,  1, nx)
+        n.getNdArray()[:] = np.random.normal(0,  1.0, nx)
         y = Iop * (x.clone() + n)
         
         derivative = TV * x
@@ -364,36 +365,45 @@ def main():
         #     plt.show()
         
         # # SplitBregman
-        # problemSB = ProblemLinearReg(x.clone().zero(), y, Iop, regsL1=TV, epsL1=2.0)
-        # SB = SplitBregmanSolver(BasicStopper(niter=50), niter_inner=5, niter_solver=5,
-        #                         linear_solver='LSQR', breg_weight=1., use_prev_sol=False, logger=logger("test_SB.txt"))
-        # SB.run(problemSB, verbose=True, inner_verbose=False)
-        # if PLOT:
-        #     plt.figure(figsize=(5, 4))
-        #     plt.plot(x.getNdArray(), 'k', lw=1, label='x')
-        #     plt.plot(y.getNdArray(), '.k', label='y=x+n')
-        #     plt.plot(derivative.getNdArray(), ':k', lw=1, label='∂x')
-        #     plt.plot(problemSB.model.getNdArray(), 'r', lw=2, label='x_inv')
-        #     plt.plot((TV * problemSB.model).getNdArray(), ':r', lw=2, label='∂(x_inv)')
-        #     plt.legend()
-        #     plt.title('SB inversion')
-        #     plt.show()
-    
-        # ADMM
-        problemADMM = ProblemLinearReg(x.clone().zero(), y, Iop, regsL1=TV, epsL1=3.)
-
-        ADMM = ADMMsolver(BasicStopper(niter=30), niter_linear=10, niter_lasso=50)
-        ADMM.run(problemADMM, verbose=True, inner_verbose=False)
+        problemSB = ProblemLinearReg(x.clone().zero(), y, Iop, regsL1=TV, epsL1=3.0)
+        SB = SplitBregmanSolver(BasicStopper(niter=100), lambd=0.03, niter_inner=1, niter_solver=20,
+                                linear_solver='LSQR', breg_weight=1., warm_start=True)#, logger=logger("test_SB1.txt"))
+        SB.setDefaults(save_obj=True)
+        SB.run(problemSB, verbose=True, inner_verbose=False)
         if PLOT:
             plt.figure(figsize=(5, 4))
             plt.plot(x.getNdArray(), 'k', lw=1, label='x')
             plt.plot(y.getNdArray(), '.k', label='y=x+n')
             plt.plot(derivative.getNdArray(), ':k', lw=1, label='∂x')
-            plt.plot(problemADMM.model.getNdArray(), 'r', lw=2, label='x_inv')
-            plt.plot((TV * problemADMM.model).getNdArray(), ':r', lw=2, label='∂(x_inv)')
+            plt.plot(problemSB.model.getNdArray(), 'r', lw=2, label='x_inv')
+            plt.plot((TV * problemSB.model).getNdArray(), ':r', lw=2, label='∂(x_inv)')
             plt.legend()
-            plt.title('ADMM inversion')
+            plt.title('SB inversion')
             plt.show()
+            # Objective function convergence
+            plt.figure(figsize=(5, 4))
+            plt.plot(np.log10(SB.obj/SB.obj[0]), 'r', lw=1, label='SplitBregman')
+            obj_true = problemSB.get_obj(x)
+            plt.plot([np.log10(obj_true/SB.obj[0])]*len(SB.obj), 'k--', lw=1, label='true solution obj value')
+            plt.legend()
+            plt.title('Convergence curve')
+            plt.show()
+    
+        # ADMM
+        # problemADMM = ProblemLinearReg(x.clone().zero(), y, Iop, regsL1=TV, epsL1=3.)
+        #
+        # ADMM = ADMMsolver(BasicStopper(niter=30), niter_linear=10, niter_lasso=50)
+        # ADMM.run(problemADMM, verbose=True, inner_verbose=False)
+        # if PLOT:
+        #     plt.figure(figsize=(5, 4))
+        #     plt.plot(x.getNdArray(), 'k', lw=1, label='x')
+        #     plt.plot(y.getNdArray(), '.k', label='y=x+n')
+        #     plt.plot(derivative.getNdArray(), ':k', lw=1, label='∂x')
+        #     plt.plot(problemADMM.model.getNdArray(), 'r', lw=2, label='x_inv')
+        #     plt.plot((TV * problemADMM.model).getNdArray(), ':r', lw=2, label='∂(x_inv)')
+        #     plt.legend()
+        #     plt.title('ADMM inversion')
+        #     plt.show()
     
     elif EXAMPLE == 'gaussian':
         x = pyVec.vectorIC(np.empty((301, 601))).set(0)
@@ -467,81 +477,90 @@ def main():
         x = pyVec.vectorIC(np.load('../testdata/shepp_logan_phantom.npy', allow_pickle=True).astype(np.float32))
         if PLOT:
             plt.figure(figsize=(5, 4))
-            plt.imshow(x.getNdArray(), cmap='bone'), plt.colorbar()
+            plt.imshow(x.getNdArray(), cmap='bone', vmin=x.min(), vmax=x.max()), plt.colorbar()
             plt.title('Model')
             plt.show()
             
-        nh = [5, 10]
-        hz = np.exp(-0.1 * np.linspace(-(nh[0] // 2), nh[0] // 2, nh[0]) ** 2)
-        hx = np.exp(-0.03 * np.linspace(-(nh[1] // 2), nh[1] // 2, nh[1]) ** 2)
-        hz /= np.trapz(hz)  # normalize the integral to 1
-        hx /= np.trapz(hx)  # normalize the integral to 1
-        h = hz[:, np.newaxis] * hx[np.newaxis, :]
-        if PLOT:
-            plt.figure(figsize=(5, 4))
-            plt.imshow(h, aspect='equal'), plt.colorbar()
-            plt.title('Blurring Kernel')
-            plt.show()
-        Blurring = pyNpOperator.ConvNDscipy(model=x, kernel=pyVec.vectorIC(h))
+        # nh = [5, 10]
+        # hz = np.exp(-0.1 * np.linspace(-(nh[0] // 2), nh[0] // 2, nh[0]) ** 2)
+        # hx = np.exp(-0.03 * np.linspace(-(nh[1] // 2), nh[1] // 2, nh[1]) ** 2)
+        # hz /= np.trapz(hz)  # normalize the integral to 1
+        # hx /= np.trapz(hx)  # normalize the integral to 1
+        # h = hz[:, np.newaxis] * hx[np.newaxis, :]
+        # if PLOT:
+        #     plt.figure(figsize=(5, 4))
+        #     plt.imshow(h, aspect='equal'), plt.colorbar()
+        #     plt.title('Blurring Kernel')
+        #     plt.show()
+        # Blurring = pyNpOperator.ConvNDscipy(model=x, kernel=pyVec.vectorIC(h))
+        Blurring = pyNpOperator.GaussianFilter(x, [3, 5])
         
         y = Blurring * x
         if PLOT:
             plt.figure(figsize=(5, 4))
-            plt.imshow(y.getNdArray(), cmap='bone'), plt.colorbar()
+            plt.imshow(y.getNdArray(), cmap='bone', vmin=x.min(), vmax=x.max()), plt.colorbar()
             plt.title('Data')
             plt.show()
             
         # CG solver
-        problemLS = ProblemL2Linear(x.clone().zero(), y, Blurring)
-        CG = LCGsolver(BasicStopper(niter=50))
+        problemLS = ProblemL2Linear(x.clone().zero(), y, Blurring, minBound=x.clone().set(0.0))
+        CG = LCGsolver(BasicStopper(niter=400))
         CG.run(problemLS, verbose=True)
         if PLOT:
             plt.figure(figsize=(5, 4))
-            plt.imshow(problemLS.model.getNdArray(), cmap='bone'), plt.colorbar()
+            plt.imshow(problemLS.model.getNdArray(), cmap='bone', vmin=x.min(), vmax=x.max()), plt.colorbar()
             plt.title('CG, %d iter' % CG.stopper.niter)
             plt.show()
 
         # FISTA
-        problemFISTA = ProblemL1Lasso(x.clone().zero(), y, Blurring, lambda_value=1, op_norm=1.25)
-        FISTA = ISTAsolver(BasicStopper(niter=100), fast=True)
-        FISTA.run(problemFISTA, verbose=True)
-        if PLOT:
-            plt.figure(figsize=(5, 4))
-            plt.imshow(problemFISTA.model.getNdArray(), cmap='bone'), plt.colorbar()
-            plt.title(r'FISTA, $\lambda$=%.2e, %d iter'
-                      % (problemFISTA.lambda_value, FISTA.stopper.niter))
-            plt.show()
+        # problemFISTA = ProblemL1Lasso(x.clone().zero(), y, Blurring, lambda_value=1, op_norm=1.25)
+        # FISTA = ISTAsolver(BasicStopper(niter=100), fast=True)
+        # FISTA.run(problemFISTA, verbose=True)
+        # if PLOT:
+        #     plt.figure(figsize=(5, 4))
+        #     plt.imshow(problemFISTA.model.getNdArray(), cmap='bone'), plt.colorbar()
+        #     plt.title(r'FISTA, $\lambda$=%.2e, %d iter'
+        #               % (problemFISTA.lambda_value, FISTA.stopper.niter))
+        #     plt.show()
 
         # SplitBregman
         # the gradient of the image is 6e3
         D = pyNpOperator.TotalVariation(x)
         I = pyOp.IdentityOp(x)
 
-        problemSB = ProblemLinearReg(x.clone().zero(), y, Blurring, regsL1=D, epsL1=.01)
+        problemSB = ProblemLinearReg(x.clone().zero(), y, Blurring, regsL1=D, epsL1=0.00005, minBound=x.clone().set(0.0))
         
-        SB = SplitBregmanSolver(BasicStopper(niter=10), niter_inner=10, niter_solver=50,
-                                linear_solver='LSQR', breg_weight=1, use_prev_sol=False)
+        SB = SplitBregmanSolver(BasicStopper(niter=300), lambd=0.1, niter_inner=1, niter_solver=30,
+                                linear_solver='LSQR', breg_weight=1., warm_start=True)
+        SB.setDefaults(save_obj=True)
         SB.run(problemSB, verbose=True, inner_verbose=False)
         if PLOT:
             plt.figure(figsize=(5, 4))
-            plt.imshow(problemSB.model.getNdArray(), cmap='bone'), plt.colorbar()
+            plt.imshow(problemSB.model.getNdArray(), cmap='bone', vmin=x.min(), vmax=x.max()), plt.colorbar()
             plt.title(r'SB TV, $\varepsilon=%.2e$, %d iter'
                       % (problemSB.epsL1[0], SB.stopper.niter))
             plt.show()
+            plt.figure(figsize=(5, 4))
+            plt.plot(np.log10(SB.obj / SB.obj[0]), 'r', lw=1, label='SplitBregman')
+            obj_true = problemSB.get_obj(x)
+            plt.plot([np.log10(obj_true / SB.obj[0])] * len(SB.obj), 'k--', lw=1, label='true solution obj value')
+            plt.legend()
+            plt.title('Convergence curve')
+            plt.show()
 
         # ADMM
-        problemADMM = ProblemLinearReg(x.clone().zero(), y, Blurring,
-                                     regsL1=D, epsL1=.1)
-
-        ADMM = ADMMsolver(BasicStopper(niter=10), niter_linear=30, niter_lasso=10)
-        ADMM.setDefaults(save_obj=True, save_model=True)
-        ADMM.run(problemADMM, verbose=True, inner_verbose=True)
-        if PLOT:
-            plt.figure(figsize=(5, 4))
-            plt.imshow(problemADMM.model.getNdArray(), cmap='bone'), plt.colorbar()
-            plt.title(r'ADMM TV, $\varepsilon=%.2e$, %d iter'
-                      % (problemADMM.epsL1[0], ADMM.stopper.niter))
-            plt.show()
+        # problemADMM = ProblemLinearReg(x.clone().zero(), y, Blurring,
+        #                              regsL1=D, epsL1=.1)
+        #
+        # ADMM = ADMMsolver(BasicStopper(niter=10), niter_linear=30, niter_lasso=10)
+        # ADMM.setDefaults(save_obj=True, save_model=True)
+        # ADMM.run(problemADMM, verbose=True, inner_verbose=True)
+        # if PLOT:
+        #     plt.figure(figsize=(5, 4))
+        #     plt.imshow(problemADMM.model.getNdArray(), cmap='bone'), plt.colorbar()
+        #     plt.title(r'ADMM TV, $\varepsilon=%.2e$, %d iter'
+        #               % (problemADMM.epsL1[0], ADMM.stopper.niter))
+        #     plt.show()
 
     elif EXAMPLE == 'monarch':
         x = pyVec.vectorIC(np.load('../testdata/monarch.npy', allow_pickle=True).astype(np.float32))
