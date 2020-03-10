@@ -305,7 +305,7 @@ class GaussianFilter(pyOp.Operator):
         """
         self.setDomainRange(model, model)
         self.sigma = sigma
-        self.scaling = 2.0 * np.pi * np.prod(self.sigma)  # in order to have the max amplitude 1
+        self.scaling = np.sqrt(np.prod(self.sigma/np.pi))  # in order to have the max amplitude 1
         return
     
     def __str__(self):
