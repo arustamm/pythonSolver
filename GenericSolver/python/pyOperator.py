@@ -236,8 +236,8 @@ class Operator:
                 print("Absolute error: %.2e" % abs(abs_err))
                 print("Relative error: %.2e \n" % abs(err_rel))
             if err_rel > tol:
-                # Deleting temporary vectors
-                del d1, d2, r1, r2
+                # # Deleting temporary vectors
+                # del d1, d2, r1, r2
                 raise Warning("\tDot products failure add=%s; relative error %.2e is greater than tolerance %.2e"
                               % (str(add), err_rel, tol))
     
