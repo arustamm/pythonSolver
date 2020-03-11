@@ -14,13 +14,13 @@ import imp
 try:
     imp.find_module('SepVector')
     import SepVector
-    
-    
+
+
     def call_constr_hyper(axes_in):
         """Function to remotely construct an SepVector using the axis object"""
         return SepVector.getSepVector(axes=axes_in)
-    
-    
+
+
     def copy_from_NdArray(vecObj, NdArray):
         """Function to set vector values from numpy array"""
         vecObj.getNdArray()[:] = NdArray
@@ -319,7 +319,7 @@ class DaskVector(Vec.vector):
         # Waiting vectors to be instantiated
         daskD.wait(self.vecDask)
         return
-    
+
     # def __del__(self):
     # 	"""
     # 	   Cancel/Delete all futures within the class (fees memory on workers)
@@ -328,7 +328,7 @@ class DaskVector(Vec.vector):
     # 	#for the methods clone and cloneSpace. Need to find a solution to the problem
     # 	self.client.cancel(self.vecDask)
     # 	return
-    
+
     # Class vector operations
     def getNdArray(self):
         """
@@ -353,20 +353,20 @@ class DaskVector(Vec.vector):
             return NdArr
         except ValueError:
             return arrays
-    
+
     def norm(self, N=2):
         """Function to compute vector N-norm"""
         norms = self.client.map(call_norm, self.vecDask, N=N, pure=False)
         norm = 0.0
         for future, result in daskD.as_completed(norms, with_results=True):
-            norm += np.power(result, N)
+            norm += np.power(np.float64(result), N)
         return np.power(norm, 1. / N)
-    
+
     def zero(self):
         """Function to zero out a vector"""
         daskD.wait(self.client.map(call_zero, self.vecDask, pure=False))
         return self
-    
+
     def max(self):
         """Function to obtain maximum value within a vector"""
         maxs = self.client.map(call_max, self.vecDask, pure=False)
@@ -375,7 +375,7 @@ class DaskVector(Vec.vector):
             if result > max_val:
                 max_val = result
         return max_val
-    
+
     def min(self):
         """Function to obtain minimum value within a vector"""
         mins = self.client.map(call_min, self.vecDask, pure=False)
@@ -384,50 +384,50 @@ class DaskVector(Vec.vector):
             if result < min_val:
                 min_val = result
         return min_val
-    
+
     def set(self, val):
         """Function to set all values in the vector"""
         daskD.wait(self.client.map(call_set, self.vecDask, val=val, pure=False))
         return self
-    
+
     def scale(self, sc):
         """Function to scale a vector"""
         daskD.wait(self.client.map(call_scale, self.vecDask, sc=sc, pure=False))
         return self
-    
+
     def addbias(self, bias):
         """Function to add bias to a vector"""
         daskD.wait(self.client.map(call_addbias, self.vecDask, bias=bias, pure=False))
         return self
-    
+
     def rand(self):
         """Function to randomize a vector"""
         daskD.wait(self.client.map(call_rand, self.vecDask, pure=False))
         return self
-    
+
     def clone(self):
         """Function to clone (deep copy) a vector from a vector or a Space"""
         vectors = self.client.map(call_clone, self.vecDask, pure=False)
         daskD.wait(vectors)
         return DaskVector(self.dask_client, dask_vectors=vectors)
-    
+
     def cloneSpace(self):
         """Function to clone vector space"""
         vectors = self.client.map(call_cloneSpace, self.vecDask, pure=False)
         daskD.wait(vectors)
         return DaskVector(self.dask_client, dask_vectors=vectors)
-    
+
     def checkSame(self, vec2):
         """Function to check to make sure the vectors exist in the same space"""
         checkVector(self, vec2)
         futures = self.client.map(call_checkSame, self.vecDask, vec2.vecDask, pure=False)
         results = self.client.gather(futures)
         return all(results)
-    
+
     def writeVec(self, filename, mode='w', multi_file=False):
         """
         Function to write vector to file:
-        
+
         :param filename     : string - Filename to write the vector to
         :param mode         : string - Writing mode 'w'=overwrite file or 'a'=append to file ['w']
         :param multi_file   : boolean - If True multiple files will be written with suffix _chunk1,2,3,...;
@@ -495,7 +495,7 @@ class DaskVector(Vec.vector):
                         ax_id, ax[0], ax_id, ax[1], ax_id, ax[2], ax_id, ax[3]))
                 fid.write("in='%s'\n" % (binfile))
                 fid.write("esize=4\n")
-                fid.write("data_format=\"native_float\"\n")
+                fid.write("data_format=\"xdr_float\"\n")
             # Writing binary file ("reading each binary file by chuncks of BUF_SIZE")
             with open(binfile, mode + 'b') as fid:
                 for binfile_ii in bin_files:
@@ -509,22 +509,22 @@ class DaskVector(Vec.vector):
                 os.remove(vec_name)
                 os.remove(bin_files[idx])
         return
-    
+
     def abs(self):
         """Return a vector containing the absolute values"""
         daskD.wait(self.client.map(call_abs, self.vecDask, pure=False))
         return self
-    
+
     def sign(self):
         """Return a vector containing the signs"""
         daskD.wait(self.client.map(call_sign, self.vecDask, pure=False))
         return self
-    
+
     def reciprocal(self):
         """Return a vector containing the reciprocals of self"""
         daskD.wait(self.client.map(call_reciprocal, self.vecDask, pure=False))
         return self
-    
+
     def conj(self):
         """Compute conjugate transpose of the vector"""
         daskD.wait(self.client.map(call_conj, self.vecDask, pure=False))
@@ -544,21 +544,21 @@ class DaskVector(Vec.vector):
         """Compute element-wise power of the vector"""
         daskD.wait(self.client.map(call_pow, self.vecDask, power=power, pure=False))
         return self
-    
+
     # Methods combinaning different vectors
-    
+
     def maximum(self, vec2):
         """Return a new vector of element-wise maximum of self and vec2"""
         checkVector(self, vec2)
         daskD.wait(self.client.map(call_maximum, self.vecDask, vec2.vecDask, pure=False))
         return self
-    
+
     def copy(self, vec2):
         """Function to copy vector"""
         checkVector(self, vec2)
         daskD.wait(self.client.map(call_copy, self.vecDask, vec2.vecDask, pure=False))
         return self
-    
+
     def scaleAdd(self, vec2, sc1=1.0, sc2=1.0):
         """Function to scale two vectors and add them to the first one"""
         checkVector(self, vec2)
@@ -568,7 +568,7 @@ class DaskVector(Vec.vector):
                                   pure=False)
         daskD.wait(futures)
         return self
-    
+
     def dot(self, vec2):
         """Function to compute dot product between two vectors"""
         checkVector(self, vec2)
@@ -576,16 +576,16 @@ class DaskVector(Vec.vector):
         # Adding all the results together
         dot = 0.0
         for future, result in daskD.as_completed(dots, with_results=True):
-            dot += result
+            dot += np.float64(result)
         return dot
-    
+
     def multiply(self, vec2):
         """Function to multiply element-wise two vectors"""
         checkVector(self, vec2)
         futures = self.client.map(call_multiply, self.vecDask, vec2.vecDask, pure=False)
         daskD.wait(futures)
         return self
-    
+
     def isDifferent(self, vec2):
         """Function to check if two vectors are identical"""
         checkVector(self, vec2)
@@ -593,7 +593,7 @@ class DaskVector(Vec.vector):
                                   pure=False)
         results = self.client.gather(futures)
         return any(results)
-    
+
     def clipVector(self, low, high):
         """Function to bound vector values based on input vectors min and max"""
         checkVector(self, low)  # Checking low-bound vector
