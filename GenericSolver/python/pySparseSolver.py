@@ -154,7 +154,7 @@ class ISTAsolver(Solver):
             ista_mdl.scaleAdd(prblm_grad, 1.0, -1.0 / problem.op_norm)
 
             # SOFT-THRESHOLDING STEP
-            ista_mdl = _soft_thresh(ista_mdl, problem.lambda_value / problem.op_norm)
+            ista_mdl.copy(_soft_thresh(ista_mdl, problem.lambda_value / problem.op_norm))
 
             # Projecting model onto the bounds (if any)
             if "bounds" in dir(problem):
