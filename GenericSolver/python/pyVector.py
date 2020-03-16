@@ -552,7 +552,7 @@ class vectorIC(vector):
 
     def cloneSpace(self):
         """Function to clone vector space only (vector without actual vector array by using empty array of size 0)"""
-        vec_space = vectorIC(np.empty(0, dtype=self.arr.dtype))
+        vec_space = vectorIC(np.empty(self.shape, dtype=self.arr.dtype))
         # Cloning space of input vector
         vec_space.naxis = self.naxis
         vec_space.ndims = self.ndims
