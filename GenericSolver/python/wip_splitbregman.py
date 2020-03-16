@@ -1,0 +1,384 @@
+import time
+import numpy as np
+import pyVector as pyVec
+import pyOperator as pyOp
+from pyProblem import ProblemL2LinearReg
+from pyLinearSolver import LSQRsolver
+from pyStopper import BasicStopper
+import pylops
+from scipy.ndimage import gaussian_filter
+
+
+class GaussianFilterScipy(pylops.LinearOperator):
+    def __init__(self, model, sigma):
+        self.model_shape = model.shape
+        self.sigma = sigma
+        self.scaling = np.sqrt(np.prod(self.sigma / np.pi))  # in order to have the max amplitude 1
+        self.shape = (model.size, model.size)
+        self.dtype = np.dtype(model.arr.dtype)
+        self.dtype = np.float
+        
+    def __str__(self):
+        return "GausFilt"
+    
+    def _matvec(self, x):
+        """Forward operator"""
+        return self.scaling * gaussian_filter(x.reshape(self.model_shape), sigma=self.sigma)
+    
+    def _rmatvec(self, y):
+        """Self-adjoint operator"""
+        return self._matvec(y)
+
+
+def _shrinkage(x, thresh):
+    xabs = np.abs(x)
+    return x / (xabs + 1e-10) * np.maximum(xabs - thresh, 0)
+
+
+def SplitBregman(Op, RegsL1, data, niter_outer=3, niter_inner=5, RegsL2=None,
+                 dataregsL2=None, mu=1., epsRL1s=None, epsRL2s=None,
+                 tol=1e-10, tau=1., x0=None, restart=False,
+                 show=False, **kwargs_lsqr):
+    if show:
+        tstart = time.time()
+        print('Split-Bregman optimization\n'
+              '---------------------------------------------------------\n'
+              'The Operator Op has %d rows and %d cols\n'
+              'niter_outer = %3d     niter_inner = %3d   tol = %2.2e\n'
+              'mu = %2.2e         epsL1 = %s\t  epsL2 = %s     '
+              % (Op.range.size, Op.domain.size, # Op.shape[0], Op.shape[1],
+                 niter_outer, niter_inner, tol,
+                 mu, str(epsRL1s), str(epsRL2s)))
+        print('---------------------------------------------------------\n')
+        head1 = '   Itn          x[0]           r2norm          r12norm'
+        print(head1)
+    
+    # L1 regularizations
+    nregsL1 = len(RegsL1)
+    # b = [np.zeros(RegL1.shape[0]) for RegL1 in RegsL1]
+    b = [np.zeros(RegL1.range.size) for RegL1 in RegsL1]
+    d = b.copy()
+    
+    # L2 regularizations
+    nregsL2 = 0 if RegsL2 is None else len(RegsL2)
+    if nregsL2 > 0:
+        Regs = RegsL2 + RegsL1
+        if dataregsL2 is None:
+            # dataregsL2 = [np.zeros(Op.shape[1])] * nregsL2
+            dataregsL2 = [np.zeros(Op.domain.size)] * nregsL2
+    else:
+        Regs = RegsL1
+        dataregsL2 = []
+    
+    # Rescale dampings
+    epsRs = [np.sqrt(epsRL2s[ireg] / 2) / np.sqrt(mu / 2) for ireg in range(nregsL2)] + \
+            [np.sqrt(epsRL1s[ireg] / 2) / np.sqrt(mu / 2) for ireg in range(nregsL1)]
+    # xinv = np.zeros_like(np.zeros(Op.shape[1])) if x0 is None else x0
+    xinv = np.zeros_like(np.zeros(Op.domain.size)) if x0 is None else x0
+    # xold = np.inf * np.ones_like(np.zeros(Op.shape[1]))
+    xold = np.inf * np.ones_like(np.zeros(Op.domain.size))
+    
+    itn_out = 0
+    while np.linalg.norm(xinv - xold) > tol and itn_out < niter_outer:
+        xold = xinv
+        for _ in range(niter_inner):
+            # Regularized problem
+            dataregs = dataregsL2 + [d[ireg] - b[ireg] for ireg in range(nregsL1)]
+            
+            # xinv = RegularizedInversion(Op, Regs, data,
+            #                             dataregs=dataregs,
+            #                             epsRs=epsRs,
+            #                             x0=x0 if restart else xinv,
+            #                             **kwargs_lsqr)
+            
+            LinProb = ProblemL2LinearReg(model=pyVec.vectorIC((x0 if restart else xinv).reshape(Op.domain.shape)),
+                                         data=data,
+                                         op=Op,
+                                         epsilon=epsRs[0],
+                                         reg_op=Regs[0],
+                                         prior_model=pyVec.vectorIC(dataregs[0].reshape(Regs[0].range.shape)))
+            LinSolver = LSQRsolver(BasicStopper(niter=kwargs_lsqr['iter_lim']))
+            LinSolver.run(LinProb)
+            xinv_Vec = LinProb.model.clone()
+            xinv = xinv_Vec.getNdArray()
+            
+            # Shrinkage
+            # d = [_shrinkage(RegsL1[ireg] * xinv + b[ireg], epsRL1s[ireg]) for ireg in range(nregsL1)]
+            d = [_shrinkage((RegsL1[ireg] * xinv_Vec).getNdArray().ravel() + b[ireg], epsRL1s[ireg]) for ireg in range(nregsL1)]
+
+        # Bregman update
+        # b = [b[ireg] + tau * (RegsL1[ireg] * xinv - d[ireg]) for ireg in range(nregsL1)]
+        b = [b[ireg] + tau * ((RegsL1[ireg] * xinv_Vec).getNdArray().ravel() - d[ireg]) for ireg in range(nregsL1)]
+
+        itn_out += 1
+        
+        if show:
+            # costdata = mu / 2. * np.linalg.norm(data - Op.matvec(xinv)) ** 2
+            costdata = mu / 2. * (data.clone() - Op*xinv_Vec).norm()**2
+            
+            # costregL2 = 0 if RegsL2 is None else [epsRL2 * np.linalg.norm(dataregL2 - RegL2.matvec(xinv)) ** 2
+            #                                       for epsRL2, RegL2, dataregL2 in zip(epsRL2s, RegsL2, dataregsL2)]
+            costregL2 = 0 if RegsL2 is None else [epsRL2 * (dataregL2 - (RegL2*xinv_Vec).getNdArray().ravel())**2
+                                                  for epsRL2, RegL2, dataregL2 in zip(epsRL2s, RegsL2, dataregsL2)]
+            
+            # costregL1 = [np.linalg.norm(RegL1.matvec(xinv), ord=1) for epsRL1, RegL1 in zip(epsRL1s, RegsL1)]
+            costregL1 = [epsRL1 * (RegL1*xinv_Vec).norm(1) for epsRL1, RegL1 in zip(epsRL1s, RegsL1)]
+            
+            cost = costdata + np.sum(np.array(costregL2)) + np.sum(np.array(costregL1))
+            msg = '%6g  %12.5e       %10.3e        %9.3e' % \
+                  (np.abs(itn_out), xinv[0], costdata, cost)
+            print(msg)
+    
+    if show:
+        print('\nIterations = %d        Total time (s) = %.2f'
+              % (itn_out, time.time() - tstart))
+        print('---------------------------------------------------------\n')
+    # return xinv, itn_out
+    return xinv_Vec, itn_out
+
+
+if __name__ == '__main__':
+    from sys import path
+    path.insert(0, '.')
+    import matplotlib.pyplot as plt
+    import pyNpOperator
+    from pyProblem import ProblemLinearReg
+    from pySparseSolver import SplitBregmanSolver
+    
+    PLOT = True
+    EXAMPLE = 'deconv'  # must be noisy, deconv, gaussian, medical or monarch
+    
+    if EXAMPLE == 'noisy':
+        # data examples
+        np.random.seed(1)
+        nx = 101
+        x = pyVec.vectorIC((nx,)).zero()
+        x.getNdArray()[:nx // 2] = 10
+        x.getNdArray()[nx // 2:3 * nx // 4] = -5
+        
+        Iop = pyOp.IdentityOp(x)
+        TV = pyNpOperator.FirstDerivative(x)
+        L = pyNpOperator.SecondDerivative(x)
+        
+        n = x.clone()
+        n.getNdArray()[:] = np.random.normal(0, 1.0, nx)
+        y = Iop * (x.clone() + n)
+        
+        derivative = TV * x
+        
+        if PLOT:
+            plt.figure(figsize=(5, 4))
+            plt.plot(x.getNdArray(), 'k', lw=1, label='x')
+            plt.plot(y.getNdArray(), '.k', label='y=x+n')
+            plt.plot(derivative.getNdArray(), '.b', lw=2, label='∂x')
+            plt.legend()
+            plt.title('Model, Data and Derivative')
+            plt.show()
+        
+        # # SplitBregman
+        x_inv, _ = SplitBregman(Op=Iop, RegsL1=[TV], data=y,
+                                niter_outer=50, niter_inner=3, RegsL2=None,
+                                dataregsL2=None, mu=0.01, epsRL1s=[.3], epsRL2s=None,
+                                tol=1e-4, tau=1., x0=None, restart=False,
+                                show=True, **dict(iter_lim=30))
+        if PLOT:
+            plt.figure(figsize=(5, 4))
+            plt.plot(x.getNdArray(), 'k', lw=1, label='x')
+            plt.plot(y.getNdArray(), '.k', label='y=x+n')
+            plt.plot(derivative.getNdArray(), ':k', lw=1, label='∂x')
+            plt.plot(x_inv.getNdArray(), 'r', lw=2, label='x_inv')
+            plt.plot((TV * x_inv).getNdArray(), ':r', lw=2, label='∂(x_inv)')
+            plt.legend()
+            plt.title('SB inversion')
+            plt.show()
+            # Objective function convergence
+            # plt.figure(figsize=(5, 4))
+            # plt.plot(np.log10(SB.obj / SB.obj[0]), 'r', lw=1, label='SplitBregman')
+            # obj_true = problemSB.get_obj(x)
+            # plt.plot([np.log10(obj_true / SB.obj[0])] * len(SB.obj), 'k--', lw=1, label='true solution obj value')
+            # plt.legend()
+            # plt.title('Convergence curve')
+            # plt.show()
+
+    elif EXAMPLE == 'deconv':
+        # 1D deconvolution for blocky signal
+        nx = 201
+        x = pyVec.vectorIC(np.zeros((nx,), dtype=np.float32)).zero()
+        x.getNdArray()[20:30] = 10.
+        x.getNdArray()[50:75] = -5.
+        x.getNdArray()[100:150] = 2.5
+        x.getNdArray()[175:180] = 7.5
+        # if PLOT:
+        #     fig, ax = plt.subplots(figsize=(6, 3))
+        #     plt.plot(np.abs(np.fft.rfft(x.getNdArray())))
+        #     plt.title('True model')
+        #     ax.autoscale(enable=True, axis='x', tight=True)
+        #     plt.ylim(0., 220.)
+        #     plt.show()
+        # if PLOT:
+        #     fig, ax = plt.subplots(figsize=(6, 3))
+        #     plt.plot(x.getNdArray())
+        #     plt.title('True model')
+        #     ax.autoscale(enable=True, axis='x', tight=True)
+        #     plt.ylim(-6., 11.)
+        #     plt.show()
+        G = pyNpOperator.GaussianFilter(x, 2.0)
+        y = G * x
+        # y.scale(1./y.norm())
+        # if PLOT:
+        #     fig, ax = plt.subplots(figsize=(6, 3))
+        #     plt.plot(np.abs(np.fft.rfft(y.getNdArray())))
+        #     plt.title('Data')
+        #     ax.autoscale(enable=True, axis='x', tight=True)
+        #     plt.ylim(0., 220.)
+        #     plt.show()
+        # if PLOT:
+        #     fig, ax = plt.subplots(figsize=(6, 3))
+        #     plt.plot(y.getNdArray())
+        #     plt.title('Data')
+        #     ax.autoscale(enable=True, axis='x', tight=True)
+        #     plt.ylim(-6., 11.)
+        #     plt.show()
+
+        TV = pyNpOperator.FirstDerivative(x)
+        Iop = pyOp.IdentityOp(x)
+        w1 = .1
+        x_hybrid, _ = SplitBregman(G, [TV], y, niter_outer=200, niter_inner=15, mu=1.,
+                                   epsRL1s=[w1], epsRL2s=None, tau=1., show=True, **dict(iter_lim=10))
+        
+        problemSB = ProblemLinearReg(x.clone().zero(), y, G, regsL1=TV, epsL1=w1)
+        SB = SplitBregmanSolver(BasicStopper(niter=200), lambd=1., niter_inner=15, niter_solver=10,
+                                linear_solver='LSQR', breg_weight=1.)
+        SB.run(problemSB, verbose=True, inner_verbose=False)
+        
+        # pylops test
+        Gop = GaussianFilterScipy(x, 2.)
+        Dop = pylops.FirstDerivative(x.size, edge=True)
+        y_pylops = Gop * x.arr
+        x_pylops, _ = pylops.optimization.sparsity.SplitBregman(Op=Gop, RegsL1=[Dop], data=y_pylops,
+                                                                niter_outer=200, niter_inner=15, RegsL2=None,
+                                                                dataregsL2=None, mu=1., epsRL1s=[w1], epsRL2s=None,
+                                                                tol=1e-10, tau=1., x0=None, restart=False,
+                                                                show=True, **dict(iter_lim=10))
+        
+        if PLOT:
+            fig, ax = plt.subplots(figsize=(6, 3))
+            plt.plot(x.getNdArray(), 'k', label="True model")
+            # plt.plot(x_hybrid.getNdArray(), 'b--', label="Hybrid")
+            # plt.plot(problemSB.model.getNdArray(), 'r--', label="pySolver")
+            plt.plot(x_pylops, 'g--', label="pyLops")
+            plt.title('Inversion results, ')
+            ax.autoscale(enable=True, axis='x', tight=True)
+            plt.legend()
+            plt.show()
+
+    elif EXAMPLE == 'gaussian':
+        x = pyVec.vectorIC(np.empty((301, 601))).set(0)
+        x.getNdArray()[150, 300] = 1.0
+        # x.getNdArray()[100, 200] = -5.0
+        # x.getNdArray()[280, 400] = 1.0
+        if PLOT:
+            plt.figure(figsize=(6, 3))
+            plt.imshow(x.getNdArray()), plt.colorbar()
+            plt.title('Model')
+            plt.show()
+        
+        G = pyNpOperator.GaussianFilter(x, [25, 15])
+        y = G * x
+        # y.scale(1./y.norm())
+        if PLOT:
+            plt.figure(figsize=(6, 3))
+            plt.imshow(y.getNdArray()), plt.colorbar()
+            plt.title('Data')
+            plt.show()
+        
+        # SplitBregman
+        I = pyOp.IdentityOp(x)
+        problemSB = ProblemLinearReg(x.clone().zero(), y, G, regsL1=I, epsL1=10.)
+        
+        SB = SplitBregmanSolver(BasicStopper(niter=50), niter_inner=3, niter_solver=30,
+                                linear_solver='LSQR', breg_weight=1., use_prev_sol=False)
+        SB.setDefaults()
+        SB.run(problemSB, verbose=True, inner_verbose=False)
+        if PLOT:
+            plt.figure(figsize=(6, 3))
+            plt.imshow(problemSB.model.getNdArray()), plt.colorbar()
+            plt.title('SplitBregman')
+            plt.show()
+    
+    elif EXAMPLE == 'medical':
+        x = pyVec.vectorIC(np.load('../testdata/shepp_logan_phantom.npy', allow_pickle=True).astype(np.float32))
+        if PLOT:
+            plt.figure(figsize=(5, 4))
+            plt.imshow(x.getNdArray(), cmap='bone', vmin=x.min(), vmax=x.max()), plt.colorbar()
+            plt.title('Model')
+            plt.show()
+        
+        Blurring = pyNpOperator.GaussianFilter(x, [3, 5])
+        y = Blurring * x
+        
+        if PLOT:
+            plt.figure(figsize=(5, 4))
+            plt.imshow(y.getNdArray(), cmap='bone', vmin=x.min(), vmax=x.max()), plt.colorbar()
+            plt.title('Data')
+            plt.show()
+        
+        # SplitBregman
+        # the gradient of the image is 6e3
+        D = pyNpOperator.TotalVariation(x)
+        I = pyOp.IdentityOp(x)
+        
+        problemSB = ProblemLinearReg(x.clone().zero(), y, Blurring, regsL1=D, epsL1=0.00005,
+                                     minBound=x.clone().set(0.0))
+        
+        SB = SplitBregmanSolver(BasicStopper(niter=300), lambd=0.1, niter_inner=1, niter_solver=30,
+                                linear_solver='LSQR', breg_weight=1., warm_start=True)
+        SB.setDefaults(save_obj=True)
+        SB.run(problemSB, verbose=True, inner_verbose=False)
+        if PLOT:
+            plt.figure(figsize=(5, 4))
+            plt.imshow(problemSB.model.getNdArray(), cmap='bone', vmin=x.min(), vmax=x.max()), plt.colorbar()
+            plt.title(r'SB TV, $\varepsilon=%.2e$, %d iter'
+                      % (problemSB.epsL1[0], SB.stopper.niter))
+            plt.show()
+            plt.figure(figsize=(5, 4))
+            plt.plot(np.log10(SB.obj / SB.obj[0]), 'r', lw=1, label='SplitBregman')
+            obj_true = problemSB.get_obj(x)
+            plt.plot([np.log10(obj_true / SB.obj[0])] * len(SB.obj), 'k--', lw=1, label='true solution obj value')
+            plt.legend()
+            plt.title('Convergence curve')
+            plt.show()
+    
+    elif EXAMPLE == 'monarch':
+        x = pyVec.vectorIC(np.load('../testdata/monarch.npy', allow_pickle=True).astype(np.float32))
+        np.random.seed(12345)
+        sigma = 0.05
+        y = x.clone()
+        y.getNdArray()[:] += np.random.normal(0.0, sigma, y.shape)
+        Op = pyOp.IdentityOp(x)
+        TV = pyNpOperator.TotalVariation(x)
+        
+        if PLOT:
+            plt.figure(figsize=(5, 4))
+            plt.imshow(x.arr, cmap='gray'), plt.colorbar()
+            plt.title('Model')
+            plt.show()
+            
+            plt.figure(figsize=(5, 4))
+            plt.imshow(y.arr, cmap='gray'), plt.colorbar()
+            plt.title('Data, std=%.2f' % sigma)
+            plt.show()
+        
+        problemADMM = ProblemLinearReg(x.clone().zero(), y, Op, regsL1=TV, epsL1=.04)
+        
+        ADMM = ADMMsolver(BasicStopper(niter=200), niter_linear=30, niter_lasso=10)
+        ADMM.run(problemADMM, verbose=True, inner_verbose=False)
+        if PLOT:
+            plt.figure(figsize=(5, 4))
+            plt.imshow(problemADMM.model.getNdArray(), cmap='gray'), plt.colorbar()
+            plt.title(r'ADMM TV, $\varepsilon=%.2e$, %d iter'
+                      % (problemADMM.epsL1[0], ADMM.stopper.niter))
+            plt.show()
+    
+    else:
+        raise ValueError("EXAMPLE has to be one of noisy, gaussian, medical or monarch")
