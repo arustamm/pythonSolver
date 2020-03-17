@@ -89,6 +89,10 @@ class vector:
     @property
     def shape(self):
         return self.getNdArray().shape
+    
+    @property
+    def size(self):
+        return self.getNdArray().size
 
     def norm(self, N=2):
         """Function to compute vector N-norm"""
@@ -495,7 +499,6 @@ class vectorIC(vector):
             self.naxis = (1,)
 
         self.ndims = len(self.naxis)  # Number of axes integer
-        self.size = self.arr.size  # Total number of elements
         super(vectorIC, self).__init__()
 
     def getNdArray(self):
@@ -750,6 +753,7 @@ class vectorIC(vector):
             raise TypeError("Provided input high vector not a vectorIC!")
         self.getNdArray()[:] = np.minimum(np.maximum(low.getNdArray(), self.getNdArray()), high.getNdArray())
         return self
+
 
 
 # TODO add methods
