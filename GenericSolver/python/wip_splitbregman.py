@@ -6,6 +6,7 @@ from pyProblem import ProblemL2LinearReg
 from pyLinearSolver import LSQRsolver
 from pyStopper import BasicStopper
 import pylops
+import pylops.optimization.sparsity as pos
 from scipy.ndimage import gaussian_filter
 
 
@@ -17,7 +18,7 @@ class GaussianFilterScipy(pylops.LinearOperator):
         self.shape = (model.size, model.size)
         self.dtype = np.dtype(model.arr.dtype)
         self.dtype = np.float
-        
+    
     def __str__(self):
         return "GausFilt"
     
@@ -46,12 +47,12 @@ def SplitBregman(Op, RegsL1, data, niter_outer=3, niter_inner=5, RegsL2=None,
               'The Operator Op has %d rows and %d cols\n'
               'niter_outer = %3d     niter_inner = %3d   tol = %2.2e\n'
               'mu = %2.2e         epsL1 = %s\t  epsL2 = %s     '
-              % (Op.range.size, Op.domain.size, # Op.shape[0], Op.shape[1],
+              % (Op.range.size, Op.domain.size,  # Op.shape[0], Op.shape[1],
                  niter_outer, niter_inner, tol,
                  mu, str(epsRL1s), str(epsRL2s)))
         print('---------------------------------------------------------\n')
-        head1 = '   Itn          x[0]           r2norm          r12norm'
-        print(head1)
+        # head1 = '   Itn          x[0]           DFid            ObjFunc'
+        # print(head1)
     
     # L1 regularizations
     nregsL1 = len(RegsL1)
@@ -71,8 +72,8 @@ def SplitBregman(Op, RegsL1, data, niter_outer=3, niter_inner=5, RegsL2=None,
         dataregsL2 = []
     
     # Rescale dampings
-    epsRs = [np.sqrt(epsRL2s[ireg] / 2) / np.sqrt(mu / 2) for ireg in range(nregsL2)] + \
-            [np.sqrt(epsRL1s[ireg] / 2) / np.sqrt(mu / 2) for ireg in range(nregsL1)]
+    epsRs = [np.sqrt(epsRL2s[ireg]/2) / np.sqrt(mu/2) for ireg in range(nregsL2)] + \
+            [np.sqrt(epsRL1s[ireg]/2) / np.sqrt(mu/2) for ireg in range(nregsL1)]
     # xinv = np.zeros_like(np.zeros(Op.shape[1])) if x0 is None else x0
     xinv = np.zeros_like(np.zeros(Op.domain.size)) if x0 is None else x0
     # xold = np.inf * np.ones_like(np.zeros(Op.shape[1]))
@@ -104,30 +105,35 @@ def SplitBregman(Op, RegsL1, data, niter_outer=3, niter_inner=5, RegsL2=None,
             
             # Shrinkage
             # d = [_shrinkage(RegsL1[ireg] * xinv + b[ireg], epsRL1s[ireg]) for ireg in range(nregsL1)]
-            d = [_shrinkage((RegsL1[ireg] * xinv_Vec).getNdArray().ravel() + b[ireg], epsRL1s[ireg]) for ireg in range(nregsL1)]
-
+            d = [_shrinkage((RegsL1[ireg] * xinv_Vec).getNdArray().ravel() + b[ireg], epsRL1s[ireg]) for ireg in
+                 range(nregsL1)]
+        
         # Bregman update
         # b = [b[ireg] + tau * (RegsL1[ireg] * xinv - d[ireg]) for ireg in range(nregsL1)]
         b = [b[ireg] + tau * ((RegsL1[ireg] * xinv_Vec).getNdArray().ravel() - d[ireg]) for ireg in range(nregsL1)]
-
+        
         itn_out += 1
         
         if show:
             # costdata = mu / 2. * np.linalg.norm(data - Op.matvec(xinv)) ** 2
-            costdata = mu / 2. * (data.clone() - Op*xinv_Vec).norm()**2
+            res = data.clone() - Op * xinv_Vec
+            costdata = mu / 2. * res.norm() ** 2
             
             # costregL2 = 0 if RegsL2 is None else [epsRL2 * np.linalg.norm(dataregL2 - RegL2.matvec(xinv)) ** 2
             #                                       for epsRL2, RegL2, dataregL2 in zip(epsRL2s, RegsL2, dataregsL2)]
-            costregL2 = 0 if RegsL2 is None else [epsRL2 * (dataregL2 - (RegL2*xinv_Vec).getNdArray().ravel())**2
-                                                  for epsRL2, RegL2, dataregL2 in zip(epsRL2s, RegsL2, dataregsL2)]
+            costregL2 = 0 if RegsL2 is None else sum(
+                [epsRL2 * (dataregL2 - (RegL2 * xinv_Vec).getNdArray().ravel()) ** 2
+                 for epsRL2, RegL2, dataregL2 in zip(epsRL2s, RegsL2, dataregsL2)])
             
             # costregL1 = [np.linalg.norm(RegL1.matvec(xinv), ord=1) for epsRL1, RegL1 in zip(epsRL1s, RegsL1)]
-            costregL1 = [epsRL1 * (RegL1*xinv_Vec).norm(1) for epsRL1, RegL1 in zip(epsRL1s, RegsL1)]
+            costregL1 = sum([epsRL1 * (RegL1 * xinv_Vec).norm(1) for epsRL1, RegL1 in zip(epsRL1s, RegsL1)])
             
             cost = costdata + np.sum(np.array(costregL2)) + np.sum(np.array(costregL1))
-            msg = '%6g  %12.5e       %10.3e        %9.3e' % \
-                  (np.abs(itn_out), xinv[0], costdata, cost)
-            print(msg)
+            iter_msg = "iter = %s, obj = %.5e, df_obj = %.2e, reg_obj = %.2e, resnorm = %.2e" \
+                       % (str(itn_out).zfill(4), cost, costdata, costregL2 + costregL1, res.norm())
+            # msg = '%6g  %12.5e       %10.3e        %9.3e' % \
+            #       (np.abs(itn_out), xinv[0], costdata, cost)
+            print(iter_msg)
     
     if show:
         print('\nIterations = %d        Total time (s) = %.2f'
@@ -139,11 +145,14 @@ def SplitBregman(Op, RegsL1, data, niter_outer=3, niter_inner=5, RegsL2=None,
 
 if __name__ == '__main__':
     from sys import path
+    
     path.insert(0, '.')
     import matplotlib.pyplot as plt
     import pyNpOperator
+    import pyLopsInterface
     from pyProblem import ProblemLinearReg
     from pySparseSolver import SplitBregmanSolver
+    
     
     PLOT = True
     EXAMPLE = 'deconv'  # must be noisy, deconv, gaussian, medical or monarch
@@ -199,7 +208,7 @@ if __name__ == '__main__':
             # plt.legend()
             # plt.title('Convergence curve')
             # plt.show()
-
+    
     elif EXAMPLE == 'deconv':
         # 1D deconvolution for blocky signal
         nx = 201
@@ -239,39 +248,48 @@ if __name__ == '__main__':
         #     ax.autoscale(enable=True, axis='x', tight=True)
         #     plt.ylim(-6., 11.)
         #     plt.show()
-
+        
         TV = pyNpOperator.FirstDerivative(x)
         Iop = pyOp.IdentityOp(x)
         w1 = .1
-        x_hybrid, _ = SplitBregman(G, [TV], y, niter_outer=200, niter_inner=15, mu=1.,
-                                   epsRL1s=[w1], epsRL2s=None, tau=1., show=True, **dict(iter_lim=10))
-        
-        problemSB = ProblemLinearReg(x.clone().zero(), y, G, regsL1=TV, epsL1=w1)
-        SB = SplitBregmanSolver(BasicStopper(niter=200), lambd=1., niter_inner=15, niter_solver=10,
-                                linear_solver='LSQR', breg_weight=1.)
-        SB.run(problemSB, verbose=True, inner_verbose=False)
-        
+        niter = 200
+        niter_inner = 15
+        niter_solver = 10
+        breg = 1.
+        lambd = 1.
+        # x_hybrid, _ = SplitBregman(G, [TV], y, niter_outer=niter, niter_inner=niter_inner,
+        #                            mu=lambd, epsRL1s=[w1], epsRL2s=None, tau=breg,
+        #                            show=True, **dict(iter_lim=niter_solver))
+        #
+        # problemSB = ProblemLinearReg(x.clone().zero(), y, G, regsL1=TV, epsL1=w1)
+        # SB = SplitBregmanSolver(BasicStopper(niter=niter), lambd=lambd,
+        #                         niter_inner=niter_inner, niter_solver=niter_solver,
+        #                         linear_solver='LSQR', breg_weight=breg)
+        # SB.run(problemSB, verbose=True, inner_verbose=False)
+        #
         # pylops test
-        Gop = GaussianFilterScipy(x, 2.)
-        Dop = pylops.FirstDerivative(x.size, edge=True)
-        y_pylops = Gop * x.arr
-        x_pylops, _ = pylops.optimization.sparsity.SplitBregman(Op=Gop, RegsL1=[Dop], data=y_pylops,
-                                                                niter_outer=200, niter_inner=15, RegsL2=None,
-                                                                dataregsL2=None, mu=1., epsRL1s=[w1], epsRL2s=None,
-                                                                tol=1e-10, tau=1., x0=None, restart=False,
-                                                                show=True, **dict(iter_lim=10))
+        G_pylops = pyLopsInterface.ToPylops(G)
+        TV_pylops = pyLopsInterface.ToPylops(TV)
+        y_pylops = G_pylops * x.arr
+        x_pylops, _ = pos.SplitBregman(Op=G_pylops, RegsL1=[TV_pylops], data=y_pylops,
+                                       niter_outer=niter, niter_inner=niter_inner,
+                                       RegsL2=None, dataregsL2=None, mu=lambd,
+                                       epsRL1s=[w1], epsRL2s=None,
+                                       tol=1e-10, tau=breg, x0=None, restart=False,
+                                       show=True, **dict(iter_lim=niter_solver))
         
         if PLOT:
             fig, ax = plt.subplots(figsize=(6, 3))
-            plt.plot(x.getNdArray(), 'k', label="True model")
-            # plt.plot(x_hybrid.getNdArray(), 'b--', label="Hybrid")
-            # plt.plot(problemSB.model.getNdArray(), 'r--', label="pySolver")
+            plt.plot(x.getNdArray(), 'k', label="true model")
             plt.plot(x_pylops, 'g--', label="pyLops")
-            plt.title('Inversion results, ')
+            plt.plot(x_hybrid.getNdArray(), 'b--', label="Hybrid")
+            plt.plot(problemSB.model.getNdArray(), 'r--', label="pySolver")
+            plt.title('TV=%.e, λ=%.3f, ß=%.2f, niter=%d,%d,%d'
+                      % (w1, lambd, breg, niter, niter_inner, niter_solver))
             ax.autoscale(enable=True, axis='x', tight=True)
             plt.legend()
             plt.show()
-
+    
     elif EXAMPLE == 'gaussian':
         x = pyVec.vectorIC(np.empty((301, 601))).set(0)
         x.getNdArray()[150, 300] = 1.0
