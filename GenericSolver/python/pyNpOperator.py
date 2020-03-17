@@ -8,6 +8,7 @@ import pyOperator as pyOp
 import sep_util
 from scipy.signal import convolve, correlate
 from scipy.ndimage import gaussian_filter
+from scipy.sparse.linalg import LinearOperator
 
 
 class MatrixOp(pyOp.Operator):
@@ -341,9 +342,18 @@ class ConvNDscipy(pyOp.Operator):
     
     def __init__(self, domain, kernel, method='auto'):
         
-        self.kernel = kernel.getNdArray()
+        if isinstance(kernel, pyVec.vector):
+            self.kernel = kernel.clone().getNdArray()
+        elif isinstance(kernel, np.ndarray):
+            self.kernel = kernel.copy()
+        else:
+            raise ValueError("kernel has to be either a vector or a numpy.ndarray")
+        
+        assert len(domain.shape) == len(self.kernel.shape), "Domain and kernel dimensions mismatch"
+        
+        assert method in ["auto", "direct", "fft"], "method has to be auto, direct or fft"
         self.method = method
-        self.data_tmp = domain.clone().zero()
+        
         super(ConvNDscipy, self).__init__(domain, domain)
     
     def __str__(self):
@@ -352,23 +362,25 @@ class ConvNDscipy(pyOp.Operator):
     def forward(self, add, model, data):
         self.checkDomainRange(model, data)
         if add:
-            self.data_tmp.copy(data)
+            temp = data.clone()
         data.zero()
-        data.getNdArray()[:] = convolve(model.getNdArray(), self.kernel,
-                                        mode='same', method=self.method)
+        x = model.clone().getNdArray()
+        y = convolve(x, self.kernel, mode='same', method=self.method).astype(x.dtype)
+        data.getNdArray()[:] = y
         if add:
-            data.scaleAdd(self.data_tmp)
+            data.scaleAdd(temp, 1., 1.)
         return
     
     def adjoint(self, add, model, data):
         self.checkDomainRange(model, data)
         if add:
-            self.data_tmp.copy(model)
+            temp = model.clone()
         model.zero()
-        model.getNdArray()[:] = correlate(data.getNdArray(), self.kernel,
-                                          mode='same', method=self.method)
+        y = data.clone().getNdArray()
+        x = correlate(y, self.kernel, mode='same', method=self.method).astype(y.dtype)
+        model.getNdArray()[:] = x
         if add:
-            model.scaleAdd(self.data_tmp)
+            model.scaleAdd(temp, 1., 1.)
         return
 
 
@@ -519,7 +531,80 @@ class _ZeroPadIC(pyOp.Operator):
         return
 
 
+class FromScipy(pyOp.Operator):
+    
+    def __init__(self, op):
+        """
+        Cast a scipy LinearOperator to Operator
+        :param op: `scipy.sparse.linalg.LinearOperator` class (or child, such as pylops.LinearOperator)
+        """
+        assert isinstance(op, LinearOperator), "op has to be a scipy LinearOperator"
+        self.matvec = op.matvec
+        self.rmatvec = op.rmatvec
+        self.name = op.__str__()
+        super(FromScipy, self).__init__(pyVec.vectorIC(np.empty(op.shape[1])),
+                                        pyVec.vectorIC(np.empty(op.shape[0])))
+    
+    def __str__(self):
+        return self.name.replace('<', '').replace('>', '')
+        
+    def forward(self, add, model, data):
+        self.checkDomainRange(model, data)
+        if add:
+            temp = data.clone()
+        data.getNdArray()[:] = self.matvec(model.getNdArray())
+        if add:
+            data.scaleAdd(temp, 1., 1.)
+            
+    def adjoint(self, add, model, data):
+        self.checkDomainRange(model, data)
+        if add:
+            temp = model.clone()
+        model.getNdArray()[:] = self.rmatvec(data.getNdArray())
+        if add:
+            model.scaleAdd(temp, 1., 1.)
+    
+
+class ToScipy(LinearOperator):
+    
+    def __init__(self, op):
+        """
+        Cast an Operator to scipy LinearOperator or to pylops if available
+        :param op: `pyOperator.Operator` object (or child)
+        """
+        assert isinstance(op, pyOp.Operator), 'op has to be a pyOperator.Operator'
+        super(ToScipy, self).__init__(shape=(op.range.size, op.domain.size),
+                                      dtype=op.domain.getNdArray().dtype)
+        self.forfunc = op.forward
+        self.adjfunc = op.adjoint
+        self.range_shape = op.range.shape
+        self.domain_shape = op.domain.shape
+        
+    def _matvec(self, x):
+        model = pyVec.vectorIC(x.reshape(self.domain_shape).astype(self.dtype))
+        data = pyVec.vectorIC(np.empty(self.range_shape, dtype=self.dtype))
+        self.forfunc(False, model, data)
+        return data.getNdArray().copy()
+    
+    def _rmatvec(self, y):
+        model = pyVec.vectorIC(np.empty(self.domain_shape, dtype=self.dtype))
+        data = pyVec.vectorIC(y.reshape(self.range_shape).astype(self.dtype))
+        self.adjfunc(False, model, data)
+        return model.getNdArray().copy()
+
+
 if __name__ == '__main__':
+    x = pyVec.vectorIC(np.load('../testdata/monarch.npy'))
+    kernel = np.array([[0,1,0], [1,-4,1], [0,1,0]])
+    nh = [5, 10]
+    hz = np.exp(-0.1 * np.linspace(-(nh[0] // 2), nh[0] // 2, nh[0]) ** 2)
+    hx = np.exp(-0.03 * np.linspace(-(nh[1] // 2), nh[1] // 2, nh[1]) ** 2)
+    hz /= np.trapz(hz)  # normalize the integral to 1
+    hx /= np.trapz(hx)  # normalize the integral to 1
+    kernel = hz[:, np.newaxis] * hx[np.newaxis, :]
+    
+    C = ConvNDscipy(x, kernel)
+    C.dotTest(True)
     # x = pyVec.vectorIC(np.arange(9).reshape((3, 3)))
     # pad = ((2,2), (3,3))
     # P = ZeroPad(x, pad)
@@ -529,14 +614,14 @@ if __name__ == '__main__':
     # PP.dotTest()
     
     np.random.seed(1)
-    # y = pyVec.vectorIC(np.random.rand(301, 601))
-    # F = FourierTransform(y, nffts=[512, 1024])
-    # yfft = F * y
-    # F.dotTest(True)
-    #
-    # yy = pyVec.superVector(y, y)
-    # FF = FourierTransform(yy, nffts=[512, 1024])
-    # yyfft = FF * yy
-    # FF.dotTest(True)
+    y = pyVec.vectorIC(np.random.rand(301, 601))
+    F = FourierTransform(y, nffts=[512, 1024])
+    yfft = F * y
+    F.dotTest(True)
+
+    yy = pyVec.superVector(y, y)
+    FF = FourierTransform(yy, nffts=[512, 1024])
+    yyfft = FF * yy
+    FF.dotTest(True)
     
     print(0)
