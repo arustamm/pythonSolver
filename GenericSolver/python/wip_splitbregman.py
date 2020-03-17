@@ -252,20 +252,20 @@ if __name__ == '__main__':
         TV = pyNpOperator.FirstDerivative(x)
         Iop = pyOp.IdentityOp(x)
         w1 = .1
-        niter = 200
-        niter_inner = 15
+        niter = 1
+        niter_inner = 1
         niter_solver = 10
         breg = 1.
         lambd = 1.
-        # x_hybrid, _ = SplitBregman(G, [TV], y, niter_outer=niter, niter_inner=niter_inner,
-        #                            mu=lambd, epsRL1s=[w1], epsRL2s=None, tau=breg,
-        #                            show=True, **dict(iter_lim=niter_solver))
-        #
-        # problemSB = ProblemLinearReg(x.clone().zero(), y, G, regsL1=TV, epsL1=w1)
-        # SB = SplitBregmanSolver(BasicStopper(niter=niter), lambd=lambd,
-        #                         niter_inner=niter_inner, niter_solver=niter_solver,
-        #                         linear_solver='LSQR', breg_weight=breg)
-        # SB.run(problemSB, verbose=True, inner_verbose=False)
+        x_hybrid, _ = SplitBregman(G, [TV], y, niter_outer=niter, niter_inner=niter_inner,
+                                   mu=lambd, epsRL1s=[w1], epsRL2s=None, tau=breg,
+                                   show=True, **dict(iter_lim=niter_solver))
+
+        problemSB = ProblemLinearReg(x.clone().zero(), y, G, regsL1=TV, epsL1=w1)
+        SB = SplitBregmanSolver(BasicStopper(niter=niter), lambd=lambd,
+                                niter_inner=niter_inner, niter_solver=niter_solver,
+                                linear_solver='LSQR', breg_weight=breg)
+        SB.run(problemSB, verbose=True, inner_verbose=False)
         #
         # pylops test
         G_pylops = pyLopsInterface.ToPylops(G)
