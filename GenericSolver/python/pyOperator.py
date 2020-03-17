@@ -316,36 +316,6 @@ class Operator:
     H = property(hermitian)
     T = H  # misleading (H is the conjugate transpose), probably we can delete it
 
-    def eigs(self, neigs=None, niter=10):
-        """
-        Most significant eigenvalues of linear Operator A.
-        If A is rectangular, return the square root of eigs of A.H*A
-        :param neigs: int, number of eigenvalues to compute
-        :param niter: number of iterations for eigenvalue estimation
-        :return: list of Operator eigenvalues
-        """
-
-        import scipy.sparse.linalg as ssl
-        from functools import partial
-        Op = ssl.LinearOperator(np.float, (self.range.getNdarray().size, self.domain.getNdarray().size))
-
-        def forward2matvec(x):
-            data = self.range.clone().zero()
-            self.forward(False, x, data)
-            return data.getNdArray()
-
-        def adjoint2rmatvec(x):
-            model = self.domain.clone().zero()
-            self.adjoint(False, model, x)
-            return model.getNdArray()
-
-        Op.matvec = partial(forward2matvec, self)
-        Op.rmatvec = partial(adjoint2rmatvec, self)
-        is_squared = self.domain == self.range
-
-        eigenvalues = ssl.eigsh(Op if is_squared else Op.H * Op, k=neigs, maxiter=niter)[0]
-        return eigenvalues if is_squared else np.sqrt(eigenvalues)
-
 
 ################################
 # OPERATIONS BETWEEN OPERATORS #
