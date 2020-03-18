@@ -3,10 +3,11 @@ import numpy as np
 import pyOperator as pyOp
 import pyVector as pyVec
 from pySolver import Solver
-from pyProblem import ProblemL1Lasso, ProblemL2LinearReg, ProblemLinearReg
+from pyProblem import ProblemL1Lasso, ProblemL2LinearReg, ProblemLinearReg, ProblemL2Linear
 from pyLinearSolver import LCGsolver, LSQRsolver
 from pyStopper import BasicStopper
 from sys_util import logger as logger_class
+import matplotlib.pyplot as plt
 
 
 zero = 10 ** (np.floor(np.log10(np.abs(float(np.finfo(np.float64).tiny)))) + 2)  # Check for avoid Overflow or Underflow
@@ -29,8 +30,12 @@ def _shrinkage(x, thresh, eps=1e-10):
         y = x / (|x| + eps) * maximum(|x| - thresh, 0)
     """
     y = x.clone()
-    y / x.clone().abs().addbias(eps)
+    y.multiply(x.clone().abs().addbias(eps).reciprocal())
     return y * x.clone().abs().addbias([-t for t in thresh]).maximum(0.)
+
+def _shrinkage1(x, thresh):
+    xabs = np.abs(x)
+    return x / (xabs + 1e-10) * np.maximum(xabs - thresh, 0)
 
 
 class ISTAsolver(Solver):
@@ -458,18 +463,18 @@ class SplitBregmanSolver(Solver):
     """Split-Bregman solver for L1 and L2 regularized problems"""
 
     # Default class methods/functions
-    def __init__(self, stopper, logger=None, lambd=1., niter_inner=3, niter_solver=5, breg_weight=1., linear_solver='CG',
-                 warm_start=False):
+    def __init__(self, stopper, logger=None, niter_inner=3, niter_solver=5, breg_weight=1., linear_solver='CG',
+                 warm_start=False, mod_tol=1e-10):
         """
         Constructor for Split-Bregman Solver
         :param stopper          : stopper object
         :param logger           : logger object
-        :param lambd            : float; weighting for unconstrained problem in Split-Bregman step (eqn. 3.7) [1.]
         :param niter_inner      : int; number of iterations for the shrinkage loop [default 3]
         :param niter_solver     : int; number of iterations for the internal linear solver [default 5]
         :param breg_weight      : float; coefficient for the Bregman update b += beta * (R*x - d) [1.]
         :param linear_solver    : str; linear solver to be used [CG, SD, LSQR]
         :param warm_start       : bool; linear solver restarts from previous solution of inner problem [False]
+        :param mod_tol          : float; stop criterion for relative change of model norm
         """
         # Calling parent construction
         super(SplitBregmanSolver, self).__init__()
@@ -479,6 +484,8 @@ class SplitBregmanSolver(Solver):
         self.logger = logger
         # Overwriting logger of the Stopper object
         self.stopper.logger = self.logger
+        # Model norm change stop criterion
+        self.mod_tol = mod_tol
 
         # Logger for internal linear solver
         self.logger_lin_solv = None
@@ -497,10 +504,6 @@ class SplitBregmanSolver(Solver):
             raise ValueError("ERROR! Bregman update weight has to be <= 1")
         self.breg_weight = float(breg_weight)
 
-        if lambd <= 0.:
-            raise ValueError("Lambda must be greater than zero!")
-        self.lambd = float(lambd)
-
         if linear_solver == 'CG':
             self.linear_solver = LCGsolver(BasicStopper(niter=self.niter_solver), steepest=False, logger=self.logger_lin_solv)
         elif linear_solver == 'SD':
@@ -513,13 +516,15 @@ class SplitBregmanSolver(Solver):
 
         # print formatting
         self.iter_msg = "iter = %s, obj = %.5e, df_obj = %.2e, reg_obj = %.2e, resnorm = %.2e"
+        # self.iter_msg = "iter = %s, obj = %s, df_obj = %s, reg_obj = %s, resnorm = %s"
 
     # def __del__(self):
     #     print('Destructor called, Split-Bregman solver deleted')
 
     def run(self, problem, verbose=False, inner_verbose=False, restart=False, initial_guess=None):
         """Running SplitBregman solver"""
-        assert type(problem) == ProblemLinearReg, 'problem has to be a ProblemLinearReg'
+        if type(problem) != ProblemLinearReg:
+            raise TypeError("Input problem object must be a ProblemLinearReg")
         if problem.regL1_op is None:
             raise ValueError("ERROR! Problem has to include at least one L1 Regularizer")
 
@@ -537,8 +542,8 @@ class SplitBregmanSolver(Solver):
         breg_d = breg_b.clone()
         RL1x = breg_b.clone()  # store RegL1 * solution
 
-        # sb_mdl = problem.model.clone().zero() if initial_guess is None else initial_guess.clone()
         sb_mdl = problem.model.clone()
+        sb_mdl_old = problem.model.clone()
         if not problem.op.domain.checkSame(sb_mdl):
             raise ValueError("ERROR! The initial guess and the operator domain mismatch.")
 
@@ -546,24 +551,19 @@ class SplitBregmanSolver(Solver):
         #  we must convert reg_op to a scaled version and epsilon to 1.
         regL2_op_scaled_list = [np.sqrt(problem.epsL2[i] / 2) / np.sqrt(1 / 2) * problem.regL2_op.ops[i] for i in
                                 range(problem.nregsL2)]
-        # regL1_op_scaled_list = [np.sqrt(problem.epsL1[i] / 2) / np.sqrt(1 / 2) * problem.regL1_op.ops[i] for i in
-        #                         range(problem.nregsL1)]
-        regL1_op_scaled_list = [-problem.epsL1[i] * problem.regL1_op.ops[i] for i in range(problem.nregsL1)]
+        regL1_op_scaled_list = [np.sqrt(problem.epsL1[i]) * problem.regL1_op.ops[i] for i in range(problem.nregsL1)]
         reg_op = pyOp.Vstack(pyOp.Vstack(regL2_op_scaled_list) if len(regL2_op_scaled_list) != 0 else None,
                              pyOp.Vstack(regL1_op_scaled_list) if len(regL1_op_scaled_list) != 0 else None)
 
         # inner problem
         prior = pyVec.superVector(problem.dataregsL2, breg_d.clone()) # Note: d = 0.
 
-        linear_problem = ProblemL2LinearReg(
-            model=sb_mdl.clone(),
-            data=problem.data,
-            op=problem.op,
-            epsilon=np.sqrt(self.lambd),
-            reg_op=reg_op,
-            prior_model=prior,
-            minBound=problem.minBound, maxBound=problem.maxBound, boundProj=problem.boundProj
-        )
+        linear_problem = ProblemL2Linear(model=sb_mdl.clone(),
+                                        data=pyVec.superVector(problem.data,prior),
+                                        op=pyOp.Vstack(problem.op,reg_op),
+                                        minBound=problem.minBound,
+                                        maxBound=problem.maxBound,
+                                        boundProj=problem.boundProj)
 
         if restart:
             self.restart.read_restart()
@@ -591,7 +591,6 @@ class SplitBregmanSolver(Solver):
                     msg += "\tL1 Regularizer ops:\t\t" + ", ".join(["%s" % op for op in problem.regL1_op.ops]) + "\n"
                     msg += "\tL1 Regularizer weights:\t" + ", ".join(["{:.2e}".format(e) for e in problem.epsL1]) + "\n"
                 msg += "\tBregman update weight:\t%.2e\n" % self.breg_weight
-                msg += "\tLambda weight:\t%.2e\n" % self.lambd
                 if self.warm_start:
                     msg += "\tUsing warm start option for inner problem\n"
                 msg += 90 * '#' + '\n'
@@ -608,6 +607,8 @@ class SplitBregmanSolver(Solver):
         # Main iteration loop
         while True:
             obj0 = problem.get_obj(sb_mdl)
+            # Saving previous model vector
+            sb_mdl_old.copy(sb_mdl)
 
             if outer_iter == 0:
                 initial_obj_value = obj0
@@ -646,13 +647,12 @@ class SplitBregmanSolver(Solver):
                 # resetting inversion problem variables
                 if not self.warm_start:
                     linear_problem.model.zero()
-                # prior = b - d
-                linear_problem.prior_model.vecs[-1].copy(breg_b)
-                linear_problem.prior_model.vecs[-1].scaleAdd(breg_d, 1., -1.)
+                # prior = d - b
+                linear_problem.data.vecs[-1].vecs[-1].copy(breg_b)
+                linear_problem.data.vecs[-1].vecs[-1].scaleAdd(breg_d, -1., 1.)
+                for ii in range(problem.nregsL1):
+                    linear_problem.data.vecs[-1].vecs[problem.nregsL2 + ii].scale(np.sqrt(problem.epsL1[ii]))
                 linear_problem.setDefaults()
-
-                # if outer_iter == 0 and initial_guess is not None:
-                #     linear_problem.model = initial_guess.clone()
 
                 # solve inner problem
                 self.linear_solver.run(linear_problem, verbose=inner_verbose)
@@ -661,15 +661,12 @@ class SplitBregmanSolver(Solver):
                 # sb_mdl.copy(linear_problem.model)
 
                 # compute RL1*x
-                if problem.nregsL1 != 0:
-                    problem.regL1_op.forward(False, linear_problem.model, RL1x)
+                problem.regL1_op.forward(False, linear_problem.model, RL1x)
 
-                for idx in range(problem.nregsL1):
-                    RL1x.vecs[idx].scale(problem.epsL1[idx])
+                # update breg_d
+                for ii in range(problem.nregsL1):
+                    breg_d.vecs[ii].copy(_soft_thresh(RL1x.vecs[ii].clone() + breg_b.vecs[ii], thresh=(problem.epsL1[ii])))
 
-                # update breg_a
-                if problem.nregsL1 != 0:
-                    breg_d.copy(_soft_thresh(RL1x.clone() + breg_b, thresh=1./self.lambd))
 
                 if self.logger_lin_solv:
                     msg = "\t\tfinished inner iter %d with sb_mdl = %.2e, RL1x = %.2e"\
@@ -677,9 +674,8 @@ class SplitBregmanSolver(Solver):
                     self.logger_lin_solv.addToLog(msg)
 
             # update breg_b
-            if problem.nregsL1 != 0:
-                breg_b.scaleAdd(RL1x, 1.0, self.breg_weight)
-                breg_b.scaleAdd(breg_d, 1., -self.breg_weight)
+            breg_b.scaleAdd(RL1x, 1.0, self.breg_weight)
+            breg_b.scaleAdd(breg_d, 1., -self.breg_weight)
 
             # Update SB model
             sb_mdl.copy(linear_problem.model)
@@ -690,10 +686,11 @@ class SplitBregmanSolver(Solver):
             # problem.res_regsL1_already_computed = True
             # problem.res_data_already_computed = False
             obj1 = problem.get_obj(sb_mdl)
-            if obj1 >= obj0:  # TODO check theory for monotonic convergence
+            sb_mdl_norm = sb_mdl.norm()
+            chng_norm = sb_mdl_old.scaleAdd(sb_mdl,1.,-1.).norm()
+            if chng_norm <= self.mod_tol*sb_mdl_norm:
                 if self.create_msg:
-                    msg = "Objective function didn't reduce, will terminate solver:\n\t"\
-                          "obj_new = %.2e\tobj_cur = %.2e" % (obj1, obj0)
+                    msg = "Relative model change (%.4e) norm smaller than given tolerance (%.4e)" % (chng_norm, self.mod_tol*sb_mdl_norm)
                     if verbose:
                         print(msg)
                     if self.logger:

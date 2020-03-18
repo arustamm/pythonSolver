@@ -559,7 +559,7 @@ class vectorIC(vector):
         # Cloning space of input vector
         vec_space.naxis = self.naxis
         vec_space.ndims = self.ndims
-        vec_space.size = self.size
+        # vec_space.size = self.size
         return vec_space
 
     def checkSame(self, other):

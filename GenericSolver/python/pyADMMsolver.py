@@ -270,7 +270,7 @@ def main():
     from pyProblem import ProblemLinearReg
     
     PLOT = True
-    EXAMPLE = 'medical'  # must be noisy, gaussian, medical or monarch
+    EXAMPLE = 'medical'  # must be noisy, gaussian, deconv, medical or monarch
     
     if EXAMPLE == 'noisy':
         # data examples
@@ -366,8 +366,8 @@ def main():
         
         # # SplitBregman
         problemSB = ProblemLinearReg(x.clone().zero(), y, Iop, regsL1=TV, epsL1=3.0)
-        SB = SplitBregmanSolver(BasicStopper(niter=100), lambd=0.03, niter_inner=1, niter_solver=20,
-                                linear_solver='LSQR', breg_weight=1., warm_start=True)#, logger=logger("test_SB1.txt"))
+        SB = SplitBregmanSolver(BasicStopper(niter=200), niter_inner=2, niter_solver=20,
+                                linear_solver='LSQR', breg_weight=1., warm_start=True)
         SB.setDefaults(save_obj=True)
         SB.run(problemSB, verbose=True, inner_verbose=False)
         if PLOT:
@@ -472,6 +472,47 @@ def main():
             plt.imshow(problemADMM.model.getNdArray()), plt.colorbar()
             plt.title('ADMM')
             plt.show()
+
+    elif EXAMPLE == 'deconv':
+        # 1D deconvolution for blocky signal
+        nx = 201
+        x = pyVec.vectorIC(np.zeros((nx,), dtype=np.float32)).zero()
+        x.getNdArray()[20:30] = 10.
+        x.getNdArray()[50:75] = -5.
+        x.getNdArray()[100:150] = 2.5
+        x.getNdArray()[175:180] = 7.5
+        G = pyNpOperator.GaussianFilter(x, 2.0)
+        y = G * x
+
+        niter = 200
+        niter_inner = 2
+        niter_solver = 10
+
+        # CG solver
+        problemLS = ProblemL2Linear(x.clone().zero(), y, G)
+        CG = LCGsolver(BasicStopper(niter=niter*niter_inner*niter_solver))
+        CG.run(problemLS, verbose=True)
+
+        TV = pyNpOperator.FirstDerivative(x)
+        Iop = pyOp.IdentityOp(x)
+        w1 = .1
+        breg = 1.
+
+        problemSB = ProblemLinearReg(x.clone().zero(), y, G, regsL1=TV, epsL1=w1)
+        SB = SplitBregmanSolver(BasicStopper(niter=niter),
+                                niter_inner=niter_inner, niter_solver=niter_solver,
+                                linear_solver='LSQR', breg_weight=breg)
+        SB.run(problemSB, verbose=True, inner_verbose=False)
+        #
+
+        if PLOT:
+            fig, ax = plt.subplots(figsize=(6, 3))
+            plt.plot(x.getNdArray(), 'k', label="true model")
+            plt.plot(problemLS.model.getNdArray(), 'r--', label="CG")
+            plt.plot(problemSB.model.getNdArray(), 'b--', label="SplitBregman")
+            ax.autoscale(enable=True, axis='x', tight=True)
+            plt.legend()
+            plt.show()
     
     elif EXAMPLE == 'medical':
         x = pyVec.vectorIC(np.load('../testdata/shepp_logan_phantom.npy', allow_pickle=True).astype(np.float32))
@@ -493,7 +534,7 @@ def main():
         #     plt.title('Blurring Kernel')
         #     plt.show()
         # Blurring = pyNpOperator.ConvNDscipy(model=x, kernel=pyVec.vectorIC(h))
-        Blurring = pyNpOperator.GaussianFilter(x, [3, 5])
+        Blurring = pyNpOperator.GaussianFilter(x, [3, 3])
         
         y = Blurring * x
         if PLOT:
@@ -528,17 +569,16 @@ def main():
         D = pyNpOperator.TotalVariation(x)
         I = pyOp.IdentityOp(x)
 
-        problemSB = ProblemLinearReg(x.clone().zero(), y, Blurring, regsL1=D, epsL1=0.00005, minBound=x.clone().set(0.0))
+        problemSB = ProblemLinearReg(x.clone().zero(), y, Blurring, regsL1=D, epsL1=1e-1)#, minBound=x.clone().set(0.0))
         
-        SB = SplitBregmanSolver(BasicStopper(niter=300), lambd=0.1, niter_inner=1, niter_solver=30,
+        SB = SplitBregmanSolver(BasicStopper(niter=300), niter_inner=2, niter_solver=10,
                                 linear_solver='LSQR', breg_weight=1., warm_start=True)
         SB.setDefaults(save_obj=True)
         SB.run(problemSB, verbose=True, inner_verbose=False)
         if PLOT:
             plt.figure(figsize=(5, 4))
             plt.imshow(problemSB.model.getNdArray(), cmap='bone', vmin=x.min(), vmax=x.max()), plt.colorbar()
-            plt.title(r'SB TV, $\varepsilon=%.2e$, %d iter'
-                      % (problemSB.epsL1[0], SB.stopper.niter))
+            plt.title(r'SB TV')
             plt.show()
             plt.figure(figsize=(5, 4))
             plt.plot(np.log10(SB.obj / SB.obj[0]), 'r', lw=1, label='SplitBregman')

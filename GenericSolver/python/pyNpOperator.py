@@ -306,7 +306,7 @@ class GaussianFilter(pyOp.Operator):
         """
         self.setDomainRange(model, model)
         self.sigma = sigma
-        self.scaling = np.sqrt(np.prod(self.sigma/np.pi))  # in order to have the max amplitude 1
+        self.scaling = np.sqrt(np.prod(np.array(self.sigma)/np.pi))  # in order to have the max amplitude 1
         return
     
     def __str__(self):
@@ -320,7 +320,7 @@ class GaussianFilter(pyOp.Operator):
         # Getting Ndarrays
         model_arr = model.getNdArray()
         data_arr = data.getNdArray()
-        data_arr[:] = self.scaling * gaussian_filter(model_arr, sigma=self.sigma)
+        data_arr[:] += self.scaling * gaussian_filter(model_arr, sigma=self.sigma)
         return
     
     def adjoint(self, add, model, data):

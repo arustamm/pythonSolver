@@ -252,17 +252,16 @@ if __name__ == '__main__':
         TV = pyNpOperator.FirstDerivative(x)
         Iop = pyOp.IdentityOp(x)
         w1 = .1
-        niter = 1
-        niter_inner = 1
+        niter = 200
+        niter_inner = 2
         niter_solver = 10
         breg = 1.
-        lambd = 1.
         x_hybrid, _ = SplitBregman(G, [TV], y, niter_outer=niter, niter_inner=niter_inner,
-                                   mu=lambd, epsRL1s=[w1], epsRL2s=None, tau=breg,
+                                   mu=1.0, epsRL1s=[w1], epsRL2s=None, tau=breg,
                                    show=True, **dict(iter_lim=niter_solver))
 
         problemSB = ProblemLinearReg(x.clone().zero(), y, G, regsL1=TV, epsL1=w1)
-        SB = SplitBregmanSolver(BasicStopper(niter=niter), lambd=lambd,
+        SB = SplitBregmanSolver(BasicStopper(niter=niter),
                                 niter_inner=niter_inner, niter_solver=niter_solver,
                                 linear_solver='LSQR', breg_weight=breg)
         SB.run(problemSB, verbose=True, inner_verbose=False)
@@ -273,7 +272,7 @@ if __name__ == '__main__':
         y_pylops = G_pylops * x.arr
         x_pylops, _ = pos.SplitBregman(Op=G_pylops, RegsL1=[TV_pylops], data=y_pylops,
                                        niter_outer=niter, niter_inner=niter_inner,
-                                       RegsL2=None, dataregsL2=None, mu=lambd,
+                                       RegsL2=None, dataregsL2=None, mu=1.0,
                                        epsRL1s=[w1], epsRL2s=None,
                                        tol=1e-10, tau=breg, x0=None, restart=False,
                                        show=True, **dict(iter_lim=niter_solver))
@@ -285,7 +284,7 @@ if __name__ == '__main__':
             plt.plot(x_hybrid.getNdArray(), 'b--', label="Hybrid")
             plt.plot(problemSB.model.getNdArray(), 'r--', label="pySolver")
             plt.title('TV=%.e, λ=%.3f, ß=%.2f, niter=%d,%d,%d'
-                      % (w1, lambd, breg, niter, niter_inner, niter_solver))
+                      % (w1, 1.0, breg, niter, niter_inner, niter_solver))
             ax.autoscale(enable=True, axis='x', tight=True)
             plt.legend()
             plt.show()
