@@ -7,10 +7,9 @@ from pyProblem import ProblemL1Lasso, ProblemL2LinearReg, ProblemLinearReg, Prob
 from pyLinearSolver import LCGsolver, LSQRsolver
 from pyStopper import BasicStopper
 from sys_util import logger as logger_class
-import matplotlib.pyplot as plt
-
 
 zero = 10 ** (np.floor(np.log10(np.abs(float(np.finfo(np.float64).tiny)))) + 2)  # Check for avoid Overflow or Underflow
+
 
 def _soft_thresh(x, thresh):
     """
@@ -33,6 +32,7 @@ def _shrinkage(x, thresh, eps=1e-10):
     y.multiply(x.clone().abs().addbias(eps).reciprocal())
     return y * x.clone().abs().addbias([-t for t in thresh]).maximum(0.)
 
+
 def _shrinkage1(x, thresh):
     xabs = np.abs(x)
     return x / (xabs + 1e-10) * np.maximum(xabs - thresh, 0)
@@ -43,7 +43,7 @@ class ISTAsolver(Solver):
     Iterative Shrikage-Thresholding Algorithm (ISTA) solver to solve:
         1/2*| y - Am |_2 + lambda*| m |_1
     """
-
+    
     def __init__(self, stopper, fast=False, logger=None):
         """
         Constructor for ISTA Solver:
@@ -63,14 +63,14 @@ class ISTAsolver(Solver):
         self.fast = fast
         # print formatting
         self.iter_msg = "iter = %s, obj = %.5e, resnorm = %.2e, gradnorm = %.2e, feval = %d"
-
+    
     def __del__(self):
         """Default destructor"""
         return
-
+    
     def run(self, problem, verbose=False, restart=False):
         """Running ISTA solver"""
-
+        
         self.create_msg = verbose or self.logger
         # Resetting stopper before running the inversion
         self.stopper.reset()
@@ -80,7 +80,7 @@ class ISTAsolver(Solver):
         # Checking if the regularization weight was set
         if problem.lambda_value is None:
             raise ValueError("Regularization weight (lambda_value) is not set!")
-
+        
         if not restart:
             if self.create_msg:
                 msg = 90 * "#" + "\n"
@@ -94,7 +94,7 @@ class ISTAsolver(Solver):
                     print(msg.replace(" log file", ""))
                 if self.logger:
                     self.logger.addToLog(msg)
-
+            
             # Setting internal vectors (model, search direction, and previous gradient vectors)
             prblm_mdl = problem.get_model()
             ista_mdl = prblm_mdl.clone()
@@ -102,7 +102,7 @@ class ISTAsolver(Solver):
             if self.fast:
                 t = 1.0
                 # fista_mdl = prblm_mdl.clone()
-
+            
             # Other internal variables
             iiter = 0
         else:
@@ -122,9 +122,9 @@ class ISTAsolver(Solver):
             if self.fast:
                 t = self.restart.retrieve_parameter("t")
                 # fista_mdl = self.restart.retrieve_vector("fista_mdl")
-
+        
         ista_mdl0 = ista_mdl.clone()  # Previous model in case stepping procedure fails
-
+        
         # Inversion loop
         while True:
             obj0 = problem.get_obj(ista_mdl)  # Compute objective function value
@@ -150,28 +150,28 @@ class ISTAsolver(Solver):
             if problem.get_gnorm(ista_mdl) == 0.:
                 print("Gradient vanishes identically")
                 break
-
+            
             # Saving results
             self.save_results(iiter, problem, force_save=False)
             ista_mdl0.copy(ista_mdl)  # Saving model before updating it
-
+            
             # Update model x = x + scale_precond * A' [y - Ax]
             ista_mdl.scaleAdd(prblm_grad, 1.0, -1.0 / problem.op_norm)
-
+            
             # SOFT-THRESHOLDING STEP
             ista_mdl.copy(_soft_thresh(ista_mdl, problem.lambda_value / problem.op_norm))
-
+            
             # Projecting model onto the bounds (if any)
             if "bounds" in dir(problem):
                 problem.bounds.apply(ista_mdl)
-
+            
             if self.fast:
                 t0 = t
                 t = (1. + np.sqrt(1. + 4. * t ** 2)) / 2.
                 # z = x + ((t0 - 1.) / t) * (x - xold)
                 scale = (t0 - 1.) / t
                 ista_mdl.scaleAdd(ista_mdl0, 1.0 + scale, -scale)
-
+            
             obj1 = problem.get_obj(ista_mdl)
             if obj1 >= obj0:
                 if self.create_msg:
@@ -185,14 +185,14 @@ class ISTAsolver(Solver):
                 # Copying back to the previous solution
                 ista_mdl.copy(ista_mdl0)
                 break
-
+            
             # Saving current model in case of restart and other parameters
             self.restart.save_parameter("iter", iiter)
             self.restart.save_vector("ista_mdl", ista_mdl)
             if self.fast:
                 self.restart.save_parameter("t", t)
                 # self.restart.save_vector("fista_mdl", fista_mdl)
-
+            
             # iteration info
             iiter = iiter + 1
             if self.create_msg:
@@ -211,7 +211,7 @@ class ISTAsolver(Solver):
                 raise ValueError("Either gradient norm or objective function value NaN!")
             if self.stopper.run(problem, iiter, initial_obj_value, verbose):
                 break
-
+        
         # Writing last inverted model
         self.save_results(iiter, problem, force_save=True, force_write=True)
         if self.create_msg:
@@ -229,7 +229,7 @@ class ISTAsolver(Solver):
 
 class ISTCsolver(Solver):
     """ISTC solver to solve: convex problem 1/2*| y - Am |_2 + lambda*| m |_1"""
-
+    
     def __init__(self, stopper, inner_it, cooling_start, cooling_end, logger=None):
         """
         Constructor for ISTC Solver
@@ -248,7 +248,7 @@ class ISTCsolver(Solver):
         # Overwriting logger of the Stopper object
         self.stopper.logger = self.logger
         self.iter_msg = "Inner_iter = %s, obj = %.5e, resnorm = %.2e, gradnorm= %.2e, feval = %d"
-
+        
         # ISTC parameters
         if self.stopper.niter <= 0:
             raise ValueError("niter for stopper object must be positive and greater than 0!")
@@ -258,16 +258,16 @@ class ISTCsolver(Solver):
             raise ValueError("Cooling_start and end must be within [0,1] interval and cooling_start <= cooling_end")
         self.cooling_start = cooling_start  # start of cooling continuation as fraction of size of sorted array |A'y|
         self.cooling_end = cooling_end  # end of cooling continuation as fraction of size of sorted array |A'y|
-
+    
     def __del__(self):
         """Default destructor"""
         return
-
+    
     def run(self, problem, verbose=False, restart=False):
         """Running ISTC solver"""
-
+        
         self.create_msg = verbose or self.logger
-
+        
         # Resetting stopper before running the inversion
         self.stopper.reset()
         # Checking if the provided problem is L1-LASSO
@@ -287,11 +287,11 @@ class ISTCsolver(Solver):
                     print(msg.replace(" log file", ""))
                 if self.logger:
                     self.logger.addToLog(msg)
-
+            
             # Setting internal vectors (model, search direction, and previous gradient vectors)
             prblm_mdl = problem.get_model()
             istc_mdl = prblm_mdl.clone()
-
+            
             # Inversion always starts from m = 0 (I need to understand if it is possible to start from m different than 0)
             istc_mdl.zero()  # modl = 0
             # Other internal variables
@@ -332,19 +332,20 @@ class ISTCsolver(Solver):
             iiter = self.restart.retrieve_parameter("iter")
             initial_obj_value = self.restart.retrieve_parameter("obj_initial")
             istc_mdl = self.restart.retrieve_vector("istc_mdl")
-
+        
         # Common variables unrelated to restart
         success = True
         istc_mdl0 = istc_mdl.clone()  # Previous model in case stepping procedure fails
         istc_mdl_save = istc_mdl0  # used also to save results
-
+        
         # Outer iteration loop
         while True:
             # Setting lambda value for a given outer loop iteration
             problem.set_lambda(lambda_values[iiter])
             problem.obj_updated = False  # Lambda has been changed so objective function will change as well
             if self.create_msg:
-                msg = "Outer_iter = %s\tlambda_value = %.2e" % (str(iiter).zfill(self.stopper.zfill), lambda_values[iiter])
+                msg = "Outer_iter = %s\tlambda_value = %.2e" % (
+                str(iiter).zfill(self.stopper.zfill), lambda_values[iiter])
                 if verbose:
                     print(msg)
                 if self.logger:
@@ -354,7 +355,7 @@ class ISTCsolver(Solver):
             else:
                 self.restart.retrieve_parameter("inner_iter", inner_iter)
                 restart = False
-
+            
             if iiter == 0:
                 # Applying preconditioning
                 istc_mdl.scale(scale_precond)
@@ -383,13 +384,13 @@ class ISTCsolver(Solver):
                 if problem.get_gnorm(istc_mdl) == 0.:
                     print("Gradient vanishes identically")
                     break
-
+                
                 # Removing preconditioning scaling factor from inverted model
                 istc_mdl_save.copy(istc_mdl)
                 istc_mdl_save.scale(scale_precond)
                 # Saving results
                 self.save_results(iiter, problem, istc_mdl_save, force_save=False)
-
+                
                 # Stepping for internal iteration model update
                 istc_mdl0.copy(istc_mdl)  # Saving model before updating it
                 istc_mdl.scaleAdd(prblm_grad, 1.0, -scale_precond)  # Update model x = x + scale_precond * A' [y - Ax]
@@ -400,7 +401,7 @@ class ISTCsolver(Solver):
                 # Projecting model onto the bounds (if any)
                 if "bounds" in dir(problem):
                     problem.bounds.apply(istc_mdl)
-
+                
                 obj1 = problem.get_obj(istc_mdl)
                 problem.get_model().writeVec("problem_model.H")
                 istc_mdl.writeVec("solver_model.H")
@@ -416,12 +417,12 @@ class ISTCsolver(Solver):
                     # Copying back to the previous solution
                     istc_mdl.copy(istc_mdl0)
                     break
-
+                
                 # Saving current model in case of restart and other parameters
                 self.restart.save_parameter("iter", iiter)
                 self.restart.save_parameter("inner_iter", inner_iter)
                 self.restart.save_vector("istc_mdl", istc_mdl)
-
+                
                 # iteration info
                 inner_iter += 1
                 if self.create_msg:
@@ -441,7 +442,7 @@ class ISTCsolver(Solver):
             iiter = iiter + 1
             if self.stopper.run(problem, iiter, initial_obj_value, verbose):
                 break
-
+        
         # Removing preconditioning scaling factor from inverted model
         istc_mdl_save.copy(istc_mdl)
         istc_mdl_save.scale(scale_precond)
@@ -461,7 +462,7 @@ class ISTCsolver(Solver):
 
 class SplitBregmanSolver(Solver):
     """Split-Bregman solver for L1 and L2 regularized problems"""
-
+    
     # Default class methods/functions
     def __init__(self, stopper, logger=None, niter_inner=3, niter_solver=5, breg_weight=1., linear_solver='CG',
                  warm_start=False, mod_tol=1e-10):
@@ -486,85 +487,86 @@ class SplitBregmanSolver(Solver):
         self.stopper.logger = self.logger
         # Model norm change stop criterion
         self.mod_tol = mod_tol
-
+        
         # Logger for internal linear solver
         self.logger_lin_solv = None
         if logger is not None:
             if "/" in logger.file.name:
-                folder = "/".join(logger.file.name.split("/")[:-1])+"/"
+                folder = "/".join(logger.file.name.split("/")[:-1]) + "/"
             else:
                 folder = ""
-            filename = "inner_inv_"+logger.file.name.split("/")[-1]
-            self.logger_lin_solv = logger_class(folder+filename)
-
+            filename = "inner_inv_" + logger.file.name.split("/")[-1]
+            self.logger_lin_solv = logger_class(folder + filename)
+        
         self.niter_inner = niter_inner  # number of iterations for the shrinkage
         self.niter_solver = niter_solver  # number of iterations for the internal problem
         self.warm_start = warm_start
         if breg_weight > 1.:
             raise ValueError("ERROR! Bregman update weight has to be <= 1")
-        self.breg_weight = float(breg_weight)
-
+        self.breg_weight = float(abs(breg_weight))
+        
         if linear_solver == 'CG':
-            self.linear_solver = LCGsolver(BasicStopper(niter=self.niter_solver), steepest=False, logger=self.logger_lin_solv)
+            self.linear_solver = LCGsolver(BasicStopper(niter=self.niter_solver), steepest=False,
+                                           logger=self.logger_lin_solv)
         elif linear_solver == 'SD':
-            self.linear_solver = LCGsolver(BasicStopper(niter=self.niter_solver), steepest=True, logger=self.logger_lin_solv)
+            self.linear_solver = LCGsolver(BasicStopper(niter=self.niter_solver), steepest=True,
+                                           logger=self.logger_lin_solv)
         elif linear_solver == 'LSQR':
             self.linear_solver = LSQRsolver(BasicStopper(niter=self.niter_solver), logger=self.logger_lin_solv)
         else:
             raise ValueError('ERROR! Solver has to be CG, SD or LSQR')
         self.linear_solver.setDefaults(iter_sampling=1, flush_memory=True)
-
+        
         # print formatting
         self.iter_msg = "iter = %s, obj = %.5e, df_obj = %.2e, reg_obj = %.2e, resnorm = %.2e"
         # self.iter_msg = "iter = %s, obj = %s, df_obj = %s, reg_obj = %s, resnorm = %s"
-
+    
     # def __del__(self):
     #     print('Destructor called, Split-Bregman solver deleted')
-
+    
     def run(self, problem, verbose=False, inner_verbose=False, restart=False, initial_guess=None):
         """Running SplitBregman solver"""
         if type(problem) != ProblemLinearReg:
             raise TypeError("Input problem object must be a ProblemLinearReg")
         if problem.regL1_op is None:
             raise ValueError("ERROR! Problem has to include at least one L1 Regularizer")
-
+        
         verbose = True if inner_verbose else verbose
         self.create_msg = verbose or self.logger
-
+        
         # overriding save_grad variable
         self.save_grad = False
-
+        
         # reset stopper before running the inversion
         self.stopper.reset()
-
+        
         # initialize all the vectors and operators for Split-Bregman
         breg_b = problem.regL1_op.range.clone().zero()
         breg_d = breg_b.clone()
         RL1x = breg_b.clone()  # store RegL1 * solution
-
+        
         sb_mdl = problem.model.clone()
         sb_mdl_old = problem.model.clone()
         if not problem.op.domain.checkSame(sb_mdl):
             raise ValueError("ERROR! The initial guess and the operator domain mismatch.")
-
+        
         # TODO linear_solver accepts only one regularizer and one epsilon:
         #  we must convert reg_op to a scaled version and epsilon to 1.
-        regL2_op_scaled_list = [np.sqrt(problem.epsL2[i]/2) / np.sqrt(1/2) * problem.regL2_op.ops[i] for i in
-                                range(problem.nregsL2)]
+        regL2_op_scaled_list = [np.sqrt(problem.epsL2[i]) * problem.regL2_op.ops[i] for i in range(problem.nregsL2)]
         regL1_op_scaled_list = [np.sqrt(problem.epsL1[i]) * problem.regL1_op.ops[i] for i in range(problem.nregsL1)]
         reg_op = pyOp.Vstack(pyOp.Vstack(regL2_op_scaled_list) if len(regL2_op_scaled_list) != 0 else None,
                              pyOp.Vstack(regL1_op_scaled_list) if len(regL1_op_scaled_list) != 0 else None)
-
+        
         # inner problem
         prior = pyVec.superVector(problem.dataregsL2, breg_d.clone())  # Note: d = 0. TODO is the clone() needed?
-
+        
         linear_problem = ProblemL2Linear(model=sb_mdl.clone(),
-                                        data=pyVec.superVector(problem.data,prior),
-                                        op=pyOp.Vstack(problem.op,reg_op),
-                                        minBound=problem.minBound,
-                                        maxBound=problem.maxBound,
-                                        boundProj=problem.boundProj)
-
+                                         data=pyVec.superVector(problem.data, prior),
+                                         op=pyOp.Vstack(problem.op, reg_op),
+                                         minBound=problem.minBound,
+                                         maxBound=problem.maxBound,
+                                         boundProj=problem.boundProj)
+        
         if restart:
             self.restart.read_restart()
             outer_iter = self.restart.retrieve_parameter("iter")
@@ -576,7 +578,7 @@ class SplitBregmanSolver(Solver):
                     print(msg)
                 if self.logger:
                     self.logger.addToLog(msg)
-
+        
         else:
             outer_iter = 0
             if self.create_msg:
@@ -603,13 +605,13 @@ class SplitBregmanSolver(Solver):
                     msg += "\t\t\tSPLIT-BREGMAN ALGORITHM internal inversions log file\n"
                     msg += 90 * '#' + '\n'
                     self.logger_lin_solv.addToLog(msg)
-
+        
         # Main iteration loop
         while True:
             obj0 = problem.get_obj(sb_mdl)
             # Saving previous model vector
             sb_mdl_old.copy(sb_mdl)
-
+            
             if outer_iter == 0:
                 initial_obj_value = obj0
                 self.restart.save_parameter("obj_initial", initial_obj_value)
@@ -623,27 +625,27 @@ class SplitBregmanSolver(Solver):
                         print(msg)
                     if self.logger:
                         self.logger.addToLog("\n" + msg)
-
+            
             if self.logger_lin_solv:
-                self.logger_lin_solv.addToLog("\n\t\t\tOuter iteration: %s"%(str(outer_iter).zfill(self.stopper.zfill)))
-
-                if isnan(obj0):
-                    raise ValueError("Objective function values NaN!")
-
+                self.logger_lin_solv.addToLog(
+                    "\n\t\t\tOuter iteration: %s" % (str(outer_iter).zfill(self.stopper.zfill)))
+                
+            if isnan(obj0):
+                raise ValueError("Objective function values NaN!")
+            
             if obj0 <= zero:
                 print("Objective function is numerically zero! Stop the inversion")
                 break
-
+            
             self.save_results(outer_iter, problem, force_save=False)
-
+            
             for iter_inner in range(self.niter_inner):
-
+                
                 if self.logger_lin_solv:
-                    msg = "\t\tstarting inner iter %d with d = %.2e, b = %.2e"\
+                    msg = "\t\tstarting inner iter %d with d = %.2e, b = %.2e" \
                           % (iter_inner, breg_d.norm(), breg_b.norm())
                     self.logger_lin_solv.addToLog("\n" + msg)
-
-
+                
                 # resetting inversion problem variables
                 if not self.warm_start:
                     linear_problem.model.zero()
@@ -653,33 +655,33 @@ class SplitBregmanSolver(Solver):
                 for ii in range(problem.nregsL1):
                     linear_problem.data.vecs[-1].vecs[problem.nregsL2 + ii].scale(np.sqrt(problem.epsL1[ii]))
                 linear_problem.setDefaults()
-
+                
                 # solve inner problem
                 self.linear_solver.run(linear_problem, verbose=inner_verbose)
-
+                
                 # sb_mdl = linear_problem.model.clone()
                 # sb_mdl.copy(linear_problem.model)
-
+                
                 # compute RL1*x
                 problem.regL1_op.forward(False, linear_problem.model, RL1x)
-
+                
                 # update breg_d
                 for ii in range(problem.nregsL1):
-                    breg_d.vecs[ii].copy(_soft_thresh(RL1x.vecs[ii].clone() + breg_b.vecs[ii], thresh=(problem.epsL1[ii])))
-
-
+                    breg_d.vecs[ii].copy(_soft_thresh(RL1x.vecs[ii].clone() + breg_b.vecs[ii],
+                                                      thresh=(problem.epsL1[ii])))
+                
                 if self.logger_lin_solv:
-                    msg = "\t\tfinished inner iter %d with sb_mdl = %.2e, RL1x = %.2e"\
+                    msg = "\t\tfinished inner iter %d with sb_mdl = %.2e, RL1x = %.2e" \
                           % (iter_inner, linear_problem.model.norm(), RL1x.norm())
                     self.logger_lin_solv.addToLog(msg)
-
+            
             # update breg_b
             breg_b.scaleAdd(RL1x, 1.0, self.breg_weight)
             breg_b.scaleAdd(breg_d, 1., -self.breg_weight)
-
+            
             # Update SB model
             sb_mdl.copy(linear_problem.model)
-
+            
             outer_iter += 1
             # check objective function
             # problem.res_regsL1 = RL1x.clone()
@@ -687,16 +689,17 @@ class SplitBregmanSolver(Solver):
             # problem.res_data_already_computed = False
             obj1 = problem.get_obj(sb_mdl)
             sb_mdl_norm = sb_mdl.norm()
-            chng_norm = sb_mdl_old.scaleAdd(sb_mdl,1.,-1.).norm()
-            if chng_norm <= self.mod_tol*sb_mdl_norm:
+            chng_norm = sb_mdl_old.scaleAdd(sb_mdl, 1., -1.).norm()
+            if chng_norm <= self.mod_tol * sb_mdl_norm:
                 if self.create_msg:
-                    msg = "Relative model change (%.4e) norm smaller than given tolerance (%.4e)" % (chng_norm, self.mod_tol*sb_mdl_norm)
+                    msg = "Relative model change (%.4e) norm smaller than given tolerance (%.4e)" % (
+                    chng_norm, self.mod_tol * sb_mdl_norm)
                     if verbose:
                         print(msg)
                     if self.logger:
                         self.logger.addToLog(msg)
                 break
-
+            
             # iteration info
             if self.create_msg:
                 msg = self.iter_msg % (str(outer_iter).zfill(self.stopper.zfill),
@@ -708,17 +711,17 @@ class SplitBregmanSolver(Solver):
                     print(msg)
                 if self.logger:
                     self.logger.addToLog("\n" + msg)
-
+            
             # saving in case of restart
             self.restart.save_parameter("iter", outer_iter)
             self.restart.save_vector("sb_mdl", sb_mdl)
-
+            
             if self.stopper.run(problem, outer_iter, initial_obj_value, verbose):
                 break
-
+        
         # writing last inverted model
         self.save_results(outer_iter, problem, force_save=True, force_write=True)
-
+        
         # ending message and log file
         if self.create_msg:
             msg = 90 * '#' + '\n'
@@ -728,6 +731,6 @@ class SplitBregmanSolver(Solver):
                 print(msg.replace(" log file", ""))
             if self.logger:
                 self.logger.addToLog("\n" + msg)
-
+        
         # Clear restart object
         self.restart.clear_restart()
