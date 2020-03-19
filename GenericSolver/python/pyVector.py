@@ -497,7 +497,6 @@ class vectorIC(vector):
 
         if len(self.naxis) == 0:  # To fix problem with scalar within a vectorIC
             self.naxis = (1,)
-
         self.ndims = len(self.naxis)  # Number of axes integer
         super(vectorIC, self).__init__()
 
@@ -559,7 +558,6 @@ class vectorIC(vector):
         # Cloning space of input vector
         vec_space.naxis = self.naxis
         vec_space.ndims = self.ndims
-        # vec_space.size = self.size
         return vec_space
 
     def checkSame(self, other):

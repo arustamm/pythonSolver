@@ -217,37 +217,15 @@ if __name__ == '__main__':
         x.getNdArray()[50:75] = -5.
         x.getNdArray()[100:150] = 2.5
         x.getNdArray()[175:180] = 7.5
-        # if PLOT:
-        #     fig, ax = plt.subplots(figsize=(6, 3))
-        #     plt.plot(np.abs(np.fft.rfft(x.getNdArray())))
-        #     plt.title('True model')
-        #     ax.autoscale(enable=True, axis='x', tight=True)
-        #     plt.ylim(0., 220.)
-        #     plt.show()
-        # if PLOT:
-        #     fig, ax = plt.subplots(figsize=(6, 3))
-        #     plt.plot(x.getNdArray())
-        #     plt.title('True model')
-        #     ax.autoscale(enable=True, axis='x', tight=True)
-        #     plt.ylim(-6., 11.)
-        #     plt.show()
+        
         G = pyNpOperator.GaussianFilter(x, 2.0)
         y = G * x
-        # y.scale(1./y.norm())
-        # if PLOT:
-        #     fig, ax = plt.subplots(figsize=(6, 3))
-        #     plt.plot(np.abs(np.fft.rfft(y.getNdArray())))
-        #     plt.title('Data')
-        #     ax.autoscale(enable=True, axis='x', tight=True)
-        #     plt.ylim(0., 220.)
-        #     plt.show()
-        # if PLOT:
-        #     fig, ax = plt.subplots(figsize=(6, 3))
-        #     plt.plot(y.getNdArray())
-        #     plt.title('Data')
-        #     ax.autoscale(enable=True, axis='x', tight=True)
-        #     plt.ylim(-6., 11.)
-        #     plt.show()
+
+        if PLOT:
+            fig, ax = plt.subplots(figsize=(6, 3))
+            plt.plot(x.getNdArray(), label='Model')
+            plt.plot(y.getNdArray(), label='Data')
+            plt.show()
         
         TV = pyNpOperator.FirstDerivative(x)
         Iop = pyOp.IdentityOp(x)
@@ -374,6 +352,12 @@ if __name__ == '__main__':
         y.getNdArray()[:] += np.random.normal(0.0, sigma, y.shape)
         Op = pyOp.IdentityOp(x)
         TV = pyNpOperator.TotalVariation(x)
+        w1 = 1.
+        niter = 10
+        niter_inner = 10
+        niter_solver = 10
+        lambd = 1.
+        breg = 1.
         
         if PLOT:
             plt.figure(figsize=(5, 4))
@@ -386,15 +370,19 @@ if __name__ == '__main__':
             plt.title('Data, std=%.2f' % sigma)
             plt.show()
         
-        problemADMM = ProblemLinearReg(x.clone().zero(), y, Op, regsL1=TV, epsL1=.04)
-        
-        ADMM = ADMMsolver(BasicStopper(niter=200), niter_linear=30, niter_lasso=10)
-        ADMM.run(problemADMM, verbose=True, inner_verbose=False)
+        Op_pylops = pyLopsInterface.ToPylops(Op)
+        TV_pylops = pyLopsInterface.ToPylops(TV)
+        y_pylops = Op_pylops * x.arr.ravel() + np.random.normal(0.0, sigma, x.shape).ravel()
+        x_pylops, _ = pos.SplitBregman(Op=Op_pylops, RegsL1=[TV_pylops], data=y_pylops,
+                                       niter_outer=niter, niter_inner=niter_inner,
+                                       RegsL2=None, dataregsL2=None, mu=lambd,
+                                       epsRL1s=[w1], epsRL2s=None,
+                                       tol=1e-10, tau=breg, x0=None, restart=False,
+                                       show=True, **dict(iter_lim=niter_solver))
         if PLOT:
             plt.figure(figsize=(5, 4))
-            plt.imshow(problemADMM.model.getNdArray(), cmap='gray'), plt.colorbar()
-            plt.title(r'ADMM TV, $\varepsilon=%.2e$, %d iter'
-                      % (problemADMM.epsL1[0], ADMM.stopper.niter))
+            plt.imshow(x_pylops.reshape(x.shape), cmap='gray'), plt.colorbar()
+            plt.title(r'ADMM TV, ε=%.e' % w1)
             plt.show()
     
     else:

@@ -549,14 +549,14 @@ class SplitBregmanSolver(Solver):
 
         # TODO linear_solver accepts only one regularizer and one epsilon:
         #  we must convert reg_op to a scaled version and epsilon to 1.
-        regL2_op_scaled_list = [np.sqrt(problem.epsL2[i] / 2) / np.sqrt(1 / 2) * problem.regL2_op.ops[i] for i in
+        regL2_op_scaled_list = [np.sqrt(problem.epsL2[i]/2) / np.sqrt(1/2) * problem.regL2_op.ops[i] for i in
                                 range(problem.nregsL2)]
         regL1_op_scaled_list = [np.sqrt(problem.epsL1[i]) * problem.regL1_op.ops[i] for i in range(problem.nregsL1)]
         reg_op = pyOp.Vstack(pyOp.Vstack(regL2_op_scaled_list) if len(regL2_op_scaled_list) != 0 else None,
                              pyOp.Vstack(regL1_op_scaled_list) if len(regL1_op_scaled_list) != 0 else None)
 
         # inner problem
-        prior = pyVec.superVector(problem.dataregsL2, breg_d.clone()) # Note: d = 0.
+        prior = pyVec.superVector(problem.dataregsL2, breg_d.clone())  # Note: d = 0. TODO is the clone() needed?
 
         linear_problem = ProblemL2Linear(model=sb_mdl.clone(),
                                         data=pyVec.superVector(problem.data,prior),

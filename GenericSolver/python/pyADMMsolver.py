@@ -15,22 +15,23 @@ class ADMMsolver(Solver):
     """Alternate Directions of Multipliers Method (ADMM)"""
     
     # Default class methods/functions
-    def __init__(self, stopper, logger=None, niter_linear=5, niter_lasso=15, rho=None, auto_rho=True, mu=10., tau=2., use_prev_sol=False, linear_solver='CG'):
+    def __init__(self, stopper, logger=None, niter_linear=5, niter_lasso=5, rho=None,
+                 update_rho=True, mu=10., tau=2., warm_start=False, linear_solver='CG'):
         """
         Constructor for ADMM Solver
         .. math ::
             1/2 |Op x - d|_2^2 + \sum_i epsL2_i |R2_i x - dr|_2^2 + \gamma |y|_1
-                subject to Ax + By = c
+                subject to Ax + By - c = 0
         Note: for now B=-I, c=0 (i.e., y=Ax)
         :param stopper          : stopper object
         :param logger           : logger object
         :param niter_linear     : int; number of iterations for solving the linear problem [5]
         :param niter_lasso      : int; number of iterations for solving the lasso problem [5]
         :param rho              : float; penalty parameter rho (if None it is initialized as 2*gamma+.1)
-        :param auto_rho         : bool; update rho automatically
+        :param update_rho       : bool; update rho automatically
         :param mu               : float; norm ratio between residuals for updating rho [10]
         :param tau              : float; scaling factor for updating rho [2]
-        :param use_prev_sol     : bool; linear solver uses previous solution [False]
+        :param warm_start       : bool; linear solver uses previous solution [False]
         :param linear_solver    : str; linear solver to be used [CG, SD, LSQR]
         """
         # Calling parent construction
@@ -41,6 +42,7 @@ class ADMMsolver(Solver):
         self.stopper.logger = self.logger
         self.niter_linear = niter_linear
         self.niter_lasso = niter_lasso
+        self.warm_start = warm_start
         
         if linear_solver == 'CG':
             self.solver_linear = LCGsolver(BasicStopper(niter=self.niter_linear), steepest=False, logger=self.logger)
@@ -50,18 +52,15 @@ class ADMMsolver(Solver):
             self.solver_linear = LSQRsolver(BasicStopper(niter=self.niter_linear), logger=self.logger)
         else:
             raise ValueError('ERROR! Solver has to be CG, SD or LSQR')
-        self.solver_linear.setDefaults(iter_sampling=1, flush_memory=True)
         
         self.solver_lasso = ISTAsolver(BasicStopper(niter=self.niter_lasso), fast=True, logger=self.logger)
-        self.solver_lasso.setDefaults(iter_sampling=1, flush_memory=True)
-        self.use_prev_sol = use_prev_sol
 
-        self.rho = rho          # ADMM penalty parameter
-        self.mu = mu
-        self.tau = tau
-        self.auto_rho = auto_rho
-        self.primal = None      # aka r (in the complete formulation is A x + B z - c)
-        self.dual = None        # aka s (in the complete formulation is rho A.H B r)
+        self.rho = rho              # ADMM penalty parameter
+        self.mu = mu                # norm ratio between residuals for updating rho
+        self.tau = tau              # scaling factor for updating rho
+        self.auto_rho = update_rho    # whether to update rho
+        self.primal = None          # primal residual vector (r = A x + B z - c)
+        self.dual = None            # dual residual vector (s = rho A.H B r)
 
         # print formatting
         self.iter_msg = "iter = %s, obj = %.5e, df_obj = %.2e, reg_obj = %.2e, resnorm = %.2e"
@@ -162,9 +161,7 @@ class ADMMsolver(Solver):
 
             self.save_results(outer_iter, problem, force_save=False)
             
-            # 1) update x
-            # Linear Problem:       1/2 | Op x - d| + epsL2   | R2 x -  dr  |
-            #                                         rho/2   | A  x - (y-u)|
+
             regL2_op_scaled_list = [problem.epsL2[i] * problem.regL2_op.ops[i] for i in range(problem.nregsL2)]
             regA_op_scaled_list = [self.rho / 2 * A.ops[i] for i in range(A.n)]
             reg_op = pyOp.Vstack(
@@ -173,7 +170,7 @@ class ADMMsolver(Solver):
             )
             prior = pyVec.superVector(problem.dataregsL2, y.clone().scaleAdd(u, 1., -1.))
             linear_problem = ProblemL2LinearReg(
-                model=admm_mdl.clone().zero() if not self.use_prev_sol else admm_mdl.clone(),
+                model=admm_mdl.clone().zero() if not self.warm_start else admm_mdl.clone(),
                 data=problem.data,
                 op=problem.op,
                 reg_op=reg_op,  # pyOp.Vstack(problem.regL2_op, A),
@@ -268,9 +265,11 @@ def main():
     # plt.style.use('ggplot')
     import pyNpOperator
     from pyProblem import ProblemLinearReg
+    from pySparseSolver import SplitBregmanSolver
     
     PLOT = True
-    EXAMPLE = 'medical'  # must be noisy, gaussian, deconv, medical or monarch
+    EXAMPLE = 'deconv'  # must be noisy, deconv, gaussian, medical or monarch
+    SHOW_OTHERS = True  # show also CG, LSQR, L2 reg, and FISTA
     
     if EXAMPLE == 'noisy':
         # data examples
@@ -404,7 +403,100 @@ def main():
         #     plt.legend()
         #     plt.title('ADMM inversion')
         #     plt.show()
+
+    if EXAMPLE == 'deconv':
+        # 1D deconvolution for blocky signal
+        nx = 201
+        x = np.zeros((nx,), dtype=np.float32)
+        x[20:30] = 10.
+        x[50:75] = -5.
+        x[100:150] = 2.5
+        x[175:180] = 7.5
+        x = pyVec.vectorIC(x)
     
+        G = pyNpOperator.GaussianFilter(x, 2.0)
+        y = G * x
+        TV = pyNpOperator.FirstDerivative(x)
+        dx = TV * x
+        
+        if PLOT:
+            plt.figure(figsize=(5, 4))
+            plt.plot(x.getNdArray(), 'k', lw=2, label='x')
+            plt.plot(y.getNdArray(), 'b', lw=2, label='y=Gx')
+            plt.plot(dx.getNdArray(), 'k:', lw=1, label='∂x')
+            plt.legend()
+            plt.title('Model, Data and Derivative')
+            plt.show()
+        
+        if SHOW_OTHERS:
+            # CG solver
+            problemLS = ProblemL2Linear(x.clone().zero(), y, G)
+            CG = LCGsolver(BasicStopper(niter=500))
+            CG.run(problemLS)
+            if PLOT:
+                plt.figure(figsize=(5, 4))
+                plt.plot(x.getNdArray(), 'k', lw=2, label='x')
+                plt.plot(y.getNdArray(), 'b', lw=2, label='y=Gx')
+                plt.plot(problemLS.model.getNdArray(), 'r', lw=1, label='x_inv')
+                plt.legend()
+                plt.title('Least-Squares CG')
+                plt.show()
+    
+            # LSQR solver
+            problemLSQR = ProblemL2Linear(x.clone().zero(), y, G)
+            LSQR = LSQRsolver(BasicStopper(niter=500))
+            LSQR.run(problemLSQR, verbose=True)
+            if PLOT:
+                plt.figure(figsize=(5, 4))
+                plt.plot(x.getNdArray(), 'k', lw=2, label='x')
+                plt.plot(y.getNdArray(), 'b', lw=2, label='y=Gx')
+                plt.plot(problemLSQR.model.getNdArray(), 'r', lw=1, label='x_inv')
+                plt.legend()
+                plt.title('Least-Squares LSQR')
+                plt.show()
+            
+            # CG solver with L2 regularization
+            L = pyNpOperator.Laplacian(x)
+            problemLSR = ProblemL2LinearReg(x.clone().zero(), y, G, 1, L)
+            CG = LCGsolver(BasicStopper(niter=500))
+            CG.run(problemLSR, verbose=True)
+            if PLOT:
+                plt.figure(figsize=(5, 4))
+                plt.plot(x.getNdArray(), 'k', lw=2, label='x')
+                plt.plot(y.getNdArray(), 'b', lw=2, label='y=Gx')
+                plt.plot(problemLSR.model.getNdArray(), 'r', lw=1, label='x_inv')
+                plt.legend()
+                plt.title('CG with Laplacian reg')
+                plt.show()
+            
+            # FISTA
+            problemFISTA = ProblemL1Lasso(x.clone().zero(), y, G, lambda_value=.5, op_norm=1.05)
+            FISTA = ISTAsolver(BasicStopper(niter=300), fast=True)
+            FISTA.run(problemFISTA, verbose=True)
+            if PLOT:
+                plt.figure(figsize=(5, 4))
+                plt.plot(x.getNdArray(), 'k', lw=2, label='x')
+                plt.plot(y.getNdArray(), 'b', lw=2, label='y=Gx')
+                plt.plot(problemFISTA.model.getNdArray(), 'r', lw=1, label='x_inv')
+                plt.legend()
+                plt.title('FISTA inversion')
+                plt.show()
+    
+        # ADMM
+        problemADMM = ProblemLinearReg(x.clone().zero(), y, G, regsL1=TV, epsL1=3.)
+        ADMM = ADMMsolver(BasicStopper(niter=30), niter_linear=10, niter_lasso=50)
+        ADMM.run(problemADMM, verbose=True, inner_verbose=False)
+        if PLOT:
+            plt.figure(figsize=(5, 4))
+            plt.plot(x.getNdArray(), 'k', lw=1, label='x')
+            plt.plot(y.getNdArray(), '.k', label='y=x+n')
+            plt.plot(derivative.getNdArray(), ':k', lw=1, label='∂x')
+            plt.plot(problemADMM.model.getNdArray(), 'r', lw=2, label='x_inv')
+            plt.plot((TV * problemADMM.model).getNdArray(), ':r', lw=2, label='∂(x_inv)')
+            plt.legend()
+            plt.title('ADMM inversion')
+            plt.show()
+
     elif EXAMPLE == 'gaussian':
         x = pyVec.vectorIC(np.empty((301, 601))).set(0)
         x.getNdArray()[150, 300] = 1.0
