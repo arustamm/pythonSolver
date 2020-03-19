@@ -545,7 +545,7 @@ def main():
             
         # CG solver
         problemLS = ProblemL2Linear(x.clone().zero(), y, Blurring, minBound=x.clone().set(0.0))
-        CG = LCGsolver(BasicStopper(niter=400))
+        CG = LCGsolver(BasicStopper(niter=3000))
         CG.run(problemLS, verbose=True)
         if PLOT:
             plt.figure(figsize=(5, 4))
@@ -569,9 +569,9 @@ def main():
         D = pyNpOperator.TotalVariation(x)
         I = pyOp.IdentityOp(x)
 
-        problemSB = ProblemLinearReg(x.clone().zero(), y, Blurring, regsL1=D, epsL1=1e-1)#, minBound=x.clone().set(0.0))
+        problemSB = ProblemLinearReg(x.clone().zero(), y, Blurring, regsL1=D, epsL1=1.5e-2)#, minBound=x.clone().set(0.0))
         
-        SB = SplitBregmanSolver(BasicStopper(niter=300), niter_inner=2, niter_solver=10,
+        SB = SplitBregmanSolver(BasicStopper(niter=1000), niter_inner=1, niter_solver=10,
                                 linear_solver='LSQR', breg_weight=1., warm_start=True)
         SB.setDefaults(save_obj=True)
         SB.run(problemSB, verbose=True, inner_verbose=False)
@@ -580,12 +580,13 @@ def main():
             plt.imshow(problemSB.model.getNdArray(), cmap='bone', vmin=x.min(), vmax=x.max()), plt.colorbar()
             plt.title(r'SB TV')
             plt.show()
-            plt.figure(figsize=(5, 4))
+            fig, ax = plt.subplots(figsize=(5, 4))
             plt.plot(np.log10(SB.obj / SB.obj[0]), 'r', lw=1, label='SplitBregman')
             obj_true = problemSB.get_obj(x)
             plt.plot([np.log10(obj_true / SB.obj[0])] * len(SB.obj), 'k--', lw=1, label='true solution obj value')
             plt.legend()
             plt.title('Convergence curve')
+            ax.autoscale(enable=True, axis='x', tight=True)
             plt.show()
 
         # ADMM
