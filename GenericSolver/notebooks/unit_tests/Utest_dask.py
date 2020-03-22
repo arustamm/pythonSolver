@@ -5,11 +5,12 @@ import pyOperator as pyOp
 import pyVector as  Vec
 import numpy as np
 
-hostnames = ["thanos", "thanos", "vision", "vision"]
-client = DaskClient(hostnames=hostnames)
-# params = {"cores":32, "memory":'1GB', "queue":'xaginolimit', "walltime":'20:00:00', "interface":'ib0'}
+# hostnames = ["thanos", "thanos", "vision", "vision"]
+# client = DaskClient(hostnames=hostnames)
+params = {"nanny": True, "job_name":"test1", "cores":32, "memory":'1GB', "queue":'xaginolimit', "walltime":'20:00:00', "interface":'ib0', "job_extra": ["-V"]}
 # params = {"nanny":"0", "job_name":"test1","cores":32, "memory":'120GB', "queue":'xagigpu', "walltime":'9999:00:00', "interface":'ib0', "resource_spec":"select=1:ncpus=32:mem=120gb:ngpus=2"}
-# client = DaskClient(pbs_params=params,n_workers=4)
+# client = DaskClient(pbs_params=params,n_workers=2,n_jobs=2)
+client = DaskClient(pbs_params=params,n_workers=2)
 vec = Vec.vectorIC((100,10))
 chunks = (1,1,1,1)
 vecD = pyDaskVector.DaskVector(client,vector_template=vec,chunks=chunks)

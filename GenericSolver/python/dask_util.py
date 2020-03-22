@@ -57,7 +57,8 @@ class DaskClient:
 			Must be a mounted path on all the machines. Necessary if hostnames are provided [$HOME/scheduler-]
 		2) PBS cluster:
 		:param pbs_params : - dict; dictionary containing PBS Cluster options (see help(PBSCluster) for help) [None]
-		:param n_workers : - int; number of workers to be submitted to the cluster
+		:param n_workers : - int; number of workers to be submitted to the cluster or to be used on each job (if n_jobs is provided)
+		:param n_jobs : - int; number of jobs to be submitted to the cluster; if provided you will have n_workers per job (i.e., n_workers*n_jobs = dask_workers) [None]
 		"""
         hostnames = kwargs.get("hostnames", None)
         pbs_params = kwargs.get("pbs_params", None)
@@ -115,11 +116,23 @@ class DaskClient:
                 wrkIds.pop(idx)
                 wrk_ips.pop(idx)
         elif pbs_params:
-            self.cluster = PBSCluster(**pbs_params)
             n_workers = kwargs.get("n_workers", 0)
+            n_jobs = kwargs.get("n_jobs", None)
             if n_workers <= 0:
                 raise ValueError("n_workers must equal or greater than 1!")
-            self.cluster.scale(n_workers)
+            # if n_jobs is provided then start n_workers on n_jobs
+            if n_jobs:
+                if n_jobs <= 0:
+                    raise ValueError("n_jobs must equal or greater than 1!")
+                pbs_params.update({"processes": n_workers})
+                if n_workers > 1:
+                    # forcing nanny to be true (otherwise, dask-worker command will fail)
+                    pbs_params.update({"nanny": True})
+                n_workers *= n_jobs
+            else:
+                n_jobs = n_workers
+            self.cluster = PBSCluster(**pbs_params)
+            self.cluster.scale(jobs=n_jobs)
             # Creating dask Client
             self.client = daskD.Client(self.cluster)
             workers = 0
