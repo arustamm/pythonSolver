@@ -232,9 +232,9 @@ class Operator:
             abs_err = dt1 - dt2
             err_rel = abs_err / abs(dt2)
             if verbose:
-                print("Dot products add=%s: domain=%.2e range=%.2e " % (str(add), abs(dt1), abs(dt2)))
-                print("Absolute error: %.2e" % abs(abs_err))
-                print("Relative error: %.2e \n" % abs(err_rel))
+                print("Dot products add=%s: domain=%.6e range=%.6e " % (str(add), abs(dt1), abs(dt2)))
+                print("Absolute error: %.6e" % abs(abs_err))
+                print("Relative error: %.6e \n" % abs(err_rel))
             if err_rel > tol:
                 # # Deleting temporary vectors
                 # del d1, d2, r1, r2

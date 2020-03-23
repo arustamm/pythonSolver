@@ -86,11 +86,9 @@ class vector:
         """Function to return Ndarray of the vector"""
         raise NotImplementedError("getNdArray must be overwritten")
 
-    @property
     def shape(self):
         return self.getNdArray().shape
-    
-    @property
+
     def size(self):
         return self.getNdArray().size
 
@@ -275,9 +273,11 @@ class superVector(vector):
         """Function to return Ndarray of the vector"""
         return [self.vecs[idx].getNdArray() for idx in range(self.n)]
 
-    @property
     def shape(self):
         return [self.vecs[idx].shape for idx in range(self.n)]
+
+    def size(self):
+        return [self.vecs[idx].size for idx in range(self.n)]
 
     def norm(self, N=2):
         """Function to compute vector N-norm"""
@@ -498,6 +498,8 @@ class vectorIC(vector):
         if len(self.naxis) == 0:  # To fix problem with scalar within a vectorIC
             self.naxis = (1,)
         self.ndims = len(self.naxis)  # Number of axes integer
+        self.shape = self.naxis
+        self.size = self.getNdArray().size
         super(vectorIC, self).__init__()
 
     def getNdArray(self):
@@ -554,10 +556,12 @@ class vectorIC(vector):
 
     def cloneSpace(self):
         """Function to clone vector space only (vector without actual vector array by using empty array of size 0)"""
-        vec_space = vectorIC(np.empty(self.shape, dtype=self.arr.dtype))
+        vec_space = vectorIC(np.empty(0, dtype=self.getNdArray().dtype))
         # Cloning space of input vector
         vec_space.naxis = self.naxis
         vec_space.ndims = self.ndims
+        vec_space.shape = self.shape
+        vec_space.size = self.size
         return vec_space
 
     def checkSame(self, other):
