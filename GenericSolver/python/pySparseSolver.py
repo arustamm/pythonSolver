@@ -27,6 +27,8 @@ def _shrinkage(x, thresh, eps=1e-10):
     """
     Shrinkage function Gamma
         y = x / (|x| + eps) * maximum(|x| - thresh, 0)
+    
+    note: sgn(x) = x / |x| so it is the same of _soft_thresh
     """
     y = x.clone()
     y.multiply(x.clone().abs().addbias(eps).reciprocal())
