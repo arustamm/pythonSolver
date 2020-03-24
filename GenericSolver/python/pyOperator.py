@@ -813,7 +813,7 @@ class VstackNonLinearOperator(NonLinearOperator):
         # Defining internal set_background functions
         self.set_background1 = nl_op1.set_background
         self.set_background2 = nl_op2.set_background
-        super(VstackNonLinearOperator, self).__init__(self.nl_op, self.lin_op)
+        super(VstackNonLinearOperator, self).__init__(self.nl_op, self.lin_op, self.set_background)
 
     def __str__(self):
         return "NLVstack"
