@@ -376,10 +376,6 @@ class ConvNDscipy(pyOp.Operator):
             data.zero()
         modelNd = model.getNdArray()
         dataNd = data.getNdArray()[:]
-        # Masking edge samples
-        # modelNd[0] = 0.
-        # modelNd[-1] = 0.
-        # dataNd[1:-1] += convolve(modelNd, self.kernel, mode='same', method=self.method)[1:-1]
         dataNd += convolve(modelNd, self.kernel, mode='same', method=self.method)
         return
     
@@ -389,10 +385,6 @@ class ConvNDscipy(pyOp.Operator):
             model.zero()
         modelNd = model.getNdArray()
         dataNd = data.getNdArray()[:]
-        # Masking edge samples
-        # dataNd[0] = 0.
-        # dataNd[-1] = 0.
-        # modelNd[1:-1] += correlate(dataNd, self.kernel, mode='same', method=self.method)[1:-1]
         modelNd += correlate(dataNd, self.kernel, mode='same', method=self.method)
         return
 
