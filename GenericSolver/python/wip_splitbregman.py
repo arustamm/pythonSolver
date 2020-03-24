@@ -323,10 +323,10 @@ if __name__ == '__main__':
         D = pyNpOperator.TotalVariation(x)
         I = pyOp.IdentityOp(x)
         
-        problemSB = ProblemLinearReg(x.clone().zero(), y, Blurring, regsL1=D, epsL1=0.00005,
+        problemSB = ProblemLinearReg(x.clone().zero(), y, Blurring, regsL1=D, epsL1=1e-2,
                                      minBound=x.clone().set(0.0))
         
-        SB = SplitBregmanSolver(BasicStopper(niter=300), lambd=0.1, niter_inner=1, niter_solver=30,
+        SB = SplitBregmanSolver(BasicStopper(niter=300), niter_inner=1, niter_solver=30,
                                 linear_solver='LSQR', breg_weight=1., warm_start=True)
         SB.setDefaults(save_obj=True)
         SB.run(problemSB, verbose=True, inner_verbose=False)

@@ -277,7 +277,7 @@ class superVector(vector):
         return [self.vecs[idx].shape for idx in range(self.n)]
 
     def size(self):
-        return np.sum([self.vecs[idx].size for idx in range(self.n)])
+        return sum([self.vecs[idx].size() for idx in range(self.n)])
 
     def norm(self, N=2):
         """Function to compute vector N-norm"""

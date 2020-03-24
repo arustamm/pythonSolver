@@ -241,7 +241,7 @@ class TotalVariation(pyOp.Operator):
         if self.isotropic:
             self.checkDomainRange(model, data)
             if add:
-                self.data_tmp.copy(data)
+                data_tmp = data.clone()
             data.zero()
             for op in self.op:
                 temp = data.clone().zero()
@@ -249,7 +249,7 @@ class TotalVariation(pyOp.Operator):
                 data.scaleAdd(temp.pow(2))
             data.pow(.5)
             if add:
-                data.scaleAdd(self.data_tmp)
+                data.scaleAdd(data_tmp)
             return
         else:
             return self.op.forward(add, model, data)
@@ -361,26 +361,26 @@ class ConvNDscipy(pyOp.Operator):
     
     def forward(self, add, model, data):
         self.checkDomainRange(model, data)
-        if add:
-            temp = data.clone()
-        data.zero()
-        x = model.clone().getNdArray()
-        y = convolve(x, self.kernel, mode='same', method=self.method).astype(x.dtype)
-        data.getNdArray()[:] = y
-        if add:
-            data.scaleAdd(temp, 1., 1.)
+        if not add:
+            data.zero()
+        modelNd = model.getNdArray()
+        dataNd = data.getNdArray()[:]
+        # Masking edge samples
+        modelNd[0] = 0.
+        modelNd[-1] = 0.
+        dataNd[1:-1] += convolve(modelNd, self.kernel, mode='same', method=self.method)[1:-1]
         return
     
     def adjoint(self, add, model, data):
         self.checkDomainRange(model, data)
-        if add:
-            temp = model.clone()
-        model.zero()
-        y = data.clone().getNdArray()
-        x = correlate(y, self.kernel, mode='same', method=self.method).astype(y.dtype)
-        model.getNdArray()[:] = x
-        if add:
-            model.scaleAdd(temp, 1., 1.)
+        if not add:
+            model.zero()
+        modelNd = model.getNdArray()
+        dataNd = data.getNdArray()[:]
+        # Masking edge samples
+        dataNd[0] = 0.
+        dataNd[-1] = 0.
+        modelNd[1:-1] += correlate(dataNd, self.kernel, mode='same', method=self.method)[1:-1]
         return
 
 
@@ -592,18 +592,27 @@ class ToScipy(LinearOperator):
         self.adjfunc(False, model, data)
         return model.getNdArray().copy()
 
-
+import matplotlib.pyplot as plt
 if __name__ == '__main__':
-    x = pyVec.vectorIC(np.load('../testdata/monarch.npy'))
-    kernel = np.array([[0,1,0], [1,-4,1], [0,1,0]])
-    nh = [5, 10]
-    hz = np.exp(-0.1 * np.linspace(-(nh[0] // 2), nh[0] // 2, nh[0]) ** 2)
-    hx = np.exp(-0.03 * np.linspace(-(nh[1] // 2), nh[1] // 2, nh[1]) ** 2)
-    hz /= np.trapz(hz)  # normalize the integral to 1
-    hx /= np.trapz(hx)  # normalize the integral to 1
-    kernel = hz[:, np.newaxis] * hx[np.newaxis, :]
+    # x = pyVec.vectorIC(np.load('../testdata/monarch.npy'))
+    # kernel = np.array([[0,1,0], [1,-4,1], [0,1,0]])
+    # nh = [5, 10]
+    # hz = np.exp(-0.1 * np.linspace(-(nh[0] // 2), nh[0] // 2, nh[0]) ** 2)
+    # hx = np.exp(-0.03 * np.linspace(-(nh[1] // 2), nh[1] // 2, nh[1]) ** 2)
+    # hz /= np.trapz(hz)  # normalize the integral to 1
+    # hx /= np.trapz(hx)  # normalize the integral to 1
+    # kernel = hz[:, np.newaxis] * hx[np.newaxis, :]
+
+    x = pyVec.vectorIC(np.zeros(200))
+    kernel = np.array([1., -2., 1.])
     
     C = ConvNDscipy(x, kernel)
+    x.getNdArray()[100] = 1.
+    y = C * x
+    plt.plot(x.getNdArray(),label="model")
+    plt.plot(y.getNdArray(), label="data")
+    plt.legend()
+    plt.show()
     C.dotTest(True)
     # x = pyVec.vectorIC(np.arange(9).reshape((3, 3)))
     # pad = ((2,2), (3,3))
@@ -613,15 +622,15 @@ if __name__ == '__main__':
     # PP = ZeroPad(xx, pad)
     # PP.dotTest()
     
-    np.random.seed(1)
-    y = pyVec.vectorIC(np.random.rand(301, 601))
-    F = FourierTransform(y, nffts=[512, 1024])
-    yfft = F * y
-    F.dotTest(True)
-
-    yy = pyVec.superVector(y, y)
-    FF = FourierTransform(yy, nffts=[512, 1024])
-    yyfft = FF * yy
-    FF.dotTest(True)
-    
-    print(0)
+    # np.random.seed(1)
+    # y = pyVec.vectorIC(np.random.rand(301, 601))
+    # F = FourierTransform(y, nffts=[512, 1024])
+    # yfft = F * y
+    # F.dotTest(True)
+    #
+    # yy = pyVec.superVector(y, y)
+    # FF = FourierTransform(yy, nffts=[512, 1024])
+    # yyfft = FF * yy
+    # FF.dotTest(True)
+    #
+    # print(0)
