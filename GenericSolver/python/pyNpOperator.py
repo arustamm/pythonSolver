@@ -348,6 +348,17 @@ class ConvNDscipy(pyOp.Operator):
             self.kernel = kernel.copy()
         else:
             raise ValueError("kernel has to be either a vector or a numpy.ndarray")
+
+        # Padding array to avoid edge effects
+        pad_width = []
+        for len_filt in self.kernel.shape:
+            half_len = int(len_filt / 2)
+            if np.mod(len_filt,2):
+                padding = (half_len, half_len)
+            else:
+                padding = (half_len, half_len -1)
+            pad_width.append(padding)
+        self.kernel = np.pad(self.kernel, pad_width)
         
         assert len(domain.shape) == len(self.kernel.shape), "Domain and kernel dimensions mismatch"
         
@@ -366,9 +377,10 @@ class ConvNDscipy(pyOp.Operator):
         modelNd = model.getNdArray()
         dataNd = data.getNdArray()[:]
         # Masking edge samples
-        modelNd[0] = 0.
-        modelNd[-1] = 0.
-        dataNd[1:-1] += convolve(modelNd, self.kernel, mode='same', method=self.method)[1:-1]
+        # modelNd[0] = 0.
+        # modelNd[-1] = 0.
+        # dataNd[1:-1] += convolve(modelNd, self.kernel, mode='same', method=self.method)[1:-1]
+        dataNd += convolve(modelNd, self.kernel, mode='same', method=self.method)
         return
     
     def adjoint(self, add, model, data):
@@ -378,9 +390,10 @@ class ConvNDscipy(pyOp.Operator):
         modelNd = model.getNdArray()
         dataNd = data.getNdArray()[:]
         # Masking edge samples
-        dataNd[0] = 0.
-        dataNd[-1] = 0.
-        modelNd[1:-1] += correlate(dataNd, self.kernel, mode='same', method=self.method)[1:-1]
+        # dataNd[0] = 0.
+        # dataNd[-1] = 0.
+        # modelNd[1:-1] += correlate(dataNd, self.kernel, mode='same', method=self.method)[1:-1]
+        modelNd += correlate(dataNd, self.kernel, mode='same', method=self.method)
         return
 
 
@@ -594,25 +607,17 @@ class ToScipy(LinearOperator):
 
 import matplotlib.pyplot as plt
 if __name__ == '__main__':
-    # x = pyVec.vectorIC(np.load('../testdata/monarch.npy'))
-    # kernel = np.array([[0,1,0], [1,-4,1], [0,1,0]])
-    # nh = [5, 10]
-    # hz = np.exp(-0.1 * np.linspace(-(nh[0] // 2), nh[0] // 2, nh[0]) ** 2)
-    # hx = np.exp(-0.03 * np.linspace(-(nh[1] // 2), nh[1] // 2, nh[1]) ** 2)
-    # hz /= np.trapz(hz)  # normalize the integral to 1
-    # hx /= np.trapz(hx)  # normalize the integral to 1
-    # kernel = hz[:, np.newaxis] * hx[np.newaxis, :]
+    x = pyVec.vectorIC(np.load('../testdata/monarch.npy'))
+    kernel = np.array([[0,1,0], [1,-4,1], [0,1,0]])
+    nh = [5, 10]
+    hz = np.exp(-0.1 * np.linspace(-(nh[0] // 2), nh[0] // 2, nh[0]) ** 2)
+    hx = np.exp(-0.03 * np.linspace(-(nh[1] // 2), nh[1] // 2, nh[1]) ** 2)
+    hz /= np.trapz(hz)  # normalize the integral to 1
+    hx /= np.trapz(hx)  # normalize the integral to 1
+    kernel = hz[:, np.newaxis] * hx[np.newaxis, :]
 
-    x = pyVec.vectorIC(np.zeros(200))
-    kernel = np.array([1., -2., 1.])
-    
     C = ConvNDscipy(x, kernel)
-    x.getNdArray()[100] = 1.
-    y = C * x
-    plt.plot(x.getNdArray(),label="model")
-    plt.plot(y.getNdArray(), label="data")
-    plt.legend()
-    plt.show()
+
     C.dotTest(True)
     # x = pyVec.vectorIC(np.arange(9).reshape((3, 3)))
     # pad = ((2,2), (3,3))
