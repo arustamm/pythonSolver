@@ -85,12 +85,14 @@ class vector:
     def getNdArray(self):
         """Function to return Ndarray of the vector"""
         raise NotImplementedError("getNdArray must be overwritten")
-
+    
     def shape(self):
-        return self.getNdArray().shape
-
+        """Function to get the vector shape (number of samples for each axis)"""
+        raise NotImplementedError("shape must be overwritten")
+    
     def size(self):
-        return self.getNdArray().size
+        """Function to compute the vector size (number of samples)"""
+        raise NotImplementedError("size must be overwritten")
 
     def norm(self, N=2):
         """Function to compute vector N-norm"""
@@ -274,7 +276,7 @@ class superVector(vector):
         return [self.vecs[idx].getNdArray() for idx in range(self.n)]
 
     def shape(self):
-        return [self.vecs[idx].shape for idx in range(self.n)]
+        return [self.vecs[idx].shape() for idx in range(self.n)]
 
     def size(self):
         return sum([self.vecs[idx].size() for idx in range(self.n)])
@@ -498,13 +500,19 @@ class vectorIC(vector):
         if len(self.naxis) == 0:  # To fix problem with scalar within a vectorIC
             self.naxis = (1,)
         self.ndims = len(self.naxis)  # Number of axes integer
-        self.shape = self.naxis
-        self.size = self.getNdArray().size
+        # self.shape = self.naxis
+        # self.size = self.arr.size
         super(vectorIC, self).__init__()
 
     def getNdArray(self):
         """Function to return Ndarray of the vector"""
         return self.arr
+    
+    def size(self):
+        return self.getNdArray().size
+    
+    def shape(self):
+        return self.naxis
 
     def norm(self, N=2):
         """Function to compute vector N-norm using Numpy"""
@@ -705,8 +713,8 @@ class vectorIC(vector):
         if not isinstance(vec2, vectorIC):
             raise TypeError("Provided input vector not a vectorIC!")
         # Checking size (must have same number of elements)
-        if self.size != vec2.size:
-            raise ValueError("Vector size mismatching: vec1 = %d; vec2 = %d" % (self.size, vec2.size))
+        if self.size() != vec2.size():
+            raise ValueError("Vector size mismatching: vec1 = %d; vec2 = %d" % (self.size(), vec2.size()))
         # Checking dimensionality
         if not self.checkSame(vec2):
             raise ValueError("Dimensionality not equal: vec1 = %d; vec2 = %d" % (self.naxis, vec2.naxis))
@@ -718,8 +726,8 @@ class vectorIC(vector):
         if not isinstance(vec2, vectorIC):
             raise TypeError("Provided input vector not a vectorIC!")
         # Checking size (must have same number of elements)
-        if self.size != vec2.size:
-            raise ValueError("Vector size mismatching: vec1 = %d; vec2 = %d" % (self.size, vec2.size))
+        if self.size() != vec2.size():
+            raise ValueError("Vector size mismatching: vec1 = %d; vec2 = %d" % (self.size(), vec2.size()))
         # Checking dimensionality
         if not self.checkSame(vec2):
             raise ValueError("Dimensionality not equal: vec1 = %d; vec2 = %d" % (self.naxis, vec2.naxis))
@@ -755,7 +763,6 @@ class vectorIC(vector):
             raise TypeError("Provided input high vector not a vectorIC!")
         self.getNdArray()[:] = np.minimum(np.maximum(low.getNdArray(), self.getNdArray()), high.getNdArray())
         return self
-
 
 
 # TODO add methods
