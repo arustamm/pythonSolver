@@ -360,7 +360,8 @@ class ConvNDscipy(pyOp.Operator):
             pad_width.append(padding)
         self.kernel = np.pad(self.kernel, pad_width)
         
-        assert len(domain.shape) == len(self.kernel.shape), "Domain and kernel dimensions mismatch"
+        if len(domain.shape()) != len(self.kernel.shape):
+            raise ValueError("Domain and kernel number of dimensions mismatch")
         
         assert method in ["auto", "direct", "fft"], "method has to be auto, direct or fft"
         self.method = method
