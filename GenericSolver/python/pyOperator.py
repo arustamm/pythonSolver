@@ -6,6 +6,7 @@ import time
 from copy import deepcopy
 import numpy as np
 from pyVector import vector, superVector
+import matplotlib.pyplot as plt
 import sep_util
 
 
@@ -749,6 +750,60 @@ class NonLinearOperator(Operator):
         """
         raise NotImplementedError("Perform dot-product test directly on the linear operator.")
 
+    def linTest(self, background, pert=None, scale=np.logspace(-6,6,13), plot=False):
+        """
+        Linearization test function. It plots the model-perturbation norm vs linearization error norm
+        :param background: vector class - Background model used during the linearization test
+        :param pert: vector class - Model-perturbation vector to be used during linearization test [None]
+                     if not provided a random perturbation is employed
+        :param scale: array - array of scalars to scale the pert vector during the test [np.logspace(-6,6,13)]
+        :param plot: boolean - whether to plot the linearization error vs perturbation scale or not
+        :return:
+        :param scale
+        :param lin_err array - array containing linearization error for each scale value
+        """
+        # Creating model perturbation if not provided
+        if pert is None:
+            pert = self.getDomain().clone().rand()
+        # List containing linearization error and perturbation scale/norm
+        lin_err = []
+        # temporary vectors
+        m0 = background.clone()
+        m = background.clone()
+        d0 = self.nl_op.getRange().clone()
+        d1 = self.nl_op.getRange().clone()
+        dlin = self.nl_op.getRange().clone()
+        # computing f(m0) = d0
+        self.nl_op.forward(False, m0, d0)
+        # setting m0 for the Jacobian matrix
+        self.set_background(m0)
+        for sc in scale:
+            # normalizing perturbation
+            pert.scale(1.0 / pert.norm())
+            # computing f(m0+dm) = d1
+            m.copy(m0)
+            m.scaleAdd(pert, 1.0, sc)
+            self.nl_op.forward(False, m0, d1)
+            # computing F(m0)dm = dlin
+            pert.scale(sc)
+            self.lin_op.forward(False, pert, dlin)
+            # computing f(m0+dm) - f(m0)
+            d1.scaleAdd(d0, 1.0, -1.0)
+            # computing f(m0+dm) - f(m0) - F(m0)dm (i.e., linearization error)
+            d1.scaleAdd(dlin, 1.0, -1.0)
+            lin_err.append(d1.norm())
+        lin_err = np.array(lin_err)
+        if plot:
+            fig, ax = plt.subplots(figsize=(6, 3))
+            plt.loglog(scale, lin_err, 'r')
+            ax.autoscale(enable=True, axis='y', tight=True)
+            ax.autoscale(enable=True, axis='x', tight=True)
+            plt.xlabel("$|dm|_2$")
+            plt.ylabel("$|f(m_0+dm) - f(m_0) - F(m_0)dm|_2$")
+            plt.title('Linearization error')
+            plt.show()
+        return scale, lin_err
+
 
 class _combNonLinearOperator(NonLinearOperator):
     """
@@ -828,6 +883,49 @@ class VstackNonLinearOperator(NonLinearOperator):
         self.set_background2(model)
 
 
+# simple non-linear operator to test linTest method
+class cosOperator(Operator):
+    """Cosine non-linear operator"""
+    def __init__(self, domain):
+        super(cosOperator, self).__init__(domain, domain)
+
+    def forward(self, add, model, data):
+        """Forward operator cos(x)"""
+        self.checkDomainRange(model, data)
+        if not add:
+            data.zero()
+        data.getNdArray()[:] += np.cos(model.getNdArray())
+        return
+
+
+class cosJacobian(Operator):
+    """Jacobian of cosine non-linear operator (i.e., -sin(x0)dx)"""
+    def __init__(self, domain):
+        super(cosJacobian, self).__init__(domain, domain)
+        self.background = domain.clone()
+        self.backgroundNd = self.background.getNdArray()
+
+    def forward(self, add, model, data):
+        """Forward operator cos(x)"""
+        self.checkDomainRange(model, data)
+        if not add:
+            data.zero()
+        data.getNdArray()[:] -= np.sin(self.backgroundNd) * model.getNdArray()
+        return
+
+    def adjoint(self, add, model, data):
+        """Forward operator cos(x)"""
+        self.checkDomainRange(model, data)
+        if not add:
+            model.zero()
+        model.getNdArray()[:] -= np.sin(self.backgroundNd)*data.getNdArray()
+        return
+
+    def set_background(self, background):
+        """ Setting -sin(x0)"""
+        self.background.copy(background)
+        return
+
 def main():
     from sys import path
     path.insert(0, '.')
@@ -872,11 +970,11 @@ def main():
     C.H.forward(False, x, z)
 
     # test MatMult
-    x = pyVector.vectorIC(np.empty((100, 200)))
-    A = MatrixOp(np.eye(x.getNdArray().size), x, x, outcore=False)
-    y = A * x
-    if x.isDifferent(y):
-        print("MatMult not working")
+    # x = pyVector.vectorIC(np.empty((100, 200)))
+    # A = MatrixOp(np.eye(x.getNdArray().size), x, x, outcore=False)
+    # y = A * x
+    # if x.isDifferent(y):
+    #     print("MatMult not working")
 
     # Test inversion x = A / y
     x = pyVector.vectorIC(np.empty((100, 200))).set(1)
@@ -927,6 +1025,13 @@ def main():
     yy = xx.clone().set(10)
     S = scalingOp(xx, 10)
     xx_inv = S / yy
+
+    # test for linTest method
+    x = pyVector.vectorIC((100, 200))
+    cosOp = cosOperator(x)
+    cosJac = cosJacobian(x)
+    cosNl = NonLinearOperator(cosOp, cosJac, cosJac.set_background)
+    cosNl.linTest(x.rand(), plot=True)
 
 
 if __name__ == '__main__':
