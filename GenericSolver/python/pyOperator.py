@@ -783,7 +783,7 @@ class NonLinearOperator(Operator):
             # computing f(m0+dm) = d1
             m.copy(m0)
             m.scaleAdd(pert, 1.0, sc)
-            self.nl_op.forward(False, m0, d1)
+            self.nl_op.forward(False, m, d1)
             # computing F(m0)dm = dlin
             pert.scale(sc)
             self.lin_op.forward(False, pert, dlin)
@@ -795,11 +795,11 @@ class NonLinearOperator(Operator):
         lin_err = np.array(lin_err)
         if plot:
             fig, ax = plt.subplots(figsize=(6, 3))
-            plt.loglog(scale, lin_err, 'r')
+            plt.loglog(scale*scale, lin_err*lin_err, 'r')
             ax.autoscale(enable=True, axis='y', tight=True)
             ax.autoscale(enable=True, axis='x', tight=True)
-            plt.xlabel("$|dm|_2$")
-            plt.ylabel("$|f(m_0+dm) - f(m_0) - F(m_0)dm|_2$")
+            plt.xlabel("$|dm|_2^2$")
+            plt.ylabel("$|f(m_0+dm) - f(m_0) - F(m_0)dm|_2^2$")
             plt.title('Linearization error')
             plt.show()
         return scale, lin_err
@@ -950,9 +950,7 @@ def main():
     I2 = I * 2
     I2.forward(False, x, y)
     z = x.clone()
-    z * 2
-    y.isDifferent(z)
-    if y.isDifferent(z):
+    if y.isDifferent(z*2):
         print('prod not working')
 
     prod = I * Z
@@ -993,8 +991,7 @@ def main():
     x = V.domain.clone().zero()
     V.adjoint(False, x, y)
     x = pyVector.vectorIC(np.ones((100, 200)))
-    x2 = x.clone()
-    x2 * 2
+    x2 = x.clone() * 2.
     y = pyVector.superVector(x.clone(), x2.clone())
     y_hat = y.clone()
     V.forward(False, x, y_hat)
@@ -1027,7 +1024,7 @@ def main():
     xx_inv = S / yy
 
     # test for linTest method
-    x = pyVector.vectorIC((100, 200))
+    x = pyVector.vectorIC((10, 1))
     cosOp = cosOperator(x)
     cosJac = cosJacobian(x)
     cosNl = NonLinearOperator(cosOp, cosJac, cosJac.set_background)
