@@ -30,7 +30,7 @@ class Stopper:
 class BasicStopper(Stopper):
     """Basic Stopper with different options"""
 
-    def __init__(self, niter=0, maxfevals=0, maxhours=0.0, tolr=1.0e-18, tolg=1.0e-18, tolobj=None, tolobjrel=None,
+    def __init__(self, niter=0, maxfevals=0, maxhours=0.0, tolr=1.0e-32, tolg=1.0e-32, tolobj=None, tolobjrel=None,
                  toleta=None, tolobjchng=None, logger=None):
         """
         Constructor for Basic Stopper:
