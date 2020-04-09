@@ -1,10 +1,8 @@
-# Module containing the definition of the operator necessary for the solver class
-# It takes vector objects from the pyVector class
-
 from __future__ import division, print_function, absolute_import
 import numpy as np
-from pyVector import vector
-from pyOperator import Operator
+import pyVector as pyVec
+from pyCuVector import vectorCupy
+import pyOperator as pyOp
 import sep_util
 try:
     import cupy as cp
@@ -15,7 +13,7 @@ except ModuleNotFoundError:
     import cupy as cp
 
 
-class MatrixOp(Operator):
+class MatrixOp(pyOp.Operator):
     """Operator built upon a matrix"""
 
     def __init__(self, matrix, domain, range, outcore=False):
@@ -25,9 +23,9 @@ class MatrixOp(Operator):
         :param range    : range vector
         :param outcore  : use outcore sep operators
         """
-        if not isinstance(domain, vector):
+        if not isinstance(domain, pyVec.vector):
             raise TypeError("ERROR! Domain vector not a vector object")
-        if not isinstance(range, vector):
+        if not isinstance(range, pyVec.vector):
             raise TypeError("ERROR! Range vector not a vector object")
         # Setting domain and range of operator and matrix to use during application of the operator
         self.setDomainRange(domain, range)
@@ -74,7 +72,7 @@ class MatrixOp(Operator):
         return self.arr_module.array(self.M)
 
 
-class FirstDerivative(Operator):
+class FirstDerivative(pyOp.Operator):
     def __init__(self, model, sampling=1., axis=0):
         r"""
         Compute 2nd order centered first derivative
@@ -140,7 +138,7 @@ class FirstDerivative(Operator):
         return
 
 
-class SecondDerivative(Operator):
+class SecondDerivative(pyOp.Operator):
     def __init__(self, model, sampling=1., axis=0):
         r"""
         Compute 2nd order second derivative
@@ -208,7 +206,7 @@ class SecondDerivative(Operator):
         return
 
 
-class TotalVariation(Operator):
+class TotalVariation(pyOp.Operator):
     def __init__(self, model, axis=None, weights=None, sampling=None, iso=False):
         r"""
         (An)isotropic Total Variation operator.
@@ -267,7 +265,7 @@ class TotalVariation(Operator):
             return self.op.adjoint(add, model, data)
 
 
-class Laplacian(Operator):
+class Laplacian(pyOp.Operator):
     def __init__(self, model, axis=None, weights=None, sampling=None):
         r"""
         Laplacian operator.
@@ -304,7 +302,7 @@ class Laplacian(Operator):
 
 
 # TODO not finished yet
-class Convolution(Operator):
+class Convolution(pyOp.Operator):
     """ND Convolution through Cupy"""
     
     def __init__(self, domain, kernel):
@@ -320,7 +318,7 @@ class Convolution(Operator):
             subprocess.call([sys.executable, "-m", "pip", "install", "--user", "chainer==7.2.0"])
             import chainer.functions as F
         
-        if not isinstance(domain, vector):
+        if not isinstance(domain, pyVec.vector):
             raise TypeError("ERROR! Domain vector not a vector object")
         # Setting domain and range of operator and matrix to use during application of the operator
         self.setDomainRange(domain, domain)
@@ -367,3 +365,76 @@ class Convolution(Operator):
     
     def getNdArray(self):
         return self.arr_module.array(self.M)
+
+
+def ZeroPad(domain, pad):
+    if isinstance(domain, vectorCupy):
+        return _ZeroPadIC(domain, pad)
+    elif isinstance(domain, pyVec.superVector):
+        # TODO add the possibility to have different padding for each sub-vector
+        return pyOp.Dstack([_ZeroPadIC(v, pad) for v in domain.vecs])
+    else:
+        raise ValueError("ERROR! Provided domain has to be either vector or superVector")
+    
+
+def _pad_vectorIC(vec, pad):
+    if not isinstance(vec, vectorCupy):
+        raise ValueError("ERROR! Provided vector must be of vectorCcupy type")
+    assert len(vec.shape) == len(pad), "Dimensions of vector and padding mismatch!"
+    
+    vec_new_shape = tuple(cp.asarray(vec.shape) + [sum(pad[_]) for _ in range(len(pad))])
+    if isinstance(vec, vectorCupy):
+        return vectorCupy(cp.empty(vec_new_shape, dtype=vec.getNdArray().dtype))
+    else:
+        raise ValueError("ERROR! For now only vectorCupy is supported!")
+
+
+class _ZeroPadIC(pyOp.Operator):
+    
+    def __init__(self, domain, pad):
+        """ Zero Pad operator.
+
+        To pad 2 values to each side of the first dim, and 3 values to each side of the second dim, use:
+            pad=((2,2), (3,3))
+        :param domain: vectorIC class
+        :param pad: scalar or sequence of scalars
+            Number of samples to pad in each dimension.
+            If a single scalar is provided, it is assigned to every dimension.
+        """
+        if isinstance(domain, vectorCupy):
+            self.dims = domain.shape
+            pad = [(pad, pad)] * len(self.dims) if pad is cp.isscalar else list(pad)
+            if (cp.array(pad) < 0).any():
+                raise ValueError('Padding must be positive or zero')
+            self.pad = pad
+            super(_ZeroPadIC, self).__init__(domain, _pad_vectorIC(domain, self.pad))
+    
+    def __str__(self):
+        return "ZeroPad "
+    
+    def forward(self, add, model, data):
+        """Zero padding"""
+        self.checkDomainRange(model, data)
+        if add:
+            temp = data.clone()
+        y = cp.pad(model.getNdArray(), self.pad, mode='constant')
+        data.getNdArray()[:] = y
+        if add:
+            data.scaleAdd(temp, 1., 1.)
+        return
+    
+    def adjoint(self, add, model, data):
+        """Extract non-zero subsequence"""
+        self.checkDomainRange(model, data)
+        if add:
+            temp = model.clone()
+        x = data.clone().getNdArray()
+        for ax, pad in enumerate(self.pad):
+            x = cp.take(x, pad[0] + cp.arange(self.dims[ax]), axis=ax)
+        model.arr = x
+        if add:
+            model.scaleAdd(temp, 1., 1.)
+        return
+
+
+
