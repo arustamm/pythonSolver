@@ -1,4 +1,4 @@
-from pyVector import vector, vectorOC
+import pyVector as pyVec
 import cupy as cp
 import sep_util
 from copy import deepcopy
@@ -16,7 +16,7 @@ except ModuleNotFoundError:
 # TODO check https://docs-cupy.chainer.org/en/stable/tutorial/basic.html#how-to-write-cpu-gpu-agnostic-code
 
 
-class vectorCupy(vector):
+class vectorCupy(pyVec.vector):
     """In-core python vector class based on Cupy"""
 
     def __init__(self, in_vec):
@@ -28,7 +28,7 @@ class vectorCupy(vector):
         """
 
         # Verify that input is a numpy array or header file or vectorOC
-        if isinstance(in_vec, vectorOC):  # VectorOC passed to constructor
+        if isinstance(in_vec, pyVec.vectorOC):  # VectorOC passed to constructor
             self.arr, self.ax_info = sep_util.read_file(in_vec.vecfile)
         elif isinstance(in_vec, str):  # Header file passed to constructor
             self.arr, self.ax_info = sep_util.read_file(in_vec)
@@ -329,8 +329,14 @@ if __name__ == '__main__':
     x.printDevice()
     
     D = pyCuOperator.FirstDerivative(x)
-    n = x.clone().rand()
-    y = x.clone().set(10) + 0.01 * n
-    S = pyCuOperator.scalingOp(x, 10)
-    xinv = S / y
-    print('Error norm = %.2e' % (xinv.norm() - x.norm()))
+    # n = x.clone().rand()
+    # y = x.clone().set(10) + 0.01 * n
+    # S = pyCuOperator.scalingOp(x, 10)
+    # xinv = S / y
+    # print('Error norm = %.2e' % (xinv.norm() - x.norm()))
+    
+    x = vectorCupy(cp.arange(9).reshape((3, 3)))
+    pad = ((2, 2), (3, 3))
+    P = pyCuOperator.ZeroPad(x, pad)
+    
+    print(0)
