@@ -182,10 +182,10 @@ class LCGsolver(pySolver.Solver):
                     else:
                         dot_gradd_res = prblm_gradd.dot(prblm_res)
                         alpha = - np.real(dot_gradd_res) / dot_gradd
-                        msg = "Steppest-descent step length: %.2e" % alpha
+                        msg = "Steppest-descent step length: %.2e" % float(alpha)
                         # Writing on log file
                         if iiter == 0:
-                            msg = "First steppest-descent step length: %.2e" % alpha
+                            msg = "First steppest-descent step length: %.2e" % float(alpha)
                         if self.logger:
                             self.logger.addToLog(msg)
                 else:
