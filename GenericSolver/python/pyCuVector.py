@@ -170,7 +170,7 @@ class vectorCupy(pyVec.vector):
                 if self.getNdArray().dtype == cp.complex64:
                     esize = "esize=8\n"
                 fid.write(esize)
-                fid.write("data_format=\"xdr_float\"\n")
+                fid.write("data_format=\"native_float\"\n")
             fid.close()
         else:
             binfile = sep_util.get_binary(filename)
