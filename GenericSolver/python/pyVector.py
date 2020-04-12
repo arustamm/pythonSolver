@@ -85,11 +85,11 @@ class vector:
     def getNdArray(self):
         """Function to return Ndarray of the vector"""
         raise NotImplementedError("getNdArray must be overwritten")
-    
+
     def shape(self):
         """Function to get the vector shape (number of samples for each axis)"""
         raise NotImplementedError("shape must be overwritten")
-    
+
     def size(self):
         """Function to compute the vector size (number of samples)"""
         raise NotImplementedError("size must be overwritten")
@@ -507,10 +507,10 @@ class vectorIC(vector):
     def getNdArray(self):
         """Function to return Ndarray of the vector"""
         return self.arr
-    
+
     def size(self):
         return self.getNdArray().size
-    
+
     def shape(self):
         return self.naxis
 
@@ -718,7 +718,7 @@ class vectorIC(vector):
         # Checking dimensionality
         if not self.checkSame(vec2):
             raise ValueError("Dimensionality not equal: vec1 = %d; vec2 = %d" % (self.naxis, vec2.naxis))
-        return np.dot(self.getNdArray().flatten(), vec2.getNdArray().flatten())
+        return np.vdot(self.getNdArray().flatten(), vec2.getNdArray().flatten())
 
     def multiply(self, vec2):
         """Function to multiply element-wise two vectors"""

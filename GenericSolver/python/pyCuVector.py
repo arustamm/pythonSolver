@@ -58,17 +58,17 @@ class vectorCupy(pyVec.vector):
 
         self.ndims = len(self.naxis)  # Number of axes integer
         self.size = self.arr.size  # Total number of elements
-        
+
         self.device = self.arr.device
         super(vectorCupy, self).__init__()
-    
+
     def setDevice(self, devID=0):
         cp.cuda.Device(devID).use()
-    
+
     def printDevice(self):
         name = getGPUs()[self.arr.device.id].name
         print('GPU selected: %d - %s' % (self.arr.device.id, name))
-        
+
     def getNdArray(self):
         """Function to return Ndarray of the vector"""
         return self.arr
@@ -275,7 +275,7 @@ class vectorCupy(pyVec.vector):
         # Checking dimensionality
         if not self.checkSame(other):
             raise ValueError("Dimensionality not equal: vec1 = %d; vec2 = %d" % (self.naxis, other.naxis))
-        return cp.dot(self.getNdArray().flatten(), other.getNdArray().flatten())
+        return cp.vdot(self.getNdArray().flatten(), other.getNdArray().flatten())
 
     def multiply(self, other):
         """Function to multiply element-wise two vectors"""
@@ -324,19 +324,19 @@ class vectorCupy(pyVec.vector):
 
 if __name__ == '__main__':
     import pyCuOperator
-    
+
     x = vectorCupy(np.empty((1000, 20000))).set(1.)
     x.printDevice()
-    
+
     D = pyCuOperator.FirstDerivative(x)
     # n = x.clone().rand()
     # y = x.clone().set(10) + 0.01 * n
     # S = pyCuOperator.scalingOp(x, 10)
     # xinv = S / y
     # print('Error norm = %.2e' % (xinv.norm() - x.norm()))
-    
+
     x = vectorCupy(cp.arange(9).reshape((3, 3)))
     pad = ((2, 2), (3, 3))
     P = pyCuOperator.ZeroPad(x, pad)
-    
+
     print(0)
