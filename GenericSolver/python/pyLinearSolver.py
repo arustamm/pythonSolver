@@ -212,7 +212,7 @@ class LCGsolver(pySolver.Solver):
                         beta = (dot_gradd_dres * dot_gradd_res - dot_gradd * dot_dres_res) / determ
                         # Writing on log file
                         if self.logger:
-                            self.logger.addToLog("Conjugate alpha,beta: " + str(alpha) + ", " + str(beta)
+                            self.logger.addToLog("Conjugate alpha,beta: " + str(alpha) + ", " + str(beta))
 
             if not success:
                 if self.create_msg:
