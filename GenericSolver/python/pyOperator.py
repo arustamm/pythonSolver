@@ -6,7 +6,6 @@ import time
 from copy import deepcopy
 import numpy as np
 from pyVector import vector, superVector
-import matplotlib.pyplot as plt
 import sep_util
 
 
@@ -794,6 +793,7 @@ class NonLinearOperator(Operator):
             lin_err.append(d1.norm())
         lin_err = np.array(lin_err)
         if plot:
+            import matplotlib.pyplot as plt
             fig, ax = plt.subplots(figsize=(6, 3))
             plt.loglog(scale*scale, lin_err*lin_err, 'r')
             ax.autoscale(enable=True, axis='y', tight=True)
