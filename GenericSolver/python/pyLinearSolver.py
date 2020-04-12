@@ -9,7 +9,7 @@ from pyProblem import ProblemLinearSymmetric
 
 class LCGsolver(pySolver.Solver):
     """Linear-Conjugate Gradient and Steepest-Descent Solver parent object"""
-    
+
     # Default class methods/functions
     def __init__(self, stopper, steepest=False, logger=None):
         """
@@ -30,20 +30,20 @@ class LCGsolver(pySolver.Solver):
         self.stopper.logger = self.logger
         # print formatting
         self.iter_msg = "iter = %s, obj = %.5e, resnorm = %.2e, gradnorm = %.2e, feval = %d"
-    
+
     def __del__(self):
         """Default destructor"""
         return
-    
+
     def run(self, problem, verbose=False, restart=False):
         """Running LCG and steepest-descent solver"""
         self.create_msg = verbose or self.logger
-        
+
         # Resetting stopper before running the inversion
         self.stopper.reset()
         # Check for preconditioning
         precond = True if "prec" in dir(problem) and problem.prec is not None else False
-        
+
         if not restart:
             if self.create_msg:
                 msg = 90 * "#" + "\n"
@@ -61,7 +61,7 @@ class LCGsolver(pySolver.Solver):
             prblm_mdl = problem.get_model()
             cg_mdl = prblm_mdl.clone()
             cg_dmodl = prblm_mdl.clone().zero()
-            
+
             # Other internal variables
             iiter = 0
         else:
@@ -86,14 +86,14 @@ class LCGsolver(pySolver.Solver):
             prblm_mdl = problem.get_model()
             # Setting residual vector to avoid its unnecessary computation
             problem.set_residual(self.restart.retrieve_vector("prblm_res"))
-        
+
         # Common variables unrelated to restart
         success = True
         # Variables necessary to return inverted model if inversion stops earlier
         prev_mdl = prblm_mdl.clone().zero()
         if precond:
             cg_prec_grad = cg_dmodl.clone().zero()
-        
+
         # Iteration loop
         while True:
             # Computing objective function
@@ -124,11 +124,11 @@ class LCGsolver(pySolver.Solver):
             if prblm_grad.norm() == 0.:
                 print("Gradient vanishes identically")
                 break
-            
+
             # Saving results
             self.save_results(iiter, problem, force_save=False)
             prev_mdl.copy(prblm_mdl)  # Keeping the previous model
-            
+
             # Computing alpha and beta coefficients
             if precond:
                 # Applying preconditioning to current gradient
@@ -182,10 +182,10 @@ class LCGsolver(pySolver.Solver):
                     else:
                         dot_gradd_res = prblm_gradd.dot(prblm_res)
                         alpha = - np.real(dot_gradd_res) / dot_gradd
-                        msg = "Steppest-descent step length: %.2e" % float(alpha)
+                        msg = "Steppest-descent step length: " + str(alpha)
                         # Writing on log file
                         if iiter == 0:
-                            msg = "First steppest-descent step length: %.2e" % float(alpha)
+                            msg = "First steppest-descent step length: " + str(alpha)
                         if self.logger:
                             self.logger.addToLog(msg)
                 else:
@@ -212,8 +212,8 @@ class LCGsolver(pySolver.Solver):
                         beta = (dot_gradd_dres * dot_gradd_res - dot_gradd * dot_dres_res) / determ
                         # Writing on log file
                         if self.logger:
-                            self.logger.addToLog("Conjugate alpha,beta: %.2e, %.2e" % (alpha, beta))
-            
+                            self.logger.addToLog("Conjugate alpha,beta: " + str(alpha) + ", " + str(beta)
+
             if not success:
                 if self.create_msg:
                     msg = "Stepper couldn't find a proper step size, will terminate solver"
@@ -222,7 +222,7 @@ class LCGsolver(pySolver.Solver):
                     if self.logger:
                         self.logger.addToLog(msg)
                 break
-            
+
             if precond:
                 # modl = modl + alpha * dmodl
                 cg_mdl.scaleAdd(cg_dmodl, 1.0, alpha)  # Update model
@@ -231,7 +231,7 @@ class LCGsolver(pySolver.Solver):
                 cg_dmodl.scaleAdd(prblm_grad, beta, alpha)  # update search direction
                 # modl = modl + dmodl
                 cg_mdl.scaleAdd(cg_dmodl)  # Update model
-            
+
             # Increasing iteration counter
             iiter += 1
             # Setting the model
@@ -239,7 +239,7 @@ class LCGsolver(pySolver.Solver):
             # Projecting model onto the bounds (if any)
             if "bounds" in dir(problem):
                 problem.bounds.apply(cg_mdl)
-            
+
             if prblm_mdl.isDifferent(cg_mdl):
                 # Model went out of the bounds
                 msg = "Model hit provided bounds. Projecting it onto them."
@@ -270,7 +270,7 @@ class LCGsolver(pySolver.Solver):
                     # res = res + dres
                     prblm_res.scaleAdd(cg_dres)  # Update residuals
                 problem.set_residual(prblm_res)
-            
+
             # Computing new objective function value
             obj1 = problem.get_obj(cg_mdl)
             if obj1 >= obj0:
@@ -284,7 +284,7 @@ class LCGsolver(pySolver.Solver):
                         self.logger.addToLog(msg)
                 problem.set_model(prev_mdl)
                 break
-            
+
             # Saving current model and previous search direction in case of restart
             self.restart.save_parameter("iter", iiter)
             self.restart.save_vector("cg_mdl", cg_mdl)
@@ -295,7 +295,7 @@ class LCGsolver(pySolver.Solver):
             else:
                 self.restart.save_parameter("dot_grad_prec_grad", dot_grad_prec_grad)
             self.restart.save_vector("prblm_res", prblm_res)
-            
+
             # iteration info
             if self.create_msg:
                 msg = self.iter_msg % (str(iiter).zfill(self.stopper.zfill),
@@ -313,7 +313,7 @@ class LCGsolver(pySolver.Solver):
                 raise ValueError("Either gradient norm or objective function value NaN!")
             if self.stopper.run(problem, iiter, initial_obj_value, verbose):
                 break
-        
+
         # Writing last inverted model
         self.save_results(iiter, problem, force_save=True, force_write=True)
         if self.create_msg:
@@ -327,7 +327,7 @@ class LCGsolver(pySolver.Solver):
                 self.logger.addToLog(msg)
         # Clear restart object
         self.restart.clear_restart()
-        
+
         return
 
 
@@ -375,7 +375,7 @@ class LSQRsolver(pySolver.Solver):
          2. Use LSQR to solve the system  ``A*dx = r0``.
          3. Add the correction dx to obtain a final solution ``x = x0 + dx``.
     """
-    
+
     def __init__(self, stopper, estimate_cond=False, estimate_var=False, logger=None):
         """
         Constructor for LSQR Solver:
@@ -399,22 +399,22 @@ class LSQRsolver(pySolver.Solver):
         self.stopper.logger = self.logger
         # print formatting
         self.iter_msg = "iter = %s, obj = %.5e, resnorm = %.2e, gradnorm = %.2e, feval = %d"
-    
+
     def __del__(self):
         """Default destructor"""
         return
-    
+
     def run(self, problem, verbose=False, restart=False):
         """Running LSQR solver"""
         self.create_msg = verbose or self.logger
-        
+
         # Resetting stopper before running the inversion
         self.stopper.reset()
 
         # Setting internal vectors and initial variables
         prblm_mdl = problem.get_model()
         initial_mdl = prblm_mdl.clone()
-        
+
         if not restart:
             if self.create_msg:
                 msg = 90 * "#" + "\n"
@@ -499,7 +499,7 @@ class LSQRsolver(pySolver.Solver):
                 if self.logger:
                     self.logger.addToLog(msg)
             self.restart.read_restart()
-            
+
             # Retrieving iteration number
             iiter = self.restart.retrieve_parameter("iter")
             initial_obj_value = self.restart.retrieve_parameter("obj_initial")
@@ -511,7 +511,7 @@ class LSQRsolver(pySolver.Solver):
             v = self.restart.retrieve_vector("v")
             problem.set_model(x)
             problem.set_residual(u)
-            
+
             prblm_res = problem.get_res(x)
             if self.est_cond:
                 dk = self.restart.retrieve_vector("dk")
@@ -523,27 +523,27 @@ class LSQRsolver(pySolver.Solver):
             rhobar = self.restart.retrieve_parameter("rhobar")
             phibar = self.restart.retrieve_parameter("phibar")
             anorm = self.restart.retrieve_parameter("anorm")
-        
+
         # Common variables unrelated to restart
         prblm_mdl = problem.get_model()
         inv_model = prblm_mdl.clone()  # Inverted model to be saved during the inversion
         # Variables necessary to return inverted model if inversion stops earlier
         prev_x = x.clone().zero()
         early_stop =False
-        
+
         # Iteration loop
         while True:
             if problem.get_gnorm(prblm_mdl) == 0.:
                 print("Gradient vanishes identically")
                 break
-            
+
             # Saving results
             inv_model.copy(initial_mdl)
             inv_model.scaleAdd(x)  # x = x0 + dx; Updating inverted model
             self.save_results(iiter, problem, model=inv_model, force_save=False)
             # Necessary to save previous iteration
             prev_x.copy(x)
-            
+
             """
                 %     Perform the next step of the bidiagonalization to obtain the
                 %     next  beta, u, alpha, v.  These satisfy the relations
@@ -557,7 +557,7 @@ class LSQRsolver(pySolver.Solver):
             # u = A.matvec(v) - alpha * u
             u.scaleAdd(v_prblm, -alpha, 1.0)
             beta = u.norm()
-            
+
             if beta > 0.:
                 u.scale(1. / beta)
                 anorm = np.sqrt(anorm ** 2 + alpha ** 2 + beta ** 2)
@@ -572,11 +572,11 @@ class LSQRsolver(pySolver.Solver):
             else:
                 problem.set_model(x)
                 problem.set_residual(u)  # res = u
-            
+
             # Use a plane rotation to eliminate the subdiagonal element (beta)
             # of the lower-bidiagonal matrix, giving an upper-bidiagonal matrix.
             cs, sn, rho = _sym_ortho(rhobar, beta)
-            
+
             theta = sn * alpha
             rhobar = -cs * alpha
             phi = cs * phibar
@@ -591,13 +591,13 @@ class LSQRsolver(pySolver.Solver):
             # New objective function value
             obj1 = problem.get_obj(prblm_mdl)
 
-            
+
             # Update x and w.
             # x = x + t1 * w
             x.scaleAdd(w, 1.0, phi / rho)
             # w = v + t2 * w
             w.scaleAdd(v, -theta / rho, 1.0)
-            
+
             # Increasing iteration counter
             iiter += 1
 
@@ -660,7 +660,7 @@ class LSQRsolver(pySolver.Solver):
                 raise ValueError("Either gradient norm or objective function value NaN!")
             if self.stopper.run(problem, iiter, initial_obj_value, verbose):
                 break
-        
+
         # Writing last inverted model
         inv_model.copy(initial_mdl)
         if early_stop:
@@ -683,7 +683,7 @@ class LSQRsolver(pySolver.Solver):
 
 class SymLCGsolver(pySolver.Solver):
     """Linear-Conjugate Gradient Solver (for symmetric systems) parent object"""
-    
+
     # Default class methods/functions
     def __init__(self, stopper, steepest=False, logger=None):
         """Constructor for LCG Solver for symmetric systems"""
@@ -702,15 +702,15 @@ class SymLCGsolver(pySolver.Solver):
         # print formatting
         self.iter_msg = "iter = %s, obj = %.5e, resnorm = %.2e, feval = %d"
         return
-    
+
     def __del__(self):
         """Default destructor"""
         return
-    
+
     def run(self, problem, verbose=False, restart=False):
         """Running LCG solver for symmetric systems"""
         self.create_msg = verbose or self.logger
-        
+
         # Resetting stopper before running the inversion
         self.stopper.reset()
         # Checking if we are solving a linear square problem
@@ -733,14 +733,14 @@ class SymLCGsolver(pySolver.Solver):
                     print(msg.replace("log file", ""))
                 if self.logger:
                     self.logger.addToLog(msg)
-            
+
             # Setting internal vectors (model and search direction vectors)
             prblm_mdl = problem.get_model()
             cg_mdl = prblm_mdl.clone()
             cg_dmodl = prblm_mdl.clone().zero()
             if precond:
                 cg_prec_res = cg_dmodl.clone()
-            
+
             # Other internal variables
             iiter = 0
             beta = 0.
@@ -764,12 +764,12 @@ class SymLCGsolver(pySolver.Solver):
             prblm_mdl = problem.get_model()
             # Setting residual vector to avoid its unnecessary computation
             problem.set_residual(self.restart.retrieve_vector("prblm_res"))
-        
+
         # Common variables unrelated to restart
         success = True
         data_norm = problem.data.norm()
         prev_mdl = prblm_mdl.clone().zero()
-        
+
         # Iteration loop
         while True:
             # Computing objective function
@@ -791,19 +791,19 @@ class SymLCGsolver(pySolver.Solver):
                 # Check if either objective function value or gradient norm is NaN
                 if isnan(obj0):
                     raise ValueError("Error! Objective function value NaN!")
-            
+
             # Saving results
             self.save_results(iiter, problem, force_save=False)
             # Copying current model in case of early stop
             prev_mdl.copy(prev_mdl)
-            
+
             # Applying preconditioning to gradient (first time)
             if iiter == 0 and precond:
                 problem.prec.forward(False, prblm_res, cg_prec_res)
             # dmodl = beta * dmodl - res
             cg_dmodl.scaleAdd(cg_prec_res if precond else prblm_res, beta, -1.0)  # Update search direction
             prblm_ddmodl = problem.get_dres(cg_mdl, cg_dmodl)  # Project search direction in the data space
-            
+
             dot_dmodl_ddmodl = cg_dmodl.dot(prblm_ddmodl)
             if precond:
                 dot_res = prblm_res.dot(cg_prec_res)  # Dot product of residual and preconditioned one
@@ -824,7 +824,7 @@ class SymLCGsolver(pySolver.Solver):
                 # Writing on log file
                 if self.logger:
                     self.logger.addToLog(msg)
-            
+
             if not success:
                 if self.create_msg:
                     msg = "Stepper couldn't find a proper step size, will terminate solver"
@@ -833,23 +833,23 @@ class SymLCGsolver(pySolver.Solver):
                     if self.logger:
                         self.logger.addToLog(msg)
                 break
-            
+
             alpha = dot_res / dot_dmodl_ddmodl
             if self.logger:
                 self.logger.addToLog("Alpha step length: %.2e" % alpha)
-            
+
             # modl = modl + alpha * dmodl
             cg_mdl.scaleAdd(cg_dmodl, sc2=alpha)  # Update model
-            
+
             # Increasing iteration counter
             iiter = iiter + 1
             # Setting the model and residuals to avoid residual twice computation
             problem.set_model(cg_mdl)
-            
+
             # Projecting model onto the bounds (if any)
             if "bounds" in dir(problem):
                 problem.bounds.apply(cg_mdl)
-            
+
             if prblm_mdl.isDifferent(cg_mdl):
                 # Model went out of the bounds
                 msg = "Model hit provided bounds. Projecting it onto them."
@@ -877,7 +877,7 @@ class SymLCGsolver(pySolver.Solver):
                 problem.set_residual(prblm_res)
                 if iiter == 1:
                     problem.fevals += 1  # To correct objective function evaluation number since residuals are set
-            
+
             # Computing new objective function value
             obj1 = problem.get_obj(cg_mdl)
             if precond:
@@ -906,7 +906,7 @@ class SymLCGsolver(pySolver.Solver):
                     problem.set_model(prev_mdl)
                     break
                 obj_old = obj0  # Saving objective function at iter-1
-            
+
             # Saving current model and previous search direction in case of restart
             self.restart.save_parameter("iter", iiter)
             self.restart.save_parameter("beta", beta)
@@ -917,7 +917,7 @@ class SymLCGsolver(pySolver.Solver):
                 self.restart.save_vector("cg_prec_res", cg_prec_res)
             # Saving data space vectors
             self.restart.save_vector("prblm_res", prblm_res)
-            
+
             # iteration info
             if self.create_msg:
                 msg = self.iter_msg % (str(iiter).zfill(self.stopper.zfill),
@@ -936,7 +936,7 @@ class SymLCGsolver(pySolver.Solver):
                 raise ValueError("Error! Objective function value NaN!")
             if self.stopper.run(problem, iiter, verbose=verbose):
                 break
-        
+
         # Writing last inverted model
         self.save_results(iiter, problem, force_save=True, force_write=True)
         if self.create_msg:
