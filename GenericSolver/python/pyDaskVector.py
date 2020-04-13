@@ -495,7 +495,7 @@ class DaskVector(Vec.vector):
                         ax_id, ax[0], ax_id, ax[1], ax_id, ax[2], ax_id, ax[3]))
                 fid.write("in='%s'\n" % (binfile))
                 fid.write("esize=4\n")
-                fid.write("data_format=\"xdr_float\"\n")
+                fid.write("data_format=\"native_float\"\n")
             # Writing binary file ("reading each binary file by chuncks of BUF_SIZE")
             with open(binfile, mode + 'b') as fid:
                 for binfile_ii in bin_files:
