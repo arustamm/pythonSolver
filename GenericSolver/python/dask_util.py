@@ -58,7 +58,7 @@ def client_startup(cluster, n_jobs, total_workers):
         # If the number of workers is not reached in 5 minutes raise exception
         if time.time() - t0 > 300.0:
             raise SystemError(
-                "Dask could not start the requested workers within 5 minutes! Try different hostnames.")
+                "Dask could not start the requested workers within 5 minutes! Try different n_jobs.")
     WorkerIds = list(client.get_worker_logs().keys())
     return client, WorkerIds
 
