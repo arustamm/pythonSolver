@@ -9,6 +9,7 @@ import sep_util
 from scipy.signal import convolve, correlate
 from scipy.ndimage import gaussian_filter
 from scipy.sparse.linalg import LinearOperator
+from itertools import product
 
 
 class MatrixOp(pyOp.Operator):
@@ -353,12 +354,12 @@ class ConvNDscipy(pyOp.Operator):
         pad_width = []
         for len_filt in self.kernel.shape:
             half_len = int(len_filt / 2)
-            if np.mod(len_filt,2):
+            if np.mod(len_filt, 2):
                 padding = (half_len, half_len)
             else:
-                padding = (half_len, half_len -1)
+                padding = (half_len, half_len - 1)
             pad_width.append(padding)
-        self.kernel = np.pad(self.kernel, pad_width)
+        self.kernel = np.pad(self.kernel, pad_width, mode='constant')
         
         if len(domain.shape()) != len(self.kernel.shape):
             raise ValueError("Domain and kernel number of dimensions mismatch")
@@ -390,24 +391,24 @@ class ConvNDscipy(pyOp.Operator):
         return
 
 
-def FourierTransform(domain, dirs=None, nffts=None, sampling=1., dtype=np.complex128):
+def FourierTransform(domain, dirs=None, nfft=None, sampling=1., dtype=np.complex128):
     if isinstance(domain, pyVec.vectorIC):
-        return _FFT_IC(domain, dirs, nffts, sampling, dtype)
+        return _FFT_IC(domain, dirs, nfft, sampling, dtype)
     elif isinstance(domain, pyVec.superVector):
         # TODO add the possibility to have different settings for each sub-vector
-        return pyOp.Dstack([_FFT_IC(v, dirs, nffts, sampling, dtype) for v in domain.vecs])
+        return pyOp.Dstack([_FFT_IC(v, dirs, nfft, sampling, dtype) for v in domain.vecs])
     else:
         raise ValueError("ERROR! Provided domain has to be either vector or superVector")
 
 
 class _FFT_IC(pyOp.Operator):
     
-    def __init__(self, domain, dirs=None, nffts=None, sampling=1., dtype=np.complex128):
+    def __init__(self, domain, dirs=None, nfft=None, sampling=1., dtype=np.complex128):
         """
         :param domain   : vector class; domain vector
         :param dirs     : scalar of sequence of scalars
                             directions along which to compute the FFT
-        :param nffts    : scalar or sequence of scalars
+        :param nfft    : scalar or sequence of scalars
                             number of FFT points
         :param sampling : scalar or sequence of scalars
                             sampling step for FFT computation
@@ -422,10 +423,10 @@ class _FFT_IC(pyOp.Operator):
             assert len(self.dirs) <= len(
                 self.dims), "The number of FFT directions is greater than the domain dimensionality"
         
-        if nffts is None:
+        if nfft is None:
             self.nffts = self.dims
         else:
-            self.nffts = [int(nffts[_]) for _ in range(len(nffts))]
+            self.nffts = [int(nfft[_]) for _ in range(len(nfft))]
             assert len(self.nffts) <= len(
                 self.dims), "The number of FFT points is greater than the domain dimensionality"
         
@@ -537,81 +538,24 @@ class _ZeroPadIC(pyOp.Operator):
         return
 
 
-class FromScipy(pyOp.Operator):
-    
-    def __init__(self, op):
-        """
-        Cast a scipy LinearOperator to Operator
-        :param op: `scipy.sparse.linalg.LinearOperator` class (or child, such as pylops.LinearOperator)
-        """
-        assert isinstance(op, LinearOperator), "op has to be a scipy LinearOperator"
-        self.matvec = op.matvec
-        self.rmatvec = op.rmatvec
-        self.name = op.__str__()
-        super(FromScipy, self).__init__(pyVec.vectorIC(np.empty(op.shape[1])),
-                                        pyVec.vectorIC(np.empty(op.shape[0])))
-    
-    def __str__(self):
-        return self.name.replace('<', '').replace('>', '')
-        
-    def forward(self, add, model, data):
-        self.checkDomainRange(model, data)
-        if add:
-            temp = data.clone()
-        data.getNdArray()[:] = self.matvec(model.getNdArray())
-        if add:
-            data.scaleAdd(temp, 1., 1.)
-            
-    def adjoint(self, add, model, data):
-        self.checkDomainRange(model, data)
-        if add:
-            temp = model.clone()
-        model.getNdArray()[:] = self.rmatvec(data.getNdArray())
-        if add:
-            model.scaleAdd(temp, 1., 1.)
-    
-
-class ToScipy(LinearOperator):
-    
-    def __init__(self, op):
-        """
-        Cast an Operator to scipy LinearOperator or to pylops if available
-        :param op: `pyOperator.Operator` object (or child)
-        """
-        assert isinstance(op, pyOp.Operator), 'op has to be a pyOperator.Operator'
-        super(ToScipy, self).__init__(shape=(op.range.size, op.domain.size),
-                                      dtype=op.domain.getNdArray().dtype)
-        self.forfunc = op.forward
-        self.adjfunc = op.adjoint
-        self.range_shape = op.range.shape
-        self.domain_shape = op.domain.shape
-        
-    def _matvec(self, x):
-        model = pyVec.vectorIC(x.reshape(self.domain_shape).astype(self.dtype))
-        data = pyVec.vectorIC(np.empty(self.range_shape, dtype=self.dtype))
-        self.forfunc(False, model, data)
-        return data.getNdArray().copy()
-    
-    def _rmatvec(self, y):
-        model = pyVec.vectorIC(np.empty(self.domain_shape, dtype=self.dtype))
-        data = pyVec.vectorIC(y.reshape(self.range_shape).astype(self.dtype))
-        self.adjfunc(False, model, data)
-        return model.getNdArray().copy()
-
-import matplotlib.pyplot as plt
 if __name__ == '__main__':
+    import matplotlib.pyplot as plt
     x = pyVec.vectorIC(np.load('../testdata/monarch.npy'))
-    kernel = np.array([[0,1,0], [1,-4,1], [0,1,0]])
-    nh = [5, 10]
-    hz = np.exp(-0.1 * np.linspace(-(nh[0] // 2), nh[0] // 2, nh[0]) ** 2)
-    hx = np.exp(-0.03 * np.linspace(-(nh[1] // 2), nh[1] // 2, nh[1]) ** 2)
-    hz /= np.trapz(hz)  # normalize the integral to 1
-    hx /= np.trapz(hx)  # normalize the integral to 1
-    kernel = hz[:, np.newaxis] * hx[np.newaxis, :]
+    plt.imshow(x.getNdArray(), cmap='gray'), plt.title('Input'), plt.show()
+    
+    # Test ConvNDscipy
+    # kernel = np.array([[0,1,0], [1,-4,1], [0,1,0]])
+    # nh = [5, 10]
+    # hz = np.exp(-0.1 * np.linspace(-(nh[0] // 2), nh[0] // 2, nh[0]) ** 2)
+    # hx = np.exp(-0.03 * np.linspace(-(nh[1] // 2), nh[1] // 2, nh[1]) ** 2)
+    # hz /= np.trapz(hz)  # normalize the integral to 1
+    # hx /= np.trapz(hx)  # normalize the integral to 1
+    # kernel = hz[:, np.newaxis] * hx[np.newaxis, :]
+    # C = ConvNDscipy(x, kernel)
+    # # C.dotTest(True)
+    # blurred = C * x
+    # plt.imshow(blurred.getNdArray(), cmap='gray'), plt.title('Blurred'), plt.show()
 
-    C = ConvNDscipy(x, kernel)
-
-    C.dotTest(True)
     # x = pyVec.vectorIC(np.arange(9).reshape((3, 3)))
     # pad = ((2,2), (3,3))
     # P = ZeroPad(x, pad)
@@ -620,15 +564,14 @@ if __name__ == '__main__':
     # PP = ZeroPad(xx, pad)
     # PP.dotTest()
     
-    # np.random.seed(1)
-    # y = pyVec.vectorIC(np.random.rand(301, 601))
-    # F = FourierTransform(y, nffts=[512, 1024])
-    # yfft = F * y
-    # F.dotTest(True)
-    #
-    # yy = pyVec.superVector(y, y)
-    # FF = FourierTransform(yy, nffts=[512, 1024])
-    # yyfft = FF * yy
-    # FF.dotTest(True)
+    # Test FFT
+    F = FourierTransform(x, nfft=[512, 1024])
+    X = F * x
+    F.dotTest(True)
+
+    xx = pyVec.superVector(x, x)
+    FF = FourierTransform(xx, nfft=[512, 1024])
+    yyfft = FF * yy
+    FF.dotTest(True)
     #
     # print(0)
