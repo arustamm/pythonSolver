@@ -323,14 +323,15 @@ class DaskVector(Vec.vector):
         daskD.wait(self.vecDask)
         return
 
-    def __del__(self):
-        """
-           Cancel/Delete all futures within the class (frees memory on workers)
-        """
-        # Releasing future vector classes
-        for vecFut in self.vecDask:
-            vecFut.release()
-        return
+    # Cannot delete a future otherwise derived future objects are cancelled too
+    # def __del__(self):
+    #     """
+    #        Cancel/Delete all futures within the class (frees memory on workers)
+    #     """
+    #     # Releasing future vector classes
+    #     for vecFut in self.vecDask:
+    #         vecFut.release()
+    #     return
 
     # Class vector operations
     def getNdArray(self):
