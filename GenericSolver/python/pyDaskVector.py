@@ -251,7 +251,7 @@ class DaskVector(Vec.vector):
                 vec_space = vec_tmplt.getHyper().axes  # Passing axes since Hypercube cannot be serialized
             else:
                 vec_space = vec_tmplt.cloneSpace()
-            vec_spaceD = self.client.scatter(vec_space, broadcast=True)
+            vec_spaceD = self.client.scatter(vec_space, workers=wrkIds)
             daskD.wait(vec_spaceD)
             # Spreading vectors
             for iwrk, wrkId in enumerate(wrkIds):
