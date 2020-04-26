@@ -1,5 +1,6 @@
 # Module containing the definition of Dask-based operator class
 from pyDaskVector import DaskVector
+from pyDaskVector import DaskVector
 from pyVector import vector
 import pyOperator as Op
 import dask.distributed as daskD
@@ -60,6 +61,11 @@ def call_func_name(opObj, func_name, *args):
     fun2call = getattr(opObj, func_name)
     res = fun2call(*args)
     return res
+
+def add_from_NdArray(vecObj, NdArray):
+    """Function to add vector values from numpy array"""
+    vecObj.getNdArray()[:] += NdArray
+    return
 
 
 class DaskOperator(Op.Operator):
@@ -273,3 +279,65 @@ class DaskSpreadOp(Op.Operator):
             modelNd = model.getNdArray()
             modelNd[:] += sum_array.result()
         return
+
+class DaskCollectOp(Op.Operator):
+    """
+       Class to Collect/Scatter a Dask vector into/from a local vector
+    """
+
+    def __init__(self, domain, range):
+        """
+           Dask Collect constructor
+           :param domain : - DaskVector; Dask vector to be collected from remote
+           :param range : - Vector;  Vector class to be locally stored
+        """
+        if not isinstance(domain, DaskVector):
+            raise TypeError("domain is not a DaskVector object!")
+        if isinstance(range, DaskVector):
+            raise TypeError("range should not a DaskVector object!")
+        if not isinstance(range, vector):
+            raise TypeError("range is not a vector-derived object!")
+        if domain.size != range.size:
+            raise ValueError("number of elements in domain and range is not equal!")
+        super(DaskCollectOp, self).__init__(domain, range)
+
+    def forward(self, add, model, data):
+        """Forward operator: collecting dask vector array to local one"""
+        if not isinstance(model, DaskVector):
+            raise TypeError("Model vector must be a DaskVector!")
+        self.checkDomainRange(model, data)
+        if not add:
+            data.zero()
+        dataNd = data.getNdArray().ravel()
+        # Obtaining remove array/s
+        modelNd_list = model.getNdArray()
+        idx = 0
+        # Adding remove arrays to local one
+        for arr in modelNd_list:
+            n_elem = arr.size
+            dataNd[idx:idx+n_elem] += arr.ravel()
+            idx += n_elem
+        return
+
+    def adjoint(self, add, model, data):
+        """Adjoint operator: scattering/distributing local array to remove vector"""
+        if not isinstance(model, DaskVector):
+            raise TypeError("Model vector must be a DaskVector!")
+        self.checkDomainRange(model, data)
+        if not add:
+            model.zero()
+        dataNd = data.getNdArray().ravel()
+        # Shapes of the DaskVector chunks
+        shapes = model.shape
+        # Scattering local array
+        client = model.client
+        idx_el = 0
+        for idx, shape in enumerate(shapes):
+            n_elem = np.prod(shape)
+            wrkId = list(client.who_has(model.vecDask[idx]).values())[0]
+            arrD = client.scatter(dataNd[idx_el:idx_el+n_elem], workers=wrkId)
+            daskD.wait(arrD)
+            daskD.wait(client.submit(add_from_NdArray, model.vecDask[idx], arrD, pure=False))
+            idx_el += n_elem
+        return
+
