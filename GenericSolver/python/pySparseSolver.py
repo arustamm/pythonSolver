@@ -391,7 +391,7 @@ class ISTCsolver(Solver):
                 istc_mdl_save.copy(istc_mdl)
                 istc_mdl_save.scale(scale_precond)
                 # Saving results
-                self.save_results(iiter, problem, istc_mdl_save, force_save=False)
+                self.save_results(iiter, problem, model=istc_mdl_save, force_save=False)
                 
                 # Stepping for internal iteration model update
                 istc_mdl0.copy(istc_mdl)  # Saving model before updating it
@@ -449,7 +449,7 @@ class ISTCsolver(Solver):
         istc_mdl_save.copy(istc_mdl)
         istc_mdl_save.scale(scale_precond)
         # Writing last inverted model
-        self.save_results(iiter, problem, istc_mdl_save, force_save=True, force_write=True)
+        self.save_results(iiter, problem, model=istc_mdl_save, force_save=True, force_write=True)
         if self.create_msg:
             msg = 90 * "#" + "\n"
             msg += "\t\t\tITERATIVE SOFT-THRESHOLDING WITH COOLING SOLVER log file end\n"
