@@ -1,5 +1,6 @@
 from collections import deque
 from math import isnan
+import numpy as np
 import pySolver
 import pyOperator as pyOp
 from pyStepper import CvSrchStep, ParabolicStep
@@ -7,6 +8,8 @@ from pyStopper import BasicStopper
 from pyProblem import ProblemLinearSymmetric
 from pyLinearSolver import SymLCGsolver
 
+# Check for avoid Overflow or Underflow
+zero = 10 ** (np.floor(np.log10(np.abs(float(np.finfo(np.float64).tiny)))) + 2)
 
 # Beta functions
 # grad=new gradient, grad0=old, dir=search direction
@@ -439,8 +442,7 @@ class LBFGSsolver(pySolver.Solver):
 		Constructor for LBFGS Solver:
 		:param stopper    : Stopper, object to terminate the solver
 		:param stepper    : Stepper, object to perform line-search step
-		:param save_alpha : bool, Use previous step-length value as initial guess.
-								Otherwise, the algorithm starts from an initial guess of 1.0 [False]
+		:param save_alpha : bool, Use previous step-length value as initial guess. Otherwise, the algorithm starts from an initial guess of 1.0 [False]
 		:param m_steps    : int, Maximum number of steps to store to estimate the inverse Hessian (by default it runs BFGS method)
 		:param H0         : Operator, initial estimated Hessian inverse (by default it assumes an identity operator)
 		:param logger 	  : Logger, object to save inversion information at runtime
@@ -572,7 +574,7 @@ class LBFGSsolver(pySolver.Solver):
                 msg += "Limited-memory Broyden-Fletcher-Goldfarb-Shanno (L-BFGS) algorithm log file\n"
                 msg += "Maximum number of steps to be used for Hessian inverse estimation: %s \n" % self.m_steps
             else:
-                msg = "Broyden-Fletcher-Goldfarb-Shanno (BFGS) algorithm log file\n"
+                msg += "Broyden-Fletcher-Goldfarb-Shanno (BFGS) algorithm log file\n"
             # Printing restart folder
             msg += "Restart folder: %s\n" % self.restart.restart_folder
             msg += 90 * "#" + "\n"
@@ -786,3 +788,129 @@ class LBFGSsolver(pySolver.Solver):
         self.H0 = None
         del self.tmp_vector
         self.tmp_vector = None
+
+class MCMCsolver(pySolver.Solver):
+    """Markov chain Monte Carlo sampling algorithm"""
+
+    def __init__(self, **kwargs):
+        """
+        Constructor for MCMC Solver/Sampler:
+        :param nsamples: total number of samples to test
+        :param prop_distr: proposal distribution to be employed ["Uni","Gauss"]
+        1) "Uni" = uniform distribution: provide max_step U~[-max_step,max_step]
+        2) "Gauss" = Gaussian distribution: provide sigma N~[0,sigma]
+        :param logger: Logger, object to save inversion information at runtime [None]
+        """
+        # Calling parent construction
+        super(MCMCsolver, self).__init__()
+        # Defining stopper object
+        self.nsamples = kwargs.get("nsamples")
+        # Logger object to write on log file
+        self.logger = kwargs.get("logger", None)
+        # Proposal distribution parameters
+        self.prop_dist = kwargs.get("prop_distr")
+        if self.prop_dist == "Uni":
+            self.max_step = kwargs.get("max_step")
+        elif self.prop_dist == "Gauss":
+            self.sigma = kwargs.get("sigma")
+        else:
+            raise ValueError("Not supported prop_distr")
+        # print formatting
+        self.iter_msg = "sample number = %s, obj = %.5e, resnorm = %.2e, feval = %d, acceptance rate = %.4e"
+
+    def run(self, problem, verbose=False, restart=False):
+        """Running MCMC solver/sampler"""
+
+        # Checking if user is saving the sampled models
+        if not self.save_model:
+            msg = "WARNING! Running MCMC sampling method without saving samples!"
+            print(msg)
+            if self.logger:
+                self.logger.addToLog(msg)
+
+        if not restart:
+            msg = 90 * "#" + "\n"
+            msg += "Markov Chain Monte Carlo (MCMC) algorithm log file\n"
+            msg += "Restart folder: %s\n" % self.restart.restart_folder
+            msg += 90 * "#" + "\n"
+            if verbose:
+                print(msg.replace("log file", ""))
+            if self.logger:
+                self.logger.addToLog(msg)
+            prblm_mdl = problem.get_model()
+            mcmc_mdl_cur = prblm_mdl.clone()
+            mcmc_mdl_prop = prblm_mdl.clone()
+            mcmc_dmodl = prblm_mdl.clone().zero()
+
+            # Other internal variables
+            iiter = 0
+            count = 1 # number of accepted samples
+            tested = 1 # number of tested point so far
+        else:
+            # Retrieving parameters and vectors to restart the solver
+            msg = "Restarting previous solver run from: %s" % self.restart.restart_folder
+            if verbose:
+                print(msg)
+            if self.logger:
+                self.logger.addToLog(msg)
+            self.restart.read_restart()
+            iiter = self.restart.retrieve_parameter("iter")
+            mcmc_mdl_cur = self.restart.retrieve_vector("mcmc_mdl_cur")
+            mcmc_mdl_prop = self.restart.retrieve_vector("mcmc_mdl_prop")
+            mcmc_dmodl = self.restart.retrieve_vector("mcmc_dmodl")
+            count = self.restart.retrieve_parameter("count")
+            tested = self.restart.retrieve_parameter("tested")
+            # Setting the model and residuals to avoid residual twice computation
+            problem.set_model(mcmc_mdl_cur)
+            prblm_mdl = problem.get_model()
+
+        # Computing current objective function
+        obj_current = problem.get_obj(mcmc_mdl_cur)  # Compute objective function value
+        # Sampling loop
+        while True:
+            # Generate a candidate y from x according to the proposal distribution r(x_cur, x_prop)
+            if self.prop_dist == "Uni":
+                mcmc_dmodl.getNdArray()[:] = np.random.uniform(low=-self.max_step, high=self.max_step, size=mcmc_dmodl.shape)
+            elif self.prop_dist == "Gauss":
+                mcmc_dmodl.getNdArray()[:] = np.random.normal(scale=self.sigma, size=mcmc_dmodl.shape)
+            # Compute a(x_cur, x_prop)
+            mcmc_mdl_prop.copy(mcmc_mdl_cur)
+            mcmc_mdl_prop.scaleAdd(mcmc_dmodl)
+            obj_prop = problem.get_obj(mcmc_mdl_prop)
+            # computing log acceptance ratio
+            if obj_current > zero and obj_prop > zero:
+                log_alpha = np.min(0, np.log(obj_prop/obj_current))
+            elif obj_prop <= zero:
+                # condition to avoid zero/zero
+                log_alpha = -np.inf
+            else:
+                # condition to avoid division by zero
+                log_alpha = 0.
+
+            # Accept the x_prop with probability a
+            if np.log(np.random.uniform()) < log_alpha:
+                # accepted proposed sampled
+                mcmc_mdl_cur.copy(mcmc_mdl_prop)
+                obj_current = obj_prop
+
+            # Saving sampled point
+            self.save_results(iiter, problem, force_save=True, force_write=True, model=mcmc_mdl_cur, obj=obj_current)
+
+
+            if tested == self.nsamples:
+                msg = "Number of tested points reached maximum number of samples %d"%(self.nsamples)
+                if verbose:
+                    print(msg)
+                if self.logger:
+                    self.logger.addToLog(msg)
+                break
+
+        msg = 90 * "#" + "\n"
+        msg += "Markov Chain Monte Carlo (MCMC) algorithm algorithm log file end\n"
+        msg += 90 * "#" + "\n"
+        if verbose:
+            print(msg.replace("log file ", ""))
+        if self.logger:
+            self.logger.addToLog(msg)
+        self.restart.clear_restart()
+        return
