@@ -587,9 +587,11 @@ class SplitBregmanSolver(Solver):
                 msg = 90 * '#' + '\n'
                 msg += "\t\t\tSPLIT-BREGMAN ALGORITHM log file\n\n"
                 msg += "\tRestart folder: %s\n" % self.restart.restart_folder
-                msg += "\tModeling Operator:\t\t%s\n" % problem.op
+                msg += "\tModeling Operator:\t%s\n" % problem.op
+                msg += "\tInner iterations:\t%d\n" % self.niter_inner
+                msg += "\tSolver iterations:\t%d\n" % self.niter_solver
                 if problem.nregsL2 != 0:
-                    msg += "\tL2 Regularizer ops:\t\t" + ", ".join(["%s" % op for op in problem.regL2_op.ops]) + "\n"
+                    msg += "\tL2 Regularizer ops:\t" + ", ".join(["%s" % op for op in problem.regL2_op.ops]) + "\n"
                     msg += "\tL2 Regularizer weights:\t" + ", ".join(["{:.2e}".format(e) for e in problem.epsL2]) + "\n"
                 if problem.nregsL1 != 0:
                     msg += "\tL1 Regularizer ops:\t\t" + ", ".join(["%s" % op for op in problem.regL1_op.ops]) + "\n"
