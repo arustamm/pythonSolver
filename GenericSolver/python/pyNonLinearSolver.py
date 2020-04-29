@@ -7,9 +7,11 @@ from pyStepper import CvSrchStep, ParabolicStep
 from pyStopper import BasicStopper
 from pyProblem import ProblemLinearSymmetric
 from pyLinearSolver import SymLCGsolver
+from copy import deepcopy
 
 # Check for avoid Overflow or Underflow
 zero = 10 ** (np.floor(np.log10(np.abs(float(np.finfo(np.float64).tiny)))) + 2)
+
 
 # Beta functions
 # grad=new gradient, grad0=old, dir=search direction
@@ -160,7 +162,7 @@ def _betaSD(grad, grad0, dir, logger):
 
 class NLCGsolver(pySolver.Solver):
     """Non-Linear Conjugate Gradient and Steepest-Descent Solver object"""
-    
+
     # Default class methods/functions
     def __init__(self, stoppr, stepper=None, beta_type="FR", logger=None):
         """Constructor for NLCG Solver"""
@@ -179,11 +181,11 @@ class NLCGsolver(pySolver.Solver):
         # print formatting
         self.iter_msg = "iter = %s, obj = %.5e, resnorm = %.2e, gradnorm = %.2e, feval = %d, geval = %d"
         return
-    
+
     def __del__(self):
         """Default destructor"""
         return
-    
+
     def beta_func(self, grad, grad0, dir):
         """Beta function interface"""
         beta_type = self.beta_type
@@ -208,15 +210,15 @@ class NLCGsolver(pySolver.Solver):
         else:
             raise ValueError("ERROR! Requested Beta function type not existing")
         return beta
-    
+
     def run(self, problem, verbose=False, restart=False):
         """Running NLCG or steppest-descent solver"""
-        
+
         self.create_msg = verbose or self.logger
-        
+
         # Resetting stopper before running the inversion
         self.stoppr.reset()
-        
+
         if not restart:
             if self.create_msg:
                 msg = 90 * "#" + "\n"
@@ -230,14 +232,14 @@ class NLCGsolver(pySolver.Solver):
                     print(msg.replace("log file", ""))
                 if self.logger:
                     self.logger.addToLog(msg)
-            
+
             # Setting internal vectors (model, search direction, and previous gradient vectors)
             prblm_mdl = problem.get_model()
             cg_mdl = prblm_mdl.clone()
             cg_dmodl = prblm_mdl.clone()
             cg_dmodl.zero()
             cg_grad0 = cg_dmodl.clone()
-            
+
             # Other internal variables
             beta = 0.0
             iiter = 0
@@ -262,10 +264,10 @@ class NLCGsolver(pySolver.Solver):
             prblm_mdl = problem.get_model()
             # Setting residual vector to avoid its unnecessary computation
             problem.set_residual(self.restart.retrieve_vector("prblm_res"))
-        
+
         # Common variables unrelated to restart
         prev_mdl = prblm_mdl.clone().zero()
-        
+
         while True:
             # Computing objective function
             obj0 = problem.get_obj(cg_mdl)  # Compute objective function value
@@ -294,12 +296,12 @@ class NLCGsolver(pySolver.Solver):
             if prblm_grad.norm() == 0.:
                 print("Gradient vanishes identically")
                 break
-            
+
             # Saving results
             self.save_results(iiter, problem, force_save=False)
             # Keeping current inverted model
             prev_mdl.copy(prblm_mdl)
-            
+
             if iiter >= 1:
                 beta = self.beta_func(prblm_grad, cg_grad0, cg_dmodl)
                 if beta < 0.:
@@ -309,7 +311,7 @@ class NLCGsolver(pySolver.Solver):
             if self.beta_type != "SD":
                 if self.logger:
                     self.logger.addToLog("beta coefficient: %s" % beta)
-            
+
             # dmodl = beta*dmodl - grad
             cg_dmodl.scaleAdd(prblm_grad, beta, -1.0)
             # grad0 = grad
@@ -326,7 +328,7 @@ class NLCGsolver(pySolver.Solver):
                         self.logger.addToLog(msg)
                 problem.set_model(prev_mdl)
                 break
-            
+
             # Increasing iteration counter
             iiter = iiter + 1
             obj1 = problem.get_obj(cg_mdl)  # Compute objective function value
@@ -343,7 +345,7 @@ class NLCGsolver(pySolver.Solver):
                         self.logger.addToLog(msg)
                 problem.set_model(prev_mdl)
                 break
-            
+
             # Saving current model and previous search direction in case of restart
             self.restart.save_parameter("iter", iiter)
             self.restart.save_parameter("alpha", alpha)
@@ -364,13 +366,13 @@ class NLCGsolver(pySolver.Solver):
                     print(msg)
                 if self.logger:
                     self.logger.addToLog("\n" + msg)
-            
+
             # Check if either objective function value or gradient norm is NaN
             if isnan(obj1) or isnan(prblm_grad.norm()):
                 raise ValueError("ERROR! Either gradient norm or objective function value NaN!")
             if self.stoppr.run(problem, iiter, initial_obj_value, verbose):
                 break
-        
+
         # Writing last inverted model
         self.save_results(iiter, problem, force_save=True, force_write=True)
         if self.create_msg:
@@ -382,16 +384,16 @@ class NLCGsolver(pySolver.Solver):
                 print(msg.replace(" log file", ""))
             if self.logger:
                 self.logger.addToLog(msg)
-        
+
         # Clear restart object
         self.restart.clear_restart()
-        
+
         return
 
 
 class TNewtonsolver(pySolver.Solver):
     """Truncated Newton/Gauss-Newton solver object"""
-    
+
     def __init__(self, stopper, niter_max, HessianOp, stepper=None, niter_min=None, warm_start=True, Newton_prefix=None,
                  logger=None):
         """
@@ -428,7 +430,7 @@ class TNewtonsolver(pySolver.Solver):
         self.lin_solver = SymLCGsolver(StopLin)
         self.NewtonPrblm = ProblemLinearSymmetric(HessianOp.domain.clone(), HessianOp.domain.clone(), HessianOp)
         return
-    
+
     def run(self, problem, verbose=False, restart=False):
         """Running Truncated Newton solver"""
         return
@@ -436,7 +438,7 @@ class TNewtonsolver(pySolver.Solver):
 
 class LBFGSsolver(pySolver.Solver):
     """L-BFGS (Limited-memory Broyden-Fletcher-Goldfarb-Shanno) Solver object"""
-    
+
     def __init__(self, stopper, stepper=None, save_alpha=False, m_steps=None, H0=None, logger=None, save_est=False):
         """
 		Constructor for LBFGS Solver:
@@ -464,9 +466,10 @@ class LBFGSsolver(pySolver.Solver):
         self.m_steps = m_steps
         self.save_est = save_est
         self.tmp_vector = None  # A copy of the model vector will be create when the function run is invoked
+        self.iistep = 0 # necessary to re-used the estimated hessian inverse from previous runs
         # print formatting
         self.iter_msg = "iter = %s, obj = %.5e, resnorm = %.2e, gradnorm = %.2e, feval = %d, geval = %d"
-    
+
     def save_hessian_estimate(self, index, iiter):
         """Function to save current vector of estimated Hessian inverse"""
         # index of the step to save
@@ -475,7 +478,7 @@ class LBFGSsolver(pySolver.Solver):
             grad_diff_filename = self.prefix + "grad_diff_vector_%s.H" % iiter
             self.step_vectors[index].writeVec(step_filename)
             self.grad_diff_vectors[index].writeVec(grad_diff_filename)
-    
+
     def check_rho(self, denom_dot, step_index, iiter):
         """Function to check scaling factor of Hessian inverse estimate"""
         if denom_dot == 0.:
@@ -502,7 +505,7 @@ class LBFGSsolver(pySolver.Solver):
             # Saving current update for inverse Hessian estimate (i.e., gradient-difference and model-step vectors)
             self.save_hessian_estimate(step_index, iiter)
         return
-    
+
     # BFGSMultiply function
     def BFGSMultiply(self, dmodl, grad, iiter):
         """Function to apply approximated inverse Hessian"""
@@ -553,21 +556,29 @@ class LBFGSsolver(pySolver.Solver):
                 beta = self.rho[ii] * self.grad_diff_vectors[ii].dot(dmodl)
                 dmodl.scaleAdd(self.step_vectors[ii], 1.0, alpha[ii] - beta)
         return
-    
-    def run(self, problem, verbose=False, restart=False):
-        """Running LBFGS solver"""
+
+    def run(self, problem, verbose=False, keep_hessian=False, restart=False):
+        """
+        Running LBFGS solver
+        :param problem: problem to be minimized
+        :param verbose: verbosity flag [False]
+        :param keep_hessian: use hessian inverse estimate build from previous runs [False]
+        :param restart: restart previously crashed inversion [False]
+        """
         # Resetting stopper before running the inversion
         self.stopper.reset()
         # Preliminary variables for Hessian inverse estimation
-        if self.m_steps is not None:
-            self.step_vectors = [None] * self.m_steps  # s_i vectors
-            self.grad_diff_vectors = [None] * self.m_steps  # y_i vectors
-            self.rho = [None] * self.m_steps  # Scalar term necessary for Hessian inverse estimation
-        else:
-            self.step_vectors = []  # s_i vectors
-            self.grad_diff_vectors = []  # y_i vectors
-            self.rho = []  # Scalar term necessary for Hessian inverse estimation
-        
+        if not keep_hessian:
+            if self.m_steps is not None:
+                self.step_vectors = [None] * self.m_steps  # s_i vectors
+                self.grad_diff_vectors = [None] * self.m_steps  # y_i vectors
+                self.rho = [None] * self.m_steps  # Scalar term necessary for Hessian inverse estimation
+            else:
+                self.step_vectors = []  # s_i vectors
+                self.grad_diff_vectors = []  # y_i vectors
+                self.rho = []  # Scalar term necessary for Hessian inverse estimation
+            self.iistep = 0
+
         if not restart:
             msg = 90 * "#" + "\n"
             if self.m_steps is not None:
@@ -582,14 +593,14 @@ class LBFGSsolver(pySolver.Solver):
                 print(msg.replace("log file", ""))
             if self.logger:
                 self.logger.addToLog(msg)
-            
+
             # Setting internal vectors (model, search direction, and previous gradient vectors)
             prblm_mdl = problem.get_model()
             bfgs_mdl = prblm_mdl.clone()
             bfgs_dmodl = prblm_mdl.clone()
             bfgs_dmodl.zero()
             bfgs_grad0 = bfgs_dmodl.clone()
-            
+
             # Other internal variables
             iiter = 0
         else:
@@ -613,7 +624,8 @@ class LBFGSsolver(pySolver.Solver):
             problem.set_residual(self.restart.retrieve_vector("prblm_res"))
             # Retrieving Hessian inverse estimate
             self.rho = self.restart.retrieve_parameter("rho")
-            for istep in range(iiter):
+            self.iistep = self.restart.retrieve_parameter("iistep")
+            for istep in range(min(iiter, self.iistep)):
                 if self.m_steps is not None:
                     if istep < self.m_steps:
                         self.grad_diff_files[istep] = self.restart.retrieve_vector("grad_diff_vectors%s" % istep)
@@ -621,12 +633,12 @@ class LBFGSsolver(pySolver.Solver):
                 else:
                     self.grad_diff_files.append(self.restart.retrieve_vector("grad_diff_vectors%s" % istep))
                     self.step_files.append(self.restart.retrieve_vector("step_vectors%s" % istep))
-        
+
         # Common variables unrelated to restart
         self.tmp_vector = bfgs_dmodl.clone()
         self.tmp_vector.zero()
         prev_mdl = prblm_mdl.clone().zero()
-        
+
         # Inversion loop
         while True:
             # Computing objective function
@@ -654,27 +666,27 @@ class LBFGSsolver(pySolver.Solver):
             if prblm_grad.norm() == 0.:
                 print("Gradient vanishes identically")
                 break
-            
+
             # Saving results
             self.save_results(iiter, problem, force_save=False)
             # Saving current inverted model
             prev_mdl.copy(prblm_mdl)
-            
+
             # Applying approximated Hessian inverse
             msg = "Appplying inverse Hessian estimate"
             if self.m_steps is not None:
                 msg += "\nCurrent inverse dot-products of BFGS estimation vectors %s" \
-                       % (self.rho[0:min(self.m_steps, iiter)])
+                       % (self.rho[0:min(self.m_steps, self.iistep)])
             else:
                 if len(self.rho) > 0:
                     msg += "\nCurrent inverse dot-products of BFGS estimation vectors %s" % self.rho
             if self.logger:
                 self.logger.addToLog(msg)
-            self.BFGSMultiply(bfgs_dmodl, prblm_grad, iiter)
+            self.BFGSMultiply(bfgs_dmodl, prblm_grad, self.iistep)
             msg = "Done applying inverse Hessian estimate"
             if self.logger:
                 self.logger.addToLog(msg)
-            
+
             # grad0 = grad
             bfgs_grad0.copy(prblm_grad)
             # Calling line search
@@ -688,7 +700,7 @@ class LBFGSsolver(pySolver.Solver):
                     self.logger.addToLog(msg)
                 problem.set_model(prev_mdl)
                 break
-            
+
             obj1 = problem.get_obj(bfgs_mdl)  # Compute objective function value
             # Redundant test on verifying convergence
             if obj0 <= obj1:
@@ -698,13 +710,13 @@ class LBFGSsolver(pySolver.Solver):
                     self.logger.addToLog(msg)
                 problem.set_model(prev_mdl)
                 raise ValueError(msg)
-            
+
             # Compute new gradient
             prblm_grad = problem.get_grad(bfgs_mdl)
             # Compute updates for estimated Hessian inverse
             if self.m_steps is not None:
                 # LBFGS
-                step_index = iiter % self.m_steps  # Modulo to handle limited memory
+                step_index = self.iistep % self.m_steps  # Modulo to handle limited memory
                 # yn+1=gn+1-gn
                 self.grad_diff_vectors[step_index] = bfgs_grad0.clone()
                 self.grad_diff_vectors[step_index].scaleAdd(prblm_grad, -1.0, 1.0)
@@ -713,7 +725,7 @@ class LBFGSsolver(pySolver.Solver):
                 self.step_vectors[step_index].scale(alpha)
             else:
                 # BFGS
-                step_index = iiter
+                step_index = self.iistep
                 # yn+1=gn+1-gn
                 self.grad_diff_vectors.append(bfgs_grad0.clone())
                 self.grad_diff_vectors[step_index].scaleAdd(prblm_grad, -1.0, 1.0)
@@ -723,8 +735,8 @@ class LBFGSsolver(pySolver.Solver):
             # rhon+1=1/yn+1'sn+1
             denom_dot = self.grad_diff_vectors[step_index].dot(self.step_vectors[step_index])
             # Checking rho
-            self.check_rho(denom_dot, step_index, iiter)
-            
+            self.check_rho(denom_dot, step_index, self.iistep)
+
             # Making first step-length value Hessian guess if not provided by user
             if iiter == 0 and self.H0 is None:
                 self.restart.save_parameter("fist_alpha", alpha)
@@ -732,14 +744,15 @@ class LBFGSsolver(pySolver.Solver):
                 if self.logger:
                     self.logger.addToLog("First step-length value used as first Hessian inverse estimate!")
                 self.stepper.alpha = 1.0
-            
+
             # Increasing iteration counter
             iiter = iiter + 1
-            
+            self.iistep + 1
+
             # Using alpha = 1.0 after first iteration
             if iiter != 0 and not self.save_alpha:
                 self.stepper.alpha = 1.0
-            
+
             # Saving current model and previous search direction in case of restart
             self.restart.save_parameter("iter", iiter)
             self.restart.save_parameter("alpha", alpha)
@@ -748,11 +761,12 @@ class LBFGSsolver(pySolver.Solver):
             self.restart.save_vector("bfgs_grad0", bfgs_grad0)
             # Saving Inverse Hessian estimate for restart
             self.restart.save_parameter("rho", self.rho)
+            self.restart.save_parameter("iistep", self.iistep)
             self.restart.save_vector("grad_diff_vectors%s" % step_index, self.grad_diff_vectors[step_index])
             self.restart.save_vector("step_vectors%s" % step_index, self.step_vectors[step_index])
             # Saving data space vectors
             self.restart.save_vector("prblm_res", prblm_res)
-            
+
             # iteration info
             msg = self.iter_msg % (str(iiter).zfill(self.stopper.zfill),
                                    obj1,
@@ -770,7 +784,7 @@ class LBFGSsolver(pySolver.Solver):
                 raise ValueError("Either gradient norm or objective function value NaN!")
             if self.stopper.run(problem, iiter, initial_obj_value, verbose):
                 break
-        
+
         # Writing last inverted model
         self.save_results(iiter, problem, force_save=True, force_write=True)
         msg = 90 * "#" + "\n"
@@ -785,9 +799,11 @@ class LBFGSsolver(pySolver.Solver):
             self.logger.addToLog(msg)
         self.restart.clear_restart()
         # Resetting inverse Hessian matrix
-        self.H0 = None
+        if not keep_hessian:
+            self.H0 = None
         del self.tmp_vector
         self.tmp_vector = None
+
 
 class MCMCsolver(pySolver.Solver):
     """Markov chain Monte Carlo sampling algorithm"""
@@ -839,13 +855,10 @@ class MCMCsolver(pySolver.Solver):
                 self.logger.addToLog(msg)
             prblm_mdl = problem.get_model()
             mcmc_mdl_cur = prblm_mdl.clone()
-            mcmc_mdl_prop = prblm_mdl.clone()
-            mcmc_dmodl = prblm_mdl.clone().zero()
 
             # Other internal variables
-            iiter = 0
-            count = 1 # number of accepted samples
-            tested = 1 # number of tested point so far
+            accepted = 1  # number of accepted samples
+            iiter = 1  # number of tested point so far
         else:
             # Retrieving parameters and vectors to restart the solver
             msg = "Restarting previous solver run from: %s" % self.restart.restart_folder
@@ -854,32 +867,57 @@ class MCMCsolver(pySolver.Solver):
             if self.logger:
                 self.logger.addToLog(msg)
             self.restart.read_restart()
-            iiter = self.restart.retrieve_parameter("iter")
             mcmc_mdl_cur = self.restart.retrieve_vector("mcmc_mdl_cur")
-            mcmc_mdl_prop = self.restart.retrieve_vector("mcmc_mdl_prop")
-            mcmc_dmodl = self.restart.retrieve_vector("mcmc_dmodl")
-            count = self.restart.retrieve_parameter("count")
-            tested = self.restart.retrieve_parameter("tested")
-            # Setting the model and residuals to avoid residual twice computation
+            accepted = self.restart.retrieve_parameter("accepted")
+            iiter = self.restart.retrieve_parameter("iiter")
+            # Setting the last accepted model
             problem.set_model(mcmc_mdl_cur)
             prblm_mdl = problem.get_model()
 
+        # Common parameters
+        mcmc_mdl_prop = prblm_mdl.clone()
+        mcmc_dmodl = prblm_mdl.clone().zero()
+
         # Computing current objective function
         obj_current = problem.get_obj(mcmc_mdl_cur)  # Compute objective function value
+        res_norm = problem.get_rnorm(mcmc_mdl_cur)
+        # getting each objective function term if present
+        obj_terms = problem.obj_terms if "obj_terms" in dir(problem) else None
+        if not restart:
+            # iteration info
+            msg = self.iter_msg % (str(iiter).zfill(self.nsamples),
+                                   obj_current,
+                                   res_norm,
+                                   problem.get_fevals(),
+                                   float(accepted)/iiter)
+            if verbose:
+                print(msg)
+            # Writing on log file
+            if self.logger:
+                self.logger.addToLog("\n" + msg)
+            # Check if objective function value is NaN
+            if isnan(obj_current):
+                raise ValueError("objective function value NaN!")
+            self.save_results(iiter, problem, force_save=False)
         # Sampling loop
         while True:
             # Generate a candidate y from x according to the proposal distribution r(x_cur, x_prop)
             if self.prop_dist == "Uni":
-                mcmc_dmodl.getNdArray()[:] = np.random.uniform(low=-self.max_step, high=self.max_step, size=mcmc_dmodl.shape)
+                mcmc_dmodl.getNdArray()[:] = np.random.uniform(low=-self.max_step, high=self.max_step,
+                                                               size=mcmc_dmodl.shape)
             elif self.prop_dist == "Gauss":
                 mcmc_dmodl.getNdArray()[:] = np.random.normal(scale=self.sigma, size=mcmc_dmodl.shape)
             # Compute a(x_cur, x_prop)
             mcmc_mdl_prop.copy(mcmc_mdl_cur)
             mcmc_mdl_prop.scaleAdd(mcmc_dmodl)
             obj_prop = problem.get_obj(mcmc_mdl_prop)
+            # Check if objective function value is NaN
+            if isnan(obj_prop):
+                raise ValueError("objective function of proposed model is NaN!")
+            iiter += 1  # Increase counter of tested samples
             # computing log acceptance ratio
             if obj_current > zero and obj_prop > zero:
-                log_alpha = np.min(0, np.log(obj_prop/obj_current))
+                log_alpha = np.min(0, np.log(obj_prop / obj_current))
             elif obj_prop <= zero:
                 # condition to avoid zero/zero
                 log_alpha = -np.inf
@@ -889,21 +927,41 @@ class MCMCsolver(pySolver.Solver):
 
             # Accept the x_prop with probability a
             if np.log(np.random.uniform()) < log_alpha:
-                # accepted proposed sampled
+                # accepted proposed model
                 mcmc_mdl_cur.copy(mcmc_mdl_prop)
-                obj_current = obj_prop
+                obj_current = deepcopy(obj_prop)
+                obj_terms = deepcopy(problem.obj_terms) if "obj_terms" in dir(problem) else None
+                res_norm = problem.get_rnorm(mcmc_mdl_cur)
+                accepted += 1  # Increase counter of accepted samples
+
+            # iteration info
+            msg = self.iter_msg % (str(iiter).zfill(self.nsamples),
+                                   obj_current,
+                                   res_norm,
+                                   problem.get_fevals(),
+                                   float(accepted) / iiter)
+            if verbose:
+                print(msg)
+            # Writing on log file
+            if self.logger:
+                self.logger.addToLog("\n" + msg)
+
 
             # Saving sampled point
-            self.save_results(iiter, problem, force_save=True, force_write=True, model=mcmc_mdl_cur, obj=obj_current)
+            self.save_results(iiter, problem, model=mcmc_mdl_cur, obj=obj_current, obj_terms=obj_terms, force_save=True, force_write=True)
 
-
-            if tested == self.nsamples:
-                msg = "Number of tested points reached maximum number of samples %d"%(self.nsamples)
+            if iiter == self.nsamples:
+                msg = "Number of tested samples reached maximum number of samples %d" % (self.nsamples)
                 if verbose:
                     print(msg)
                 if self.logger:
                     self.logger.addToLog(msg)
                 break
+
+            # saving inversion vectors and parameters for restart
+            mcmc_mdl_cur = self.restart.save_vector("mcmc_mdl_cur")
+            accepted = self.restart.save_parameter("accepted")
+            iiter = self.restart.save_parameter("iiter")
 
         msg = 90 * "#" + "\n"
         msg += "Markov Chain Monte Carlo (MCMC) algorithm algorithm log file end\n"

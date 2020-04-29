@@ -151,24 +151,25 @@ class Solver:
         :param kwargs       :
         - force_save   : [False]; Flag to ignore iteration sampling
         - force_write  : [False]; Force writing on disk if necessary (used to handle last iteration)
-        - model : [problem.get_model()] model to be saved and/or written
-        - obj : objective function to be saved
+        - model : [problem.model] model to be saved and/or written
+        - obj : [problem.obj] objective function to be saved
         """
-        force_save = kwargs.get("force_save", False)
-        force_write = kwargs.get("force_write", False)
         if not isinstance(problem, pyProblem.Problem):
             raise TypeError("Input variable is not a Problem object")
+        force_save = kwargs.get("force_save", False)
+        force_write = kwargs.get("force_write", False)
         # Getting a model from arguments if provided (necessary to remove preconditioning)
         mod_save = kwargs.get("model", problem.get_model())
         # Obtaining objective function value
         objf_value = kwargs.get("obj", problem.get_obj(problem.get_model()))
+        obj_terms = kwargs.get("obj_terms", problem.obj_terms) if "obj_terms" in dir(problem) else None
         # Save if it is forced to or if the solver hits a sampled iteration number
         # The objective function is saved every iteration if requested
         if self.save_obj:
             self.obj.append(deepcopy(objf_value))
             # Checking if the objective function has multiple terms
-            if "obj_terms" in dir(problem):
-                self.obj_terms.append(deepcopy(problem.obj_terms))
+            if obj_terms is not None:
+                self.obj_terms.append(deepcopy(obj_terms))
         if iiter % self.iter_sampling == 0 or force_save:
             if self.save_model:
                 self.modelSet.append(mod_save)
