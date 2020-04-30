@@ -132,6 +132,17 @@ if __name__ == '__main__':
     print("optimal BFGS x: ", Ros_prob.model.arr[0])
     print("optimal BFGS y: ", Ros_prob.model.arr[1])
 
+    # Testing BFGS algorithm using CvSrch stepper and running it twice for testing
+    Ros_prob = Rosenbrock_prblm(x_init, y_init)
+    BFGSsolver4 = BFGS(Stopper(niter=18, tolr=1e-32, tolg=1e-32), logger=logger("Rosenbrock_BFGS_CvSrch_log.txt"))
+    # BFGSsolver.setDefaults(save_obj=True,save_model=True,prefix="BFGSsolver_ros")
+    BFGSsolver4.run(Ros_prob, verbose=True)
+    print("optimal BFGS x: ", Ros_prob.model.arr[0])
+    print("optimal BFGS y: ", Ros_prob.model.arr[1])
+    BFGSsolver4.run(Ros_prob, verbose=True, keep_hessian=True)
+    print("optimal BFGS x: ", Ros_prob.model.arr[0])
+    print("optimal BFGS y: ", Ros_prob.model.arr[1])
+
 # Computing the objective function for plotting
 # x_samples = np.linspace(-2.0,2.0,1000)
 # y_samples = np.linspace(-2.0,2.0,1000)

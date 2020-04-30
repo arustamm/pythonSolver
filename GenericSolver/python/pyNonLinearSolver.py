@@ -747,7 +747,7 @@ class LBFGSsolver(pySolver.Solver):
 
             # Increasing iteration counter
             iiter = iiter + 1
-            self.iistep + 1
+            self.iistep += 1
 
             # Using alpha = 1.0 after first iteration
             if iiter != 0 and not self.save_alpha:
