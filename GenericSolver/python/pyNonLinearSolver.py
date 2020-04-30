@@ -568,7 +568,7 @@ class LBFGSsolver(pySolver.Solver):
         # Resetting stopper before running the inversion
         self.stopper.reset()
         # Preliminary variables for Hessian inverse estimation
-        if not keep_hessian:
+        if not keep_hessian or "rho" not in dir(self):
             if self.m_steps is not None:
                 self.step_vectors = [None] * self.m_steps  # s_i vectors
                 self.grad_diff_vectors = [None] * self.m_steps  # y_i vectors
