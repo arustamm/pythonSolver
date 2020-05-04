@@ -4,13 +4,8 @@ import pyVector as pyVec
 from pyCuVector import vectorCupy
 import pyOperator as pyOp
 import sep_util
-try:
-    import cupy as cp
-except ModuleNotFoundError:
-    import subprocess
-    import sys
-    subprocess.call([sys.executable, "-m", "pip", "install", "--user", "cupy==7.2.0"])
-    import cupy as cp
+import cupy as cp
+from cupyx.scipy.ndimage import convolve, correlate
 
 
 class MatrixOp(pyOp.Operator):
@@ -301,70 +296,64 @@ class Laplacian(pyOp.Operator):
         return self.op.adjoint(add, model, data)
 
 
-# TODO not finished yet
 class Convolution(pyOp.Operator):
-    """ND Convolution through Cupy"""
+    """
+    ND convolution square operator in the domain space
+
+    :param domain   : [no default] - vector class; domain vector
+    :param kernel   : [no default] - vector class; kernel vector
+    :param method   : [auto] - str; how to compute the convolution [auto, direct, fft]
+    :return         : Convolution Operator
+    """
     
-    def __init__(self, domain, kernel):
-        """Class constructor
-        :param domain   : domain vector
-        :param kernel   : kernel vector
-        """
-        try:
-            import chainer.functions as F
-        except ModuleNotFoundError:
-            import subprocess
-            import sys
-            subprocess.call([sys.executable, "-m", "pip", "install", "--user", "chainer==7.2.0"])
-            import chainer.functions as F
+    def __init__(self, domain, kernel, method='auto'):
         
-        if not isinstance(domain, pyVec.vector):
-            raise TypeError("ERROR! Domain vector not a vector object")
-        # Setting domain and range of operator and matrix to use during application of the operator
-        self.setDomainRange(domain, domain)
-        if not (isinstance(kernel, np.ndarray) or isinstance(kernel, cp.ndarray)):
-            raise ValueError("ERROR! matrix has to be a numpy/cupy ndarray")
+        if isinstance(kernel, pyVec.vector):
+            self.kernel = kernel.clone().getNdArray()
+        elif isinstance(kernel, cp.ndarray):
+            self.kernel = kernel.copy()
+        else:
+            raise ValueError("kernel has to be either a vector or a cupy.ndarray")
         
-        self.kernel = kernel.getNdArray()
-       
-        self.pad = tuple([(domain.getNdArray().shape[d] - kernel.shape[d])//2
-                          for d in range(len(domain.getNdArray().shape))])
+        # Padding array to avoid edge effects
+        pad_width = []
+        for len_filt in self.kernel.shape:
+            half_len = int(len_filt / 2)
+            if np.mod(len_filt, 2):
+                padding = (half_len, half_len)
+            else:
+                padding = (half_len, half_len - 1)
+            pad_width.append(padding)
+        self.kernel = cp.pad(self.kernel, pad_width, mode='constant')
+        
+        if len(domain.shape()) != len(self.kernel.shape):
+            raise ValueError("Domain and kernel number of dimensions mismatch")
+        
+        assert method in ["auto", "direct", "fft"], "method has to be auto, direct or fft"
+        self.method = method
+        
+        super(Convolution, self).__init__(domain, domain)
     
     def __str__(self):
         return " ConvOp "
     
     def forward(self, add, model, data):
-        """d = A * m"""
         self.checkDomainRange(model, data)
         if not add:
             data.zero()
-        model_arr = model.getNdArray()
-        if self.outcore:
-            [data_arr, data_axis] = sep_util.read_file(data.vecfile)
-            data_arr += self.arr_module.matmul(self.M, model_arr.ravel()).reshape(data_arr.shape)
-            sep_util.write_file(data.vecfile, data_arr, data_axis)
-        else:
-            data_arr = data.getNdArray()
-            data_arr += F.deconvolution_nd(model_arr, self.kernel)
+        modelNd = model.getNdArray()
+        dataNd = data.getNdArray()[:]
+        dataNd += convolve(modelNd, self.kernel)
         return
     
     def adjoint(self, add, model, data):
-        """m = A' * d"""
         self.checkDomainRange(model, data)
         if not add:
             model.zero()
-        data_arr = data.getNdArray()
-        if self.outcore:
-            [model_arr, model_axis] = sep_util.read_file(model.vecfile)
-            model_arr += self.arr_module.matmul(self.M.T.conj(), data_arr.ravel()).reshape(model_arr.shape)
-            sep_util.write_file(model.vecfile, model_arr, model_axis)
-        else:
-            model_arr = model.getNdArray()
-            model_arr += self.arr_module.matmul(self.M.T.conj(), data_arr.ravel()).reshape(model_arr.shape)
+        modelNd = model.getNdArray()
+        dataNd = data.getNdArray()[:]
+        modelNd += correlate(dataNd, self.kernel)
         return
-    
-    def getNdArray(self):
-        return self.arr_module.array(self.M)
 
 
 def ZeroPad(domain, pad):

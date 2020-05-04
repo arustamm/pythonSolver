@@ -1,5 +1,4 @@
 import pyVector as pyVec
-import cupy as cp
 import sep_util
 from copy import deepcopy
 import os
@@ -12,6 +11,14 @@ except ModuleNotFoundError:
     import sys
     subprocess.call([sys.executable, "-m", "pip", "install", "gputil"])
     from GPUtil import getFirstAvailable, getGPUs
+    
+try:
+    import cupy as cp
+except ModuleNotFoundError:
+    import subprocess
+    import sys
+    subprocess.call([sys.executable, "-m", "pip", "install", "--user", "cupy"])
+    import cupy as cp
 
 # TODO check https://docs-cupy.chainer.org/en/stable/tutorial/basic.html#how-to-write-cpu-gpu-agnostic-code
 
@@ -315,19 +322,30 @@ class vectorCupy(pyVec.vector):
 
 if __name__ == '__main__':
     import pyCuOperator
-
+    
     x = vectorCupy(np.empty((1000, 20000))).set(1.)
     x.printDevice()
-
-    D = pyCuOperator.FirstDerivative(x)
+    
+    
+    # D = pyCuOperator.FirstDerivative(x)
     # n = x.clone().rand()
     # y = x.clone().set(10) + 0.01 * n
     # S = pyCuOperator.scalingOp(x, 10)
     # xinv = S / y
     # print('Error norm = %.2e' % (xinv.norm() - x.norm()))
-
-    x = vectorCupy(cp.arange(9).reshape((3, 3)))
-    pad = ((2, 2), (3, 3))
-    P = pyCuOperator.ZeroPad(x, pad)
+    
+    # Test Convolution
+    nh = [5, 10]
+    hz = np.exp(-0.1 * np.linspace(-(nh[0] // 2), nh[0] // 2, nh[0]) ** 2)
+    hx = np.exp(-0.03 * np.linspace(-(nh[1] // 2), nh[1] // 2, nh[1]) ** 2)
+    hz /= np.trapz(hz)  # normalize the integral to 1
+    hx /= np.trapz(hx)  # normalize the integral to 1
+    kernel = hz[:, np.newaxis] * hx[np.newaxis, :]
+    C = pyCuOperator.Convolution(x, kernel)
+    C.dotTest(True)
+    #
+    # x = vectorCupy(cp.arange(9).reshape((3, 3)))
+    # pad = ((2, 2), (3, 3))
+    # P = pyCuOperator.ZeroPad(x, pad)
 
     print(0)
