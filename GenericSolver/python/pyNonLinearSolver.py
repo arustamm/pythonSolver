@@ -833,13 +833,14 @@ class MCMCsolver(pySolver.Solver):
             raise ValueError("Not supported prop_distr")
         # print formatting
         self.iter_msg = "sample number = %s, obj = %.5e, resnorm = %.2e, feval = %d, acceptance rate = %.4e"
+        self.ndigits = len(str(self.nsamples))
 
     def run(self, problem, verbose=False, restart=False):
         """Running MCMC solver/sampler"""
 
         # Checking if user is saving the sampled models
         if not self.save_model:
-            msg = "WARNING! Running MCMC sampling method without saving samples!"
+            msg = "WARNING! save_model=False! Running MCMC sampling method will not save accepted model samples!"
             print(msg)
             if self.logger:
                 self.logger.addToLog(msg)
@@ -885,7 +886,7 @@ class MCMCsolver(pySolver.Solver):
         obj_terms = problem.obj_terms if "obj_terms" in dir(problem) else None
         if not restart:
             # iteration info
-            msg = self.iter_msg % (str(iiter).zfill(self.nsamples),
+            msg = self.iter_msg % (str(iiter).zfill(self.ndigits),
                                    obj_current,
                                    res_norm,
                                    problem.get_fevals(),
@@ -917,16 +918,16 @@ class MCMCsolver(pySolver.Solver):
             iiter += 1  # Increase counter of tested samples
             # computing log acceptance ratio
             if obj_current > zero and obj_prop > zero:
-                log_alpha = np.min(0, np.log(obj_prop / obj_current))
-            elif obj_prop <= zero:
+                alpha = min(1.0, obj_prop / obj_current )
+            elif obj_current <= zero and obj_prop > zero:
                 # condition to avoid zero/zero
-                log_alpha = -np.inf
+                alpha = 0.
             else:
                 # condition to avoid division by zero
-                log_alpha = 0.
+                alpha = 1.
 
             # Accept the x_prop with probability a
-            if np.log(np.random.uniform()) < log_alpha:
+            if np.random.uniform() <= alpha:
                 # accepted proposed model
                 mcmc_mdl_cur.copy(mcmc_mdl_prop)
                 obj_current = deepcopy(obj_prop)
@@ -935,7 +936,7 @@ class MCMCsolver(pySolver.Solver):
                 accepted += 1  # Increase counter of accepted samples
 
             # iteration info
-            msg = self.iter_msg % (str(iiter).zfill(self.nsamples),
+            msg = self.iter_msg % (str(iiter).zfill(self.ndigits),
                                    obj_current,
                                    res_norm,
                                    problem.get_fevals(),
@@ -959,9 +960,9 @@ class MCMCsolver(pySolver.Solver):
                 break
 
             # saving inversion vectors and parameters for restart
-            mcmc_mdl_cur = self.restart.save_vector("mcmc_mdl_cur")
-            accepted = self.restart.save_parameter("accepted")
-            iiter = self.restart.save_parameter("iiter")
+            self.restart.save_vector("mcmc_mdl_cur", mcmc_mdl_cur)
+            self.restart.save_parameter("accepted", accepted)
+            self.restart.save_parameter("iiter", iiter)
 
         msg = 90 * "#" + "\n"
         msg += "Markov Chain Monte Carlo (MCMC) algorithm algorithm log file end\n"
