@@ -811,7 +811,7 @@ class MCMCsolver(pySolver.Solver):
     def __init__(self, **kwargs):
         """
         Constructor for MCMC Solver/Sampler:
-        :param nsamples: total number of samples to test
+        :param stopper: Stopper object to terminate sampling
         :param prop_distr: proposal distribution to be employed ["Uni","Gauss"]
         1) "Uni" = uniform distribution: provide max_step U~[-max_step,max_step]
         2) "Gauss" = Gaussian distribution: provide sigma N~[0,sigma]
@@ -820,9 +820,11 @@ class MCMCsolver(pySolver.Solver):
         # Calling parent construction
         super(MCMCsolver, self).__init__()
         # Defining stopper object
-        self.nsamples = kwargs.get("nsamples")
+        self.stopper = kwargs.get("stopper")
         # Logger object to write on log file
         self.logger = kwargs.get("logger", None)
+        # Overwriting logger of the Stopper object
+        self.stopper.logger=self.logger
         # Proposal distribution parameters
         self.prop_dist = kwargs.get("prop_distr")
         if self.prop_dist == "Uni":
@@ -833,11 +835,12 @@ class MCMCsolver(pySolver.Solver):
             raise ValueError("Not supported prop_distr")
         # print formatting
         self.iter_msg = "sample number = %s, obj = %.5e, resnorm = %.2e, feval = %d, acceptance rate = %.4e"
-        self.ndigits = len(str(self.nsamples))
+        self.ndigits = self.stopper.zfill
 
     def run(self, problem, verbose=False, restart=False):
         """Running MCMC solver/sampler"""
-
+        # Resetting stopper before running the inversion
+        self.stopper.reset()
         # Checking if user is saving the sampled models
         if not self.save_model:
             msg = "WARNING! save_model=False! Running MCMC sampling method will not save accepted model samples!"
@@ -966,18 +969,14 @@ class MCMCsolver(pySolver.Solver):
             # Saving sampled point
             self.save_results(iiter, problem, model=mcmc_mdl_cur, obj=obj_current, obj_terms=obj_terms, force_save=True, force_write=True)
 
-            if iiter == self.nsamples:
-                msg = "Number of tested samples reached maximum number of samples %d" % (self.nsamples)
-                if verbose:
-                    print(msg)
-                if self.logger:
-                    self.logger.addToLog(msg)
-                break
-
             # saving inversion vectors and parameters for restart
             self.restart.save_vector("mcmc_mdl_cur", mcmc_mdl_cur)
             self.restart.save_parameter("accepted", accepted)
             self.restart.save_parameter("iiter", iiter)
+
+            # Checking stopping criteria
+            if self.stopper.run(problem, iiter, verbose=verbose):
+                break
 
         msg = 90 * "#" + "\n"
         msg += "Markov Chain Monte Carlo (MCMC) algorithm algorithm log file end\n"
