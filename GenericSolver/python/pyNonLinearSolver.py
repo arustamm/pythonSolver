@@ -878,6 +878,7 @@ class MCMCsolver(pySolver.Solver):
         # Common parameters
         mcmc_mdl_prop = prblm_mdl.clone()
         mcmc_dmodl = prblm_mdl.clone().zero()
+        mcmc_mdl_check = prblm_mdl.clone()
 
         # Computing current objective function
         obj_current = problem.get_obj(mcmc_mdl_cur)  # Compute objective function value
@@ -911,20 +912,34 @@ class MCMCsolver(pySolver.Solver):
             # Compute a(x_cur, x_prop)
             mcmc_mdl_prop.copy(mcmc_mdl_cur)
             mcmc_mdl_prop.scaleAdd(mcmc_dmodl)
-            obj_prop = problem.get_obj(mcmc_mdl_prop)
-            # Check if objective function value is NaN
-            if isnan(obj_prop):
-                raise ValueError("objective function of proposed model is NaN!")
-            iiter += 1  # Increase counter of tested samples
-            # computing log acceptance ratio
-            if obj_current > zero and obj_prop > zero:
-                alpha = min(1.0, obj_prop / obj_current )
-            elif obj_current <= zero and obj_prop > zero:
-                # condition to avoid zero/zero
-                alpha = 0.
+            # Checking if model parameters hit the bounds
+            mcmc_mdl_check.copy(mcmc_mdl_prop)
+            # Projecting model onto the bounds (if any)
+            if "bounds" in dir(problem):
+                mcmc_mdl_prop.bounds.apply(mcmc_mdl_check)
+            if mcmc_mdl_prop.isDifferent(mcmc_mdl_check):
+                # Model hit bounds
+                if self.logger:
+                    self.logger.addToLog("\tModel hit provided bounds. Projecting it onto them.")
+                obj_prop = np.inf
+                alpha = 1.1  # Rejecting the model
             else:
-                # condition to avoid division by zero
-                alpha = 1.
+                obj_prop = problem.get_obj(mcmc_mdl_prop)
+                # Check if objective function value is NaN
+                if isnan(obj_prop):
+                    raise ValueError("objective function of proposed model is NaN!")
+                # computing log acceptance ratio
+                if obj_current > zero and obj_prop > zero:
+                    alpha = min(1.0, obj_prop / obj_current)
+                elif obj_current <= zero < obj_prop:
+                    # condition to avoid zero/zero
+                    alpha = 0.
+                else:
+                    # condition to avoid division by zero
+                    alpha = 1.
+
+            # Increase counter of tested samples
+            iiter += 1
 
             # Accept the x_prop with probability a
             if np.random.uniform() <= alpha:
