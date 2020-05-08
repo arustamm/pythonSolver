@@ -608,7 +608,7 @@ class vectorIC(vector):
             if (mode in 'a'):
                 axes = sep_util.get_axes(filename)
                 # Number of vectors already present in the file
-                if self.shape != (1,):
+                if self.shape == (1,):
                     n_vec = axes[0][0]
                     append_dim = self.ndims
                 else:
