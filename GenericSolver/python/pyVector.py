@@ -708,7 +708,7 @@ class vectorIC(vector):
         # Checking dimensionality
         if not self.checkSame(vec2):
             raise ValueError('Dimensionality not equal: self = %s; vec2 = %s' % (self.shape, vec2.shape))
-        return np.vdot(self.getNdArray().flatten(), vec2.getNdArray().flatten())
+        return np.vdot(self.getNdArray().ravel(), vec2.getNdArray().ravel())
 
     def multiply(self, vec2):
         """Function to multiply element-wise two vectors"""
@@ -716,7 +716,7 @@ class vectorIC(vector):
         if not isinstance(vec2, vectorIC):
             raise TypeError("Provided input vector not a vectorIC!")
         # Checking size (must have same number of elements)
-        if self.size() != vec2.size():
+        if self.size != vec2.size:
             raise ValueError("Vector size mismatching: vec1 = %s; vec2 = %s" % (self.size, vec2.size))
         # Checking dimensionality
         if not self.checkSame(vec2):
