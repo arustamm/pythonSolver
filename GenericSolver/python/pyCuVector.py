@@ -167,7 +167,7 @@ class vectorCupy(pyVec.vector):
                     fid.write("n%s=%s o%s=0.0 d%s=1.0 \n" % (ax_id, 1, ax_id, ax_id))
                 fid.write("in='%s'\n" % binfile)
                 esize = "esize=4\n"
-                if self.getNdArray().dtype == cp.complex64:
+                if self.getNdArray().dtype == cp.complex64 or self.getNdArray().dtype == cp.complex128:
                     esize = "esize=8\n"
                 fid.write(esize)
                 fid.write("data_format=\"native_float\"\n")
@@ -187,7 +187,7 @@ class vectorCupy(pyVec.vector):
                     fid.write("n%s=%s o%s=0.0 d%s=1.0 \n" % (append_dim, n_vec + 1, append_dim, append_dim))
                 fid.close()
         # Writing binary file
-        format = '>f' if self.getNdArray().dtype != cp.complex64 else '>c8'
+        format = '>f' if (self.getNdArray().dtype != cp.complex64 or self.getNdArray().dtype != cp.complex128) else '>c8'
         with open(binfile, mode + 'b') as fid:
             # Writing big-ending floating point number
             if cp.isfortran(self.getNdArray()):  # Forcing column-wise binary writing
