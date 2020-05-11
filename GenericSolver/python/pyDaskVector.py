@@ -7,32 +7,35 @@ import os
 import sep_util as sep
 from sys_util import BUF_SIZE
 
-# Specific functions to use genericIO vectors
-import imp
-
 # Verify if SepVector modules are presents
 try:
-    imp.find_module('SepVector')
     import SepVector
-
 
     def call_constr_hyper(axes_in):
         """Function to remotely construct an SepVector using the axis object"""
         return SepVector.getSepVector(axes=axes_in)
-
-
-    def copy_from_NdArray(vecObj, NdArray):
-        """Function to set vector values from numpy array"""
-        vecObj.getNdArray()[:] = NdArray
-        return
 except ImportError:
     SepVector = None
 
+def copy_from_NdArray(vecObj, NdArray):
+    """Function to set vector values from numpy array"""
+    vecObj.getNdArray()[:] = NdArray
+    return
 
 # Functions necessary to submit method calls using Dask client
 def call_getNdArray(vecObj):
     """Function to call getNdArray method"""
     res = vecObj.getNdArray()
+    return res
+
+def call_shape(vecObj):
+    """Function to return shape attribute"""
+    res = vecObj.shape
+    return res
+
+def call_size(vecObj):
+    """Function to return size attribute"""
+    res = vecObj.size
     return res
 
 
@@ -248,7 +251,7 @@ class DaskVector(Vec.vector):
                 vec_space = vec_tmplt.getHyper().axes  # Passing axes since Hypercube cannot be serialized
             else:
                 vec_space = vec_tmplt.cloneSpace()
-            vec_spaceD = self.client.scatter(vec_space, broadcast=True)
+            vec_spaceD = self.client.scatter(vec_space, workers=wrkIds)
             daskD.wait(vec_spaceD)
             # Spreading vectors
             for iwrk, wrkId in enumerate(wrkIds):
@@ -320,39 +323,38 @@ class DaskVector(Vec.vector):
         daskD.wait(self.vecDask)
         return
 
+    # Cannot delete a future otherwise derived future objects are cancelled too
     # def __del__(self):
-    # 	"""
-    # 	   Cancel/Delete all futures within the class (fees memory on workers)
-    # 	"""
-    # 	#If a future is deleted is cancelled, then all the related ones are cancelled too. This is a problem
-    # 	#for the methods clone and cloneSpace. Need to find a solution to the problem
-    # 	self.client.cancel(self.vecDask)
-    # 	return
+    #     """
+    #        Cancel/Delete all futures within the class (frees memory on workers)
+    #     """
+    #     # Releasing future vector classes
+    #     for vecFut in self.vecDask:
+    #         vecFut.release()
+    #     return
 
     # Class vector operations
     def getNdArray(self):
         """
-        Function to return Ndarray of the vector.
-        The function will return an Numpy array if dimensions among all the arrays are
-        consistent with each other (i.e., slowest-axis concatenation).
-        Otherwise, a list of all the arrays is going to be returned.
+        Function to return a list of all the arrays of the vector
         """
         futures = self.client.map(call_getNdArray, self.vecDask, pure=False)
         arrays = self.client.gather(futures)
-        # Checking if dimension are consistent with each other
-        shapes = [arr.shape for arr in arrays]
-        # Find maximum number of axis
-        Naxis = np.max([len(shp) for shp in shapes])
-        # Expanding slowest axis if necessary
-        for idx, arr in enumerate(arrays):
-            dim_diff = Naxis - len(arr.shape)
-            if dim_diff == 1:
-                arrays[idx] = np.expand_dims(arr, axis=0)
-        try:
-            NdArr = np.concatenate(arrays, axis=0)
-            return NdArr
-        except ValueError:
-            return arrays
+        return arrays
+
+    @property
+    def shape(self):
+        futures = self.client.map(call_shape, self.vecDask, pure=False)
+        shapes = self.client.gather(futures)
+        return shapes
+
+    @property
+    def size(self):
+        """Attribute of total number of elements in the vector"""
+        futures = self.client.map(call_size, self.vecDask, pure=False)
+        sizes = self.client.gather(futures)
+        return np.sum(sizes)
+
 
     def norm(self, N=2):
         """Function to compute vector N-norm"""

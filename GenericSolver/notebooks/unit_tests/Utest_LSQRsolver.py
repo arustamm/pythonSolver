@@ -3,6 +3,7 @@ import sys
 sys.path.insert(0, "../../python")
 import pyVector
 import pyOperator
+import pyNpOperator
 from pyLinearSolver import LSQRsolver, LCGsolver
 from pyProblem import ProblemL2Linear, ProblemL2LinearReg
 from pyStopper import BasicStopper
@@ -22,7 +23,7 @@ if __name__ == "__main__":
     # same example as scipy (https://docs.scipy.org/doc/scipy/reference/generated/scipy.sparse.linalg.lsqr.html)
     model = pyVector.vectorIC(np.zeros(2, dtype=float))
     data = pyVector.vectorIC(np.array([1., 0.01, -1.], dtype=float))
-    A = pyOperator.MatrixOp(np.array([[1., 0.], [1., 1.], [0., 1.]], dtype=float), model, data)
+    A = pyNpOperator.MatrixOp(np.array([[1., 0.], [1., 1.], [0., 1.]], dtype=float), model, data)
     
     # CG for benchmarking
     L2ProbCG = ProblemL2Linear(model, data, A)
@@ -46,7 +47,7 @@ if __name__ == "__main__":
     x.getNdArray()[:nx // 2] = 10
     x.getNdArray()[nx // 2:3 * nx // 4] = -5
     Iop = pyOperator.IdentityOp(x)
-    L = pyOperator.SecondDerivative(x)
+    L = pyNpOperator.SecondDerivative(x)
     n = x.clone()
     n.getNdArray()[:] = np.random.normal(0, 1, nx)
     y = Iop * (x.clone() + n)

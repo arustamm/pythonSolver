@@ -391,7 +391,7 @@ class ISTCsolver(Solver):
                 istc_mdl_save.copy(istc_mdl)
                 istc_mdl_save.scale(scale_precond)
                 # Saving results
-                self.save_results(iiter, problem, istc_mdl_save, force_save=False)
+                self.save_results(iiter, problem, model=istc_mdl_save, force_save=False)
                 
                 # Stepping for internal iteration model update
                 istc_mdl0.copy(istc_mdl)  # Saving model before updating it
@@ -449,7 +449,7 @@ class ISTCsolver(Solver):
         istc_mdl_save.copy(istc_mdl)
         istc_mdl_save.scale(scale_precond)
         # Writing last inverted model
-        self.save_results(iiter, problem, istc_mdl_save, force_save=True, force_write=True)
+        self.save_results(iiter, problem, model=istc_mdl_save, force_save=True, force_write=True)
         if self.create_msg:
             msg = 90 * "#" + "\n"
             msg += "\t\t\tITERATIVE SOFT-THRESHOLDING WITH COOLING SOLVER log file end\n"
@@ -587,9 +587,11 @@ class SplitBregmanSolver(Solver):
                 msg = 90 * '#' + '\n'
                 msg += "\t\t\tSPLIT-BREGMAN ALGORITHM log file\n\n"
                 msg += "\tRestart folder: %s\n" % self.restart.restart_folder
-                msg += "\tModeling Operator:\t\t%s\n" % problem.op
+                msg += "\tModeling Operator:\t%s\n" % problem.op
+                msg += "\tInner iterations:\t%d\n" % self.niter_inner
+                msg += "\tSolver iterations:\t%d\n" % self.niter_solver
                 if problem.nregsL2 != 0:
-                    msg += "\tL2 Regularizer ops:\t\t" + ", ".join(["%s" % op for op in problem.regL2_op.ops]) + "\n"
+                    msg += "\tL2 Regularizer ops:\t" + ", ".join(["%s" % op for op in problem.regL2_op.ops]) + "\n"
                     msg += "\tL2 Regularizer weights:\t" + ", ".join(["{:.2e}".format(e) for e in problem.epsL2]) + "\n"
                 if problem.nregsL1 != 0:
                     msg += "\tL1 Regularizer ops:\t\t" + ", ".join(["%s" % op for op in problem.regL1_op.ops]) + "\n"

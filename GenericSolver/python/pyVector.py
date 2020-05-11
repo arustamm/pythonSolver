@@ -87,11 +87,11 @@ class vector:
         raise NotImplementedError("getNdArray must be overwritten")
 
     def shape(self):
-        """Function to get the vector shape (number of samples for each axis)"""
+        """Property to get the vector shape (number of samples for each axis)"""
         raise NotImplementedError("shape must be overwritten")
 
     def size(self):
-        """Function to compute the vector size (number of samples)"""
+        """Property to compute the vector size (number of samples)"""
         raise NotImplementedError("size must be overwritten")
 
     def norm(self, N=2):
@@ -275,11 +275,13 @@ class superVector(vector):
         """Function to return Ndarray of the vector"""
         return [self.vecs[idx].getNdArray() for idx in range(self.n)]
 
+    @property
     def shape(self):
-        return [self.vecs[idx].shape() for idx in range(self.n)]
+        return [self.vecs[idx].shape for idx in range(self.n)]
 
+    @property
     def size(self):
-        return sum([self.vecs[idx].size() for idx in range(self.n)])
+        return sum([self.vecs[idx].size for idx in range(self.n)])
 
     def norm(self, N=2):
         """Function to compute vector N-norm"""
@@ -471,8 +473,6 @@ class vectorIC(vector):
     def __init__(self, in_vec):
         """
         VectorIC constructor: arr=np.array
-        The naxis variable is a tuple that specifies the elements in each
-        dimension starting from the fastest to the slowest memory wise.
         This class stores array with C memory order (i.e., row-wise sorting)
         """
 
@@ -493,15 +493,9 @@ class vectorIC(vector):
             raise ValueError("ERROR! Input variable not currently supported!")
 
         # Number of elements per axis (tuple). Checking also the memory order
-        self.naxis = self.arr.shape  # If fortran the first axis is the "fastest"
-        if not np.isfortran(self.arr):
-            self.naxis = tuple(reversed(self.naxis))  # If C last axis is the "fastest"
-
-        if len(self.naxis) == 0:  # To fix problem with scalar within a vectorIC
-            self.naxis = (1,)
-        self.ndims = len(self.naxis)  # Number of axes integer
-        # self.shape = self.naxis
-        # self.size = self.arr.size
+        self.shape = self.arr.shape  # If fortran the first axis is the "fastest"
+        self.ndims = len(self.shape)  # Number of axes integer
+        self.size = self.arr.size # Total number of elements
         super(vectorIC, self).__init__()
 
     def getNdArray(self):
@@ -510,9 +504,6 @@ class vectorIC(vector):
 
     def size(self):
         return self.getNdArray().size
-
-    def shape(self):
-        return self.naxis
 
     def norm(self, N=2):
         """Function to compute vector N-norm using Numpy"""
@@ -559,14 +550,13 @@ class vectorIC(vector):
         vec_clone = deepcopy(self)  # Deep clone of vector
         # Checking if a vector space was provided
         if vec_clone.getNdArray().size == 0:
-            vec_clone.arr = np.zeros(tuple(reversed(vec_clone.naxis)), dtype=self.arr.dtype)
+            vec_clone.arr = np.zeros(vec_clone.shape, dtype=self.getNdArray().dtype)
         return vec_clone
 
     def cloneSpace(self):
         """Function to clone vector space only (vector without actual vector array by using empty array of size 0)"""
         vec_space = vectorIC(np.empty(0, dtype=self.getNdArray().dtype))
         # Cloning space of input vector
-        vec_space.naxis = self.naxis
         vec_space.ndims = self.ndims
         vec_space.shape = self.shape
         vec_space.size = self.size
@@ -574,7 +564,7 @@ class vectorIC(vector):
 
     def checkSame(self, other):
         """Function to check dimensionality of vectors"""
-        return self.naxis == other.naxis
+        return self.shape == other.shape
 
     def writeVec(self, filename, mode='w'):
         """Function to write vector to file"""
@@ -599,11 +589,11 @@ class vectorIC(vector):
                         fid.write("n%s=%s o%s=%s d%s=%s label%s='%s'\n" % (
                             ax_id, ax_info[0], ax_id, ax_info[1], ax_id, ax_info[2], ax_id, ax_info[3]))
                 else:
-                    for ii, n_axis in enumerate(self.naxis):
+                    for ii, n_axis in enumerate(tuple(reversed(self.shape))):
                         ax_id = ii + 1
                         fid.write("n%s=%s o%s=0.0 d%s=1.0 \n" % (ax_id, n_axis, ax_id, ax_id))
                 # Writing last axis for allowing appending (unless we are dealing with a scalar)
-                if (self.naxis != (1,)):
+                if self.shape != (1,):
                     ax_id = self.ndims + 1
                     fid.write("n%s=%s o%s=0.0 d%s=1.0 \n" % (ax_id, 1, ax_id, ax_id))
                 fid.write("in='%s'\n" % (binfile))
@@ -618,7 +608,7 @@ class vectorIC(vector):
             if (mode in 'a'):
                 axes = sep_util.get_axes(filename)
                 # Number of vectors already present in the file
-                if self.naxis == (1,):
+                if self.shape == (1,):
                     n_vec = axes[0][0]
                     append_dim = self.ndims
                 else:
@@ -658,7 +648,7 @@ class vectorIC(vector):
             return self
         elif isinstance(vec2, vectorIC):
             if not self.checkSame(vec2):
-                raise ValueError('Dimensionality not equal: self = %d; vec2 = %d' % (self.naxis, vec2.naxis))
+                raise ValueError('Dimensionality not equal: self = %s; vec2 = %s' % (self.shape, vec2.shape))
             self.getNdArray()[:] = np.maximum(self.getNdArray(), vec2.getNdArray())
             return self
         else:
@@ -690,7 +680,7 @@ class vectorIC(vector):
             raise TypeError("Provided input vector not a vectorIC!")
         # Checking dimensionality
         if not self.checkSame(vec2):
-            raise ValueError("Dimensionality not equal: vec1 = %d; vec2 = %d" % (self.naxis, vec2.naxis))
+            raise ValueError('Dimensionality not equal: self = %s; vec2 = %s' % (self.shape, vec2.shape))
         # Element-wise copy of the input array
         self.getNdArray()[:] = vec2.getNdArray()
         return self
@@ -702,7 +692,7 @@ class vectorIC(vector):
             raise TypeError("Provided input vector not a vectorIC!")
         # Checking dimensionality
         if not self.checkSame(vec2):
-            raise ValueError("Dimensionality not equal: vec1 = %d; vec2 = %d" % (self.naxis, vec2.naxis))
+            raise ValueError('Dimensionality not equal: self = %s; vec2 = %s' % (self.shape, vec2.shape))
         # Performing scaling and addition
         self.getNdArray()[:] = sc1 * self.getNdArray() + sc2 * vec2.getNdArray()
         return self
@@ -713,12 +703,12 @@ class vectorIC(vector):
         if not isinstance(vec2, vectorIC):
             raise TypeError("Provided input vector not a vectorIC!")
         # Checking size (must have same number of elements)
-        if self.size() != vec2.size():
-            raise ValueError("Vector size mismatching: vec1 = %d; vec2 = %d" % (self.size(), vec2.size()))
+        if self.size != vec2.size:
+            raise ValueError("Vector size mismatching: vec1 = %d; vec2 = %d" % (self.size, vec2.size))
         # Checking dimensionality
         if not self.checkSame(vec2):
-            raise ValueError("Dimensionality not equal: vec1 = %d; vec2 = %d" % (self.naxis, vec2.naxis))
-        return np.vdot(self.getNdArray().flatten(), vec2.getNdArray().flatten())
+            raise ValueError('Dimensionality not equal: self = %s; vec2 = %s' % (self.shape, vec2.shape))
+        return np.vdot(self.getNdArray().ravel(), vec2.getNdArray().ravel())
 
     def multiply(self, vec2):
         """Function to multiply element-wise two vectors"""
@@ -726,11 +716,11 @@ class vectorIC(vector):
         if not isinstance(vec2, vectorIC):
             raise TypeError("Provided input vector not a vectorIC!")
         # Checking size (must have same number of elements)
-        if self.size() != vec2.size():
-            raise ValueError("Vector size mismatching: vec1 = %d; vec2 = %d" % (self.size(), vec2.size()))
+        if self.size != vec2.size:
+            raise ValueError("Vector size mismatching: vec1 = %s; vec2 = %s" % (self.size, vec2.size))
         # Checking dimensionality
         if not self.checkSame(vec2):
-            raise ValueError("Dimensionality not equal: vec1 = %d; vec2 = %d" % (self.naxis, vec2.naxis))
+            raise ValueError('Dimensionality not equal: self = %s; vec2 = %s' % (self.shape, vec2.shape))
         # Performing element-wise multiplication
         self.getNdArray()[:] = np.multiply(self.getNdArray(), vec2.getNdArray())
         return self
@@ -802,8 +792,9 @@ class vectorOC(vector):
         # Number of elements per axis (tuple)
         axes_info = sep_util.get_axes(self.vecfile)
         axis_elements = tuple([ii[0] for ii in axes_info[:self.ndims]])
-        self.naxis = axis_elements
-        self.size = np.product(self.naxis)
+        self.shape = tuple(reversed(axis_elements))
+        self.size = np.product(self.shape)
+        self.ndims = len(self.shape)
         return
 
     def __del__(self):
@@ -866,7 +857,7 @@ class vectorOC(vector):
             # Placing temporary file into datapath folder
             tmp_vec = sep_util.datapath + "clone_tmp_vector" + str(int(time.time() * 1000000)) + ".H"
             axis_file = ""
-            for iaxis, naxis in enumerate(vec_clone.naxis):
+            for iaxis, naxis in enumerate(tuple(reversed(vec_clone.shape))):
                 axis_file += "n%s=%s " % (iaxis + 1, naxis)
             # Creating temporary vector file
             cmd = "Spike %s | Add scale=0.0 > %s" % (axis_file, tmp_vec)
@@ -902,7 +893,7 @@ class vectorOC(vector):
 
     def checkSame(self, vec2):
         """Function to check dimensionality of vectors"""
-        return self.naxis == vec2.naxis
+        return self.shape == vec2.shape
 
     def writeVec(self, filename, mode='w'):
         """Function to write vector to file"""
@@ -923,7 +914,7 @@ class vectorOC(vector):
             if mode in 'a':
                 axes = sep_util.get_axes(filename)
                 # Number of vectors already present in the file
-                if self.naxis == (1,):
+                if self.shape == (1,):
                     n_vec = axes[0][0]
                     append_dim = self.ndims
                 else:
@@ -954,7 +945,7 @@ class vectorOC(vector):
             raise TypeError("ERROR! Provided input vector not a vectorOC!")
         # Checking dimensionality
         if not self.checkSame(vec2):
-            raise ValueError("ERROR! Vector dimensionality mismatching: vec1 = %s; vec2 = %s" % (self.naxis, vec2.naxis))
+            raise ValueError("ERROR! Vector dimensionality mismatching: vec1 = %s; vec2 = %s" % (self.shape, vec2.shape))
         # Copy binary file of input vector
         copyfile(vec2.binfile, self.binfile)  # Copying binary
         return
@@ -966,7 +957,7 @@ class vectorOC(vector):
             raise TypeError("ERROR! Provided input vector not a vectorOC!")
         # Checking dimensionality
         if not self.checkSame(vec2):
-            raise ValueError("ERROR! Vector dimensionality mismatching: vec1 = %s; vec2 = %s" % (self.naxis, vec2.naxis))
+            raise ValueError("ERROR! Vector dimensionality mismatching: vec1 = %s; vec2 = %s" % (self.shape, vec2.shape))
         # Performing scaling and addition
         cmd = "Solver_ops file1=%s scale1_r=%s file2=%s scale2_r=%s op=scale_addscale" % (
             self.vecfile, sc1, vec2.vecfile, sc2)
@@ -983,7 +974,7 @@ class vectorOC(vector):
             raise ValueError("ERROR! Vector size mismatching: vec1 = %s; vec2 = %s" % (self.size, vec2.size))
         # Checking dimensionality
         if not self.checkSame(vec2):
-            raise ValueError("ERROR! Vector dimensionality mismatching: vec1 = %s; vec2 = %s" % (self.naxis, vec2.naxis))
+            raise ValueError("ERROR! Vector dimensionality mismatching: vec1 = %s; vec2 = %s" % (self.shape, vec2.shape))
         # Running Solver_ops to compute norm value
         cmd = "Solver_ops file1=%s file2=%s op=dot" % (self.vecfile, vec2.vecfile)
         find = re_dpr.search(sys_util.RunShellCmd(cmd, get_stat=False)[0])
@@ -1003,7 +994,7 @@ class vectorOC(vector):
             raise ValueError("ERROR! Vector size mismatching: vec1 = %s; vec2 = %s" % (self.size, vec2.size))
         # Checking dimensionality
         if not self.checkSame(vec2):
-            raise ValueError("ERROR! Vector dimensionality mismatching: vec1 = %s; vec2 = %s" % (self.naxis, vec2.naxis))
+            raise ValueError("ERROR! Vector dimensionality mismatching: vec1 = %s; vec2 = %s" % (self.shape, vec2.shape))
         # Performing scaling and addition
         cmd = "Solver_ops file1=%s file2=%s op=multiply" % (self.vecfile, vec2.vecfile)
         sys_util.RunShellCmd(cmd, get_stat=False, get_output=False)

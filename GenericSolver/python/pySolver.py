@@ -143,31 +143,33 @@ class Solver:
             print("WARNING! No restart folder's path was found in %s" % log_file)
         return
 
-    def save_results(self, iiter, problem, model=None, force_save=False, force_write=False):
+    def save_results(self, iiter, problem, **kwargs):
         """
         Method to save results
-        :param problem      : Problem that is being solved
         :param iiter        : Iteration index
-        :param model        : [None]; Model vector to be saved
-        :param force_save   : [False]; Flag to ignore iteration sampling
-        :param force_write  : [False]; Force writing on disk if necessary (used to handle last iteration)
+        :param problem      : Problem that is being solved
+        :param kwargs       :
+        - force_save   : [False]; Flag to ignore iteration sampling
+        - force_write  : [False]; Force writing on disk if necessary (used to handle last iteration)
+        - model : [problem.model] model to be saved and/or written
+        - obj : [problem.obj] objective function to be saved
         """
         if not isinstance(problem, pyProblem.Problem):
             raise TypeError("Input variable is not a Problem object")
+        force_save = kwargs.get("force_save", False)
+        force_write = kwargs.get("force_write", False)
         # Getting a model from arguments if provided (necessary to remove preconditioning)
-        if model is not None:
-            mod_save = model
-        else:
-            mod_save = problem.get_model()
+        mod_save = kwargs.get("model", problem.get_model())
         # Obtaining objective function value
-        objf_value = problem.get_obj(problem.get_model())
+        objf_value = kwargs.get("obj", problem.get_obj(problem.get_model()))
+        obj_terms = kwargs.get("obj_terms", problem.obj_terms) if "obj_terms" in dir(problem) else None
         # Save if it is forced to or if the solver hits a sampled iteration number
         # The objective function is saved every iteration if requested
         if self.save_obj:
             self.obj.append(deepcopy(objf_value))
             # Checking if the objective function has multiple terms
-            if "obj_terms" in dir(problem):
-                self.obj_terms.append(deepcopy(problem.obj_terms))
+            if obj_terms is not None:
+                self.obj_terms.append(deepcopy(obj_terms))
         if iiter % self.iter_sampling == 0 or force_save:
             if self.save_model:
                 self.modelSet.append(mod_save)

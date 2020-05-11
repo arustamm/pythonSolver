@@ -36,7 +36,7 @@ class BasicStopper(Stopper):
         Constructor for Basic Stopper:
         niter    	 = [0] - integer; Number of iterations to run (must be greater than 0 to be checked)
         maxfevals    = [0] - integer; Maximum number of function evaluations (must be greater than 0 to be checked)
-        maxhours     = [0.0] - float; Maxium total running time in hours (must be greater than 0.0 to be checked)
+        maxhours     = [0.0] - float; Maximum total running time in hours (must be greater than 0.0 to be checked)
         tolr     	 = [1.0e-18] - float; Tolerance on residual norm
         tolg     	 = [1.0e-18] - float; Tolerance on gradient norm (Note: ignore for symmetric system)
         tolobj     	 = [None] - float; Tolerance on objective function value (Not relative value compared to initial one)
@@ -74,7 +74,7 @@ class BasicStopper(Stopper):
         return
 
     # Beware stopper is going to change the gradient/obj/res files
-    def run(self, problem, niter, initial_obj_value=None, verbose=True):
+    def run(self, problem, niter, initial_obj_value=None, verbose=False):
         if not isinstance(problem, Problem):
             raise TypeError("Input variable is not a Problem object")
         # Variable to impose stopping to solver
@@ -186,4 +186,69 @@ class BasicStopper(Stopper):
                     if self.logger:
                         self.logger.addToLog(msg)
                     return stop
+        return stop
+
+
+
+class SamplingStopper(Stopper):
+    """Sampling Stopper with different options"""
+
+    def __init__(self, nsamples, maxhours=0.0, logger=None):
+        """
+        Constructor for Sampling Stopper:
+        nsamples - integer; Number of samples to test
+        maxhours - float; Maximum total running time in hours (must be greater than 0.0 to be checked) [0.0]
+        """
+        # Criteria to evaluate whether or not to stop the solver
+        super(SamplingStopper, self).__init__()
+        self.nsamples = nsamples
+        self.zfill = int(np.floor(np.log10(self.nsamples)) + 1)  # number of digits for printing the iteration number
+        self.maxhours = maxhours
+        # Logger to write to file stopper information
+        self.logger = logger
+        # Starting timer
+        self.__start = timer()
+        return
+
+    def reset(self):
+        """Function to reset stopper variables"""
+        # Restarting timer
+        self.__start = timer()
+        return
+
+    # Beware stopper is going to change the gradient/obj/res files
+    def run(self, problem, nsamples, verbose=False):
+        if not isinstance(problem, Problem):
+            raise TypeError("Input variable is not a Problem object")
+        # Variable to impose stopping to solver
+        stop = False
+        # Taking time run so far (hours)
+        elapsed_time = (timer() - self.__start) / 3600.0
+        secs = elapsed_time * 3600.0
+        # Printing elapsed time in hours, minutes, seconds
+        hours = secs // 3600
+        mins = (secs % 3600) // 60
+        secs = (secs % 60)
+        # Printing time stamp to log file if provided
+        msg = "Elapsed time: %d hours, %d minutes, %d seconds\n" % (hours, mins, secs) + \
+              "Current date & time: %s" % time.strftime("%c")
+        if self.logger:
+            self.logger.addToLog(msg)
+        # Stop by number of iterations
+        if 0 < self.nsamples <= nsamples:
+            stop = True
+            msg = "Terminate: maximum number of requested samples reached\n"
+            if verbose:
+                print(msg)
+            if self.logger:
+                self.logger.addToLog(msg)
+            return stop
+        if 0. < self.maxhours <= elapsed_time:
+            stop = True
+            msg = "Terminate: maximum number hours reached %s\n" % elapsed_time
+            if verbose:
+                print(msg)
+            if self.logger:
+                self.logger.addToLog(msg)
+            return stop
         return stop

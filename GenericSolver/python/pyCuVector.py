@@ -1,5 +1,4 @@
 import pyVector as pyVec
-import cupy as cp
 import sep_util
 from copy import deepcopy
 import os
@@ -12,6 +11,14 @@ except ModuleNotFoundError:
     import sys
     subprocess.call([sys.executable, "-m", "pip", "install", "gputil"])
     from GPUtil import getFirstAvailable, getGPUs
+    
+try:
+    import cupy as cp
+except ModuleNotFoundError:
+    import subprocess
+    import sys
+    subprocess.call([sys.executable, "-m", "pip", "install", "--user", "cupy"])
+    import cupy as cp
 
 # TODO check https://docs-cupy.chainer.org/en/stable/tutorial/basic.html#how-to-write-cpu-gpu-agnostic-code
 
@@ -22,8 +29,6 @@ class vectorCupy(pyVec.vector):
     def __init__(self, in_vec):
         """
         VectorIC constructor: arr=cp.ndarray
-        The naxis variable is a tuple that specifies the elements in each
-        dimension starting from the fastest to the slowest memory wise.
         This class stores array with C memory order (i.e., row-wise sorting)
         """
 
@@ -48,15 +53,8 @@ class vectorCupy(pyVec.vector):
         else:  # Not supported type
             raise ValueError("ERROR! Input variable not currently supported!")
 
-        # Number of elements per axis (tuple). Checking also the memory order
-        self.naxis = self.arr.shape  # If fortran the first axis is the "fastest"
-        if not cp.isfortran(self.arr):
-            self.naxis = tuple(reversed(self.naxis))  # If C last axis is the "fastest"
-
-        if len(self.naxis) == 0:  # To fix problem with scalar within a vectorIC
-            self.naxis = (1,)
-
-        self.ndims = len(self.naxis)  # Number of axes integer
+        self.shape = self.arr.shape # Number of elements per axis (tuple)
+        self.ndims = len(self.shape)  # Number of axes integer
         self.size = self.arr.size  # Total number of elements
 
         self.device = self.arr.device
@@ -118,7 +116,7 @@ class vectorCupy(pyVec.vector):
         vec_clone = deepcopy(self)  # Deep clone of vector
         # Checking if a vector space was provided
         if vec_clone.getNdArray().size == 0:
-            vec_clone.arr = cp.zeros(tuple(reversed(vec_clone.naxis)), dtype=self.arr.dtype)
+            vec_clone.arr = cp.zeros(vec_clone.shape, dtype=self.getNdArray().dtype)
         return vec_clone
 
     def cloneSpace(self):
@@ -126,14 +124,14 @@ class vectorCupy(pyVec.vector):
         arr = cp.empty(0,dtype=self.getNdArray().dtype)
         vec_space = vectorCupy(arr)
         # Cloning space of input vector
-        vec_space.naxis = self.naxis
+        vec_space.shape = self.shape
         vec_space.ndims = self.ndims
         vec_space.size = self.size
         return vec_space
 
     def checkSame(self, other):
         """Function to check dimensionality of vectors"""
-        return self.naxis == other.naxis
+        return self.shape == other.shape
 
     def writeVec(self, filename, mode='w'):
         """Function to write vector to file"""
@@ -158,11 +156,11 @@ class vectorCupy(pyVec.vector):
                         fid.write("n%s=%s o%s=%s d%s=%s label%s='%s'\n" % (
                             ax_id, ax_info[0], ax_id, ax_info[1], ax_id, ax_info[2], ax_id, ax_info[3]))
                 else:
-                    for ii, n_axis in enumerate(self.naxis):
+                    for ii, n_axis in enumerate(tuple(reversed(self.shape))):
                         ax_id = ii + 1
                         fid.write("n%s=%s o%s=0.0 d%s=1.0 \n" % (ax_id, n_axis, ax_id, ax_id))
                 # Writing last axis for allowing appending (unless we are dealing with a scalar)
-                if self.naxis != (1,):
+                if self.shape != (1,):
                     ax_id = self.ndims + 1
                     fid.write("n%s=%s o%s=0.0 d%s=1.0 \n" % (ax_id, 1, ax_id, ax_id))
                 fid.write("in='%s'\n" % binfile)
@@ -177,7 +175,7 @@ class vectorCupy(pyVec.vector):
             if mode in 'a':
                 axes = sep_util.get_axes(filename)
                 # Number of vectors already present in the file
-                if self.naxis == (1,):
+                if self.shape == (1,):
                     n_vec = axes[0][0]
                     append_dim = self.ndims
                 else:
@@ -215,7 +213,7 @@ class vectorCupy(pyVec.vector):
             return self
         elif isinstance(other, vectorCupy):
             if not self.checkSame(other):
-                raise ValueError('Dimensionality not equal: self = %d; vec2 = %d' % (self.naxis, other.naxis))
+                raise ValueError('Dimensionality not equal: self = %s; vec2 = %s' % (self.shape, other.shape))
             self.getNdArray()[:] = cp.maximum(self.getNdArray(), other.getNdArray())
             return self
         else:
@@ -247,7 +245,7 @@ class vectorCupy(pyVec.vector):
             raise TypeError("Provided input vector not a vectorIC!")
         # Checking dimensionality
         if not self.checkSame(other):
-            raise ValueError("Dimensionality not equal: vec1 = %d; vec2 = %d" % (self.naxis, other.naxis))
+            raise ValueError("Dimensionality not equal: vec1 = %s; vec2 = %s" % (self.shape, other.shape))
         # Element-wise copy of the input array
         self.getNdArray()[:] = other.getNdArray()
         return self
@@ -259,7 +257,7 @@ class vectorCupy(pyVec.vector):
             raise TypeError("Provided input vector not a vectorIC!")
         # Checking dimensionality
         if not self.checkSame(other):
-            raise ValueError("Dimensionality not equal: vec1 = %d; vec2 = %d" % (self.naxis, other.naxis))
+            raise ValueError("Dimensionality not equal: vec1 = %s; vec2 = %s" % (self.shape, other.shape))
         # Performing scaling and addition
         self.getNdArray()[:] = sc1 * self.getNdArray() + sc2 * other.getNdArray()
         return self
@@ -274,7 +272,7 @@ class vectorCupy(pyVec.vector):
             raise ValueError("Vector size mismatching: vec1 = %d; vec2 = %d" % (self.size, other.size))
         # Checking dimensionality
         if not self.checkSame(other):
-            raise ValueError("Dimensionality not equal: vec1 = %d; vec2 = %d" % (self.naxis, other.naxis))
+            raise ValueError("Dimensionality not equal: vec1 = %s; vec2 = %s" % (self.shape, other.shape))
         return cp.vdot(self.getNdArray().flatten(), other.getNdArray().flatten())
 
     def multiply(self, other):
@@ -287,7 +285,7 @@ class vectorCupy(pyVec.vector):
             raise ValueError("Vector size mismatching: vec1 = %d; vec2 = %d" % (self.size, other.size))
         # Checking dimensionality
         if not self.checkSame(other):
-            raise ValueError("Dimensionality not equal: vec1 = %d; vec2 = %d" % (self.naxis, other.naxis))
+            raise ValueError("Dimensionality not equal: vec1 = %s; vec2 = %s" % (self.shape, other.shape))
         # Performing element-wise multiplication
         self.getNdArray()[:] = cp.multiply(self.getNdArray(), other.getNdArray())
         return self
@@ -324,19 +322,30 @@ class vectorCupy(pyVec.vector):
 
 if __name__ == '__main__':
     import pyCuOperator
-
+    
     x = vectorCupy(np.empty((1000, 20000))).set(1.)
     x.printDevice()
-
-    D = pyCuOperator.FirstDerivative(x)
+    
+    
+    # D = pyCuOperator.FirstDerivative(x)
     # n = x.clone().rand()
     # y = x.clone().set(10) + 0.01 * n
     # S = pyCuOperator.scalingOp(x, 10)
     # xinv = S / y
     # print('Error norm = %.2e' % (xinv.norm() - x.norm()))
-
-    x = vectorCupy(cp.arange(9).reshape((3, 3)))
-    pad = ((2, 2), (3, 3))
-    P = pyCuOperator.ZeroPad(x, pad)
+    
+    # Test Convolution
+    nh = [5, 10]
+    hz = np.exp(-0.1 * np.linspace(-(nh[0] // 2), nh[0] // 2, nh[0]) ** 2)
+    hx = np.exp(-0.03 * np.linspace(-(nh[1] // 2), nh[1] // 2, nh[1]) ** 2)
+    hz /= np.trapz(hz)  # normalize the integral to 1
+    hx /= np.trapz(hx)  # normalize the integral to 1
+    kernel = hz[:, np.newaxis] * hx[np.newaxis, :]
+    C = pyCuOperator.Convolution(x, kernel)
+    C.dotTest(True)
+    #
+    # x = vectorCupy(cp.arange(9).reshape((3, 3)))
+    # pad = ((2, 2), (3, 3))
+    # P = pyCuOperator.ZeroPad(x, pad)
 
     print(0)

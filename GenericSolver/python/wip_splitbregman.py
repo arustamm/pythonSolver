@@ -150,8 +150,9 @@ if __name__ == '__main__':
     import matplotlib.pyplot as plt
     import pyNpOperator
     import pyLopsInterface
-    from pyProblem import ProblemLinearReg
+    from pyProblem import ProblemLinearReg,ProblemL2Linear
     from pySparseSolver import SplitBregmanSolver
+    from pyLinearSolver import LCGsolver
     
     
     PLOT = True
@@ -178,25 +179,32 @@ if __name__ == '__main__':
         if PLOT:
             plt.figure(figsize=(5, 4))
             plt.plot(x.getNdArray(), 'k', lw=1, label='x')
-            plt.plot(y.getNdArray(), '.k', label='y=x+n')
+            plt.plot(y.getNdArray(), '.k', label='d=x+n')
             plt.plot(derivative.getNdArray(), '.b', lw=2, label='∂x')
             plt.legend()
             plt.title('Model, Data and Derivative')
             plt.show()
         
         # # SplitBregman
-        x_inv, _ = SplitBregman(Op=Iop, RegsL1=[TV], data=y,
-                                niter_outer=50, niter_inner=3, RegsL2=None,
-                                dataregsL2=None, mu=0.01, epsRL1s=[.3], epsRL2s=None,
-                                tol=1e-4, tau=1., x0=None, restart=False,
-                                show=True, **dict(iter_lim=30))
+        # x_inv, _ = SplitBregman(Op=Iop, RegsL1=[TV], data=y,
+        #                         niter_outer=50, niter_inner=3, RegsL2=None,
+        #                         dataregsL2=None, mu=0.01, epsRL1s=[.3], epsRL2s=None,
+        #                         tol=1e-4, tau=1., x0=None, restart=False,
+        #                         show=True, **dict(iter_lim=30))
+        problemSB = ProblemLinearReg(x.clone().zero(), y, Iop, regsL1=TV, epsL1=2.)
+        SB = SplitBregmanSolver(BasicStopper(niter=400),
+                                niter_inner=1, niter_solver=200,
+                                linear_solver='LSQR', breg_weight=1.)
+        SB.run(problemSB, verbose=True, inner_verbose=False)
+        x_inv = problemSB.get_model()
+
         if PLOT:
             plt.figure(figsize=(5, 4))
             plt.plot(x.getNdArray(), 'k', lw=1, label='x')
-            plt.plot(y.getNdArray(), '.k', label='y=x+n')
+            plt.plot(y.getNdArray(), '.k', label='d=x+n')
             plt.plot(derivative.getNdArray(), ':k', lw=1, label='∂x')
-            plt.plot(x_inv.getNdArray(), 'r', lw=2, label='x_inv')
-            plt.plot((TV * x_inv).getNdArray(), ':r', lw=2, label='∂(x_inv)')
+            plt.plot(x_inv.getNdArray(), 'r', lw=2, label='$x_{inv}$')
+            plt.plot((TV * x_inv).getNdArray(), ':r', lw=2, label='∂($x_{inv}$)')
             plt.legend()
             plt.title('SB inversion')
             plt.show()
@@ -223,10 +231,29 @@ if __name__ == '__main__':
 
         if PLOT:
             fig, ax = plt.subplots(figsize=(6, 3))
-            plt.plot(x.getNdArray(), label='Model')
-            plt.plot(y.getNdArray(), label='Data')
+            plt.plot(x.getNdArray(), 'k',  label='x')
+            plt.plot(y.getNdArray(), 'b',  label='d')
+            plt.title("model and data")
+            ax.autoscale(enable=True, axis='x', tight=True)
+            plt.ylim(-5.5, 10.5)
+            plt.legend()
             plt.show()
-        
+
+        # L2-norm problem
+        problemL2 = ProblemL2Linear(x.clone().zero(), y, G)
+        LCG = LCGsolver(BasicStopper(niter=4000))
+        LCG.run(problemL2, verbose=True)
+
+        if PLOT:
+            fig, ax = plt.subplots(figsize=(6, 3))
+            plt.plot(x.getNdArray(), 'k', label="true model")
+            plt.plot(problemL2.model.getNdArray(), 'r--', label="L2")
+            plt.title('L2 problem')
+            ax.autoscale(enable=True, axis='x', tight=True)
+            plt.ylim(-5.5,10.5)
+            plt.legend()
+            plt.show()
+
         TV = pyNpOperator.FirstDerivative(x)
         Iop = pyOp.IdentityOp(x)
         w1 = .1
@@ -234,9 +261,9 @@ if __name__ == '__main__':
         niter_inner = 2
         niter_solver = 10
         breg = 1.
-        x_hybrid, _ = SplitBregman(G, [TV], y, niter_outer=niter, niter_inner=niter_inner,
-                                   mu=1.0, epsRL1s=[w1], epsRL2s=None, tau=breg,
-                                   show=True, **dict(iter_lim=niter_solver))
+        # x_hybrid, _ = SplitBregman(G, [TV], y, niter_outer=niter, niter_inner=niter_inner,
+        #                            mu=1.0, epsRL1s=[w1], epsRL2s=None, tau=breg,
+        #                            show=True, **dict(iter_lim=niter_solver))
 
         problemSB = ProblemLinearReg(x.clone().zero(), y, G, regsL1=TV, epsL1=w1)
         SB = SplitBregmanSolver(BasicStopper(niter=niter),
@@ -245,24 +272,25 @@ if __name__ == '__main__':
         SB.run(problemSB, verbose=True, inner_verbose=False)
         #
         # pylops test
-        G_pylops = pyLopsInterface.ToPylops(G)
-        TV_pylops = pyLopsInterface.ToPylops(TV)
-        y_pylops = G_pylops * x.arr
-        x_pylops, _ = pos.SplitBregman(Op=G_pylops, RegsL1=[TV_pylops], data=y_pylops,
-                                       niter_outer=niter, niter_inner=niter_inner,
-                                       RegsL2=None, dataregsL2=None, mu=1.0,
-                                       epsRL1s=[w1], epsRL2s=None,
-                                       tol=1e-10, tau=breg, x0=None, restart=False,
-                                       show=True, **dict(iter_lim=niter_solver))
+        # G_pylops = pyLopsInterface.ToPylops(G)
+        # TV_pylops = pyLopsInterface.ToPylops(TV)
+        # y_pylops = G_pylops * x.arr
+        # x_pylops, _ = pos.SplitBregman(Op=G_pylops, RegsL1=[TV_pylops], data=y_pylops,
+        #                                niter_outer=niter, niter_inner=niter_inner,
+        #                                RegsL2=None, dataregsL2=None, mu=1.0,
+        #                                epsRL1s=[w1], epsRL2s=None,
+        #                                tol=1e-10, tau=breg, x0=None, restart=False,
+        #                                show=True, **dict(iter_lim=niter_solver))
         
         if PLOT:
             fig, ax = plt.subplots(figsize=(6, 3))
             plt.plot(x.getNdArray(), 'k', label="true model")
-            plt.plot(x_pylops, 'g--', label="pyLops")
-            plt.plot(x_hybrid.getNdArray(), 'b--', label="Hybrid")
-            plt.plot(problemSB.model.getNdArray(), 'r--', label="pySolver")
+            # plt.plot(x_pylops, 'g--', label="pyLops")
+            # plt.plot(x_hybrid.getNdArray(), 'b--', label="Hybrid")
+            plt.plot(problemSB.model.getNdArray(), 'r--', label="SB")
             plt.title('TV=%.e, λ=%.3f, ß=%.2f, niter=%d,%d,%d'
                       % (w1, 1.0, breg, niter, niter_inner, niter_solver))
+            plt.ylim(-5.5, 10.5)
             ax.autoscale(enable=True, axis='x', tight=True)
             plt.legend()
             plt.show()
