@@ -86,7 +86,7 @@ if __name__ == "__main__":
     plt.show()
 
     # CG solver with L2 regularization
-    problemCGL = ProblemL2LinearReg(x.clone().zero(), y, Iop, np.sqrt(50), L)
+    problemCGL = ProblemL2LinearReg(x.clone().zero(), y, Iop, np.sqrt(50), reg_op=L)
     CG = LCGsolver(BasicStopper(niter=30))
     CG.run(problemCGL, verbose=False)
     
@@ -99,7 +99,7 @@ if __name__ == "__main__":
     plt.show()
 
     # LSQR solver with L2 regularization
-    problemLSQRL = ProblemL2LinearReg(x.clone().zero(), y, Iop, np.sqrt(50), L)
+    problemLSQRL = ProblemL2LinearReg(x.clone().zero(), y, Iop, np.sqrt(50), reg_op=L)
     LSQR = LSQRsolver(BasicStopper(niter=30))
     LSQR.run(problemLSQRL, verbose=False)
 

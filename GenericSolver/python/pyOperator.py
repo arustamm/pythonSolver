@@ -882,6 +882,41 @@ class VstackNonLinearOperator(NonLinearOperator):
         # Setting G(m0)
         self.set_background2(model)
 
+# Variable Projection Operator
+class VpOperator(Operator):
+    """
+        Operator of the form: h(m_nl)m_lin, for Variable-projection method
+    """
+
+    def __init__(self, h_nl, h_lin, set_nl, set_lin_jac, set_lin=None):
+        """
+            Constructor for an operator with a linear and non-linear model component
+            Required arguments:
+            h_nl    	= [no default] - non-linear operator class; Non-linear operator class
+            h_lin   	= [no default] - operator class; Linear operator class
+            set_nl  	= [no default] - class function pointer; Class function to set non-linear part within h_lin
+            set_lin_jac = [no default] - class function pointer; Class function to set linear part within the Jacobian h_nl (if not necessary, use pyOperator.dummy_set_background)
+            #Optional arguments:
+            set_lin 	= [None] - class function pointer; Class function to set linear part within h_nl (not used during an inversion if ProblemL2VpReg is used)
+        """
+        if not isinstance(h_nl, NonLinearOperator):
+            raise TypeError("ERROR! Not provided a non-linear operator class for h_nl")
+        self.h_nl = h_nl
+        self.h_lin = h_lin
+        # Checking the range spaces
+        if (not h_nl.nl_op.range.checkSame(h_lin.range)):
+            raise ValueError("ERROR! The two provided operators have different ranges")
+        self.set_nl = set_nl  # Function to set the non-linear component of the h(m_nl)
+        self.set_lin_jac = set_lin_jac  # Function to set the non-linear component of the Jacobian H(m_nl;m_lin)
+        self.set_lin = set_lin  # Function to set the non-linear component h(m_nl)m_lin
+
+    def dotTest(self, verb=False, maxError=.0001):
+        """
+           Raising an exception, dot-product test must be performed directly onto linear operator and the Jacobian of h(m_nl).
+        """
+        raise NotImplementedError(
+            "ERROR! Perform dot-product test directly onto linear operator and Jacobian of h(m_nl).")
+
 
 # simple non-linear operator to test linTest method
 class cosOperator(Operator):
