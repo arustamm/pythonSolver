@@ -738,11 +738,12 @@ class LBFGSsolver(pySolver.Solver):
             self.check_rho(denom_dot, step_index, self.iistep)
 
             # Making first step-length value Hessian guess if not provided by user
-            if iiter == 0 and self.H0 is None:
+            if iiter == 0 and alpha != 1.0:
                 self.restart.save_parameter("fist_alpha", alpha)
-                self.H0 = pyOp.scalingOp(bfgs_dmodl, alpha)
+                self.H0 = pyOp.scalingOp(bfgs_dmodl, alpha) if self.H0 is None else self.H0 * pyOp.scalingOp(bfgs_dmodl,
+                                                                                                             alpha)
                 if self.logger:
-                    self.logger.addToLog("First step-length value used as first Hessian inverse estimate!")
+                    self.logger.addToLog("First step-length value added to first Hessian inverse estimate!")
                 self.stepper.alpha = 1.0
 
             # Increasing iteration counter
