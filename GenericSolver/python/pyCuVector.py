@@ -11,7 +11,7 @@ except ModuleNotFoundError:
     import sys
     subprocess.call([sys.executable, "-m", "pip", "install", "gputil"])
     from GPUtil import getFirstAvailable, getGPUs
-    
+
 try:
     import cupy as cp
 except ModuleNotFoundError:
@@ -185,7 +185,9 @@ class vectorCupy(pyVec.vector):
                     fid.write("n%s=%s o%s=0.0 d%s=1.0 \n" % (append_dim, n_vec + 1, append_dim, append_dim))
                 fid.close()
         # Writing binary file
-        format = '>f' if (self.getNdArray().dtype != cp.complex64 or self.getNdArray().dtype != cp.complex128) else '>c8'
+        format = '>f'
+        if (self.getNdArray().dtype == cp.complex64 or self.getNdArray().dtype == cp.complex128):
+            format = '>c8'
         with open(binfile, mode + 'b') as fid:
             # Writing big-ending floating point number
             if cp.isfortran(self.getNdArray()):  # Forcing column-wise binary writing
@@ -322,18 +324,18 @@ class vectorCupy(pyVec.vector):
 
 if __name__ == '__main__':
     import pyCuOperator
-    
+
     x = vectorCupy(np.empty((1000, 20000))).set(1.)
     x.printDevice()
-    
-    
+
+
     # D = pyCuOperator.FirstDerivative(x)
     # n = x.clone().rand()
     # y = x.clone().set(10) + 0.01 * n
     # S = pyCuOperator.scalingOp(x, 10)
     # xinv = S / y
     # print('Error norm = %.2e' % (xinv.norm() - x.norm()))
-    
+
     # Test Convolution
     nh = [5, 10]
     hz = np.exp(-0.1 * np.linspace(-(nh[0] // 2), nh[0] // 2, nh[0]) ** 2)

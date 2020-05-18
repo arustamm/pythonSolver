@@ -618,7 +618,9 @@ class vectorIC(vector):
                     fid.write("n%s=%s o%s=0.0 d%s=1.0 \n" % (append_dim, n_vec + 1, append_dim, append_dim))
                 fid.close()
         # Writing binary file
-        fmt = '>f' if self.getNdArray().dtype != np.complex64 else '>c8'
+        fmt = '>f'
+        if (self.getNdArray().dtype == cp.complex64 or self.getNdArray().dtype == cp.complex128):
+            format = '>c8'
         with open(binfile, mode + 'b') as fid:
             # Writing big-ending floating point number
             if np.isfortran(self.getNdArray()):  # Forcing column-wise binary writing
