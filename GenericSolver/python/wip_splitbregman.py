@@ -5,30 +5,7 @@ import pyOperator as pyOp
 from pyProblem import ProblemL2LinearReg
 from pyLinearSolver import LSQRsolver
 from pyStopper import BasicStopper
-import pylops
 import pylops.optimization.sparsity as pos
-from scipy.ndimage import gaussian_filter
-
-
-class GaussianFilterScipy(pylops.LinearOperator):
-    def __init__(self, model, sigma):
-        self.model_shape = model.shape
-        self.sigma = sigma
-        self.scaling = np.sqrt(np.prod(self.sigma / np.pi))  # in order to have the max amplitude 1
-        self.shape = (model.size, model.size)
-        self.dtype = np.dtype(model.arr.dtype)
-        self.dtype = np.float
-    
-    def __str__(self):
-        return "GausFilt"
-    
-    def _matvec(self, x):
-        """Forward operator"""
-        return self.scaling * gaussian_filter(x.reshape(self.model_shape), sigma=self.sigma)
-    
-    def _rmatvec(self, y):
-        """Self-adjoint operator"""
-        return self._matvec(y)
 
 
 def _shrinkage(x, thresh):
@@ -149,14 +126,12 @@ if __name__ == '__main__':
     path.insert(0, '.')
     import matplotlib.pyplot as plt
     import pyNpOperator
-    import pyLopsInterface
-    from pyProblem import ProblemLinearReg,ProblemL2Linear
+    from pyProblem import ProblemLinearReg, ProblemL2Linear
     from pySparseSolver import SplitBregmanSolver
     from pyLinearSolver import LCGsolver
     
-    
     PLOT = True
-    EXAMPLE = 'deconv'  # must be noisy, deconv, gaussian, medical or monarch
+    EXAMPLE = 'medical'  # must be noisy, deconv, gaussian, medical or monarch
     
     if EXAMPLE == 'noisy':
         # data examples
@@ -239,21 +214,6 @@ if __name__ == '__main__':
             plt.legend()
             plt.show()
 
-        # L2-norm problem
-        problemL2 = ProblemL2Linear(x.clone().zero(), y, G)
-        LCG = LCGsolver(BasicStopper(niter=4000))
-        LCG.run(problemL2, verbose=True)
-
-        if PLOT:
-            fig, ax = plt.subplots(figsize=(6, 3))
-            plt.plot(x.getNdArray(), 'k', label="true model")
-            plt.plot(problemL2.model.getNdArray(), 'r--', label="L2")
-            plt.title('L2 problem')
-            ax.autoscale(enable=True, axis='x', tight=True)
-            plt.ylim(-5.5,10.5)
-            plt.legend()
-            plt.show()
-
         TV = pyNpOperator.FirstDerivative(x)
         Iop = pyOp.IdentityOp(x)
         w1 = .1
@@ -270,17 +230,6 @@ if __name__ == '__main__':
                                 niter_inner=niter_inner, niter_solver=niter_solver,
                                 linear_solver='LSQR', breg_weight=breg)
         SB.run(problemSB, verbose=True, inner_verbose=False)
-        #
-        # pylops test
-        # G_pylops = pyLopsInterface.ToPylops(G)
-        # TV_pylops = pyLopsInterface.ToPylops(TV)
-        # y_pylops = G_pylops * x.arr
-        # x_pylops, _ = pos.SplitBregman(Op=G_pylops, RegsL1=[TV_pylops], data=y_pylops,
-        #                                niter_outer=niter, niter_inner=niter_inner,
-        #                                RegsL2=None, dataregsL2=None, mu=1.0,
-        #                                epsRL1s=[w1], epsRL2s=None,
-        #                                tol=1e-10, tau=breg, x0=None, restart=False,
-        #                                show=True, **dict(iter_lim=niter_solver))
         
         if PLOT:
             fig, ax = plt.subplots(figsize=(6, 3))
@@ -288,18 +237,18 @@ if __name__ == '__main__':
             # plt.plot(x_pylops, 'g--', label="pyLops")
             # plt.plot(x_hybrid.getNdArray(), 'b--', label="Hybrid")
             plt.plot(problemSB.model.getNdArray(), 'r--', label="SB")
-            plt.title('TV=%.e, λ=%.3f, ß=%.2f, niter=%d,%d,%d'
-                      % (w1, 1.0, breg, niter, niter_inner, niter_solver))
+            plt.title('TV=%.e, ß=%.2f, niter=%d,%d,%d'
+                      % (w1, breg, niter, niter_inner, niter_solver))
             plt.ylim(-5.5, 10.5)
             ax.autoscale(enable=True, axis='x', tight=True)
             plt.legend()
             plt.show()
-    
+            
     elif EXAMPLE == 'gaussian':
         x = pyVec.vectorIC(np.empty((301, 601))).set(0)
         x.getNdArray()[150, 300] = 1.0
-        # x.getNdArray()[100, 200] = -5.0
-        # x.getNdArray()[280, 400] = 1.0
+        x.getNdArray()[100, 200] = -5.0
+        x.getNdArray()[280, 400] = 1.0
         if PLOT:
             plt.figure(figsize=(6, 3))
             plt.imshow(x.getNdArray()), plt.colorbar()
@@ -319,9 +268,8 @@ if __name__ == '__main__':
         I = pyOp.IdentityOp(x)
         problemSB = ProblemLinearReg(x.clone().zero(), y, G, regsL1=I, epsL1=10.)
         
-        SB = SplitBregmanSolver(BasicStopper(niter=50), niter_inner=3, niter_solver=30,
-                                linear_solver='LSQR', breg_weight=1., use_prev_sol=False)
-        SB.setDefaults()
+        SB = SplitBregmanSolver(BasicStopper(niter=50), niter_inner=10, niter_solver=30,
+                                linear_solver='LSQR', breg_weight=1., warm_start=False)
         SB.run(problemSB, verbose=True, inner_verbose=False)
         if PLOT:
             plt.figure(figsize=(6, 3))
@@ -331,14 +279,15 @@ if __name__ == '__main__':
     
     elif EXAMPLE == 'medical':
         x = pyVec.vectorIC(np.load('../testdata/shepp_logan_phantom.npy', allow_pickle=True).astype(np.float32))
+        x = x.scale(1/255.)
         if PLOT:
             plt.figure(figsize=(5, 4))
             plt.imshow(x.getNdArray(), cmap='bone', vmin=x.min(), vmax=x.max()), plt.colorbar()
             plt.title('Model')
             plt.show()
         
-        Blurring = pyNpOperator.GaussianFilter(x, [3, 5])
-        y = Blurring * x
+        G = pyNpOperator.GaussianFilter(x, [3, 3])
+        y = G * x
         
         if PLOT:
             plt.figure(figsize=(5, 4))
@@ -349,20 +298,19 @@ if __name__ == '__main__':
         # SplitBregman
         # the gradient of the image is 6e3
         D = pyNpOperator.TotalVariation(x)
-        I = pyOp.IdentityOp(x)
+        Dx = pyNpOperator.FirstDerivative(x, axis=1)
+        Dz = pyNpOperator.FirstDerivative(x, axis=0)
+
+        plt.imshow((D * x).getNdArray(), cmap='gray'), plt.colorbar(), plt.title('D'), plt.show()
         
-        problemSB = ProblemLinearReg(x.clone().zero(), y, Blurring, regsL1=D, epsL1=1e-2,
-                                     minBound=x.clone().set(0.0))
-        
-        SB = SplitBregmanSolver(BasicStopper(niter=300), niter_inner=1, niter_solver=30,
+        problemSB = ProblemLinearReg(x.clone().zero(), y, G, regsL1=[Dx, Dz], epsL1=[.001]*2)
+        SB = SplitBregmanSolver(BasicStopper(niter=100), niter_inner=10, niter_solver=50,
                                 linear_solver='LSQR', breg_weight=1., warm_start=True)
-        SB.setDefaults(save_obj=True)
         SB.run(problemSB, verbose=True, inner_verbose=False)
         if PLOT:
             plt.figure(figsize=(5, 4))
             plt.imshow(problemSB.model.getNdArray(), cmap='bone', vmin=x.min(), vmax=x.max()), plt.colorbar()
-            plt.title(r'SB TV, $\varepsilon=%.2e$, %d iter'
-                      % (problemSB.epsL1[0], SB.stopper.niter))
+            plt.title(r'SB TV, $\varepsilon=%.e$, %d iter' % (problemSB.epsL1[0], SB.stopper.niter))
             plt.show()
             plt.figure(figsize=(5, 4))
             plt.plot(np.log10(SB.obj / SB.obj[0]), 'r', lw=1, label='SplitBregman')

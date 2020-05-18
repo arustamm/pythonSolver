@@ -40,6 +40,17 @@ def _shrinkage1(x, thresh):
     return x / (xabs + 1e-10) * np.maximum(xabs - thresh, 0)
 
 
+def _proximal_L2(x, thresh, eps=1e-10):
+    """
+    Proximal operator for L2 distance as implemented in
+    https://sporco.readthedocs.io/en/latest/modules/sporco.prox.html#sporco.prox.prox_l2
+    """
+    x_norm = x.norm()
+    m = max(0, x_norm - thresh)
+    c = m / (x_norm + eps)
+    return x.clone().scale(c)
+
+
 class ISTAsolver(Solver):
     """
     Iterative Shrikage-Thresholding Algorithm (ISTA) solver to solve:
@@ -523,10 +534,7 @@ class SplitBregmanSolver(Solver):
         self.iter_msg = "iter = %s, obj = %.5e, df_obj = %.2e, reg_obj = %.2e, resnorm = %.2e"
         # self.iter_msg = "iter = %s, obj = %s, df_obj = %s, reg_obj = %s, resnorm = %s"
     
-    # def __del__(self):
-    #     print('Destructor called, Split-Bregman solver deleted')
-    
-    def run(self, problem, verbose=False, inner_verbose=False, restart=False, initial_guess=None):
+    def run(self, problem, verbose=False, inner_verbose=False, restart=False):
         """Running SplitBregman solver"""
         if type(problem) != ProblemLinearReg:
             raise TypeError("Input problem object must be a ProblemLinearReg")
@@ -548,10 +556,10 @@ class SplitBregmanSolver(Solver):
         RL1x = breg_b.clone()  # store RegL1 * solution
         
         sb_mdl = problem.model.clone()
+        if sb_mdl.norm() != 0.:
+            self.warm_start = True
         sb_mdl_old = problem.model.clone()
-        if not problem.op.domain.checkSame(sb_mdl):
-            raise ValueError("ERROR! The initial guess and the operator domain mismatch.")
-        
+
         # TODO linear_solver accepts only one regularizer and one epsilon:
         #  we must convert reg_op to a scaled version and epsilon to 1.
         regL2_op_scaled_list = [np.sqrt(problem.epsL2[i]) * problem.regL2_op.ops[i] for i in range(problem.nregsL2)]
@@ -631,8 +639,8 @@ class SplitBregmanSolver(Solver):
                         self.logger.addToLog("\n" + msg)
             
             if self.logger_lin_solv:
-                self.logger_lin_solv.addToLog(
-                    "\n\t\t\tOuter iteration: %s" % (str(outer_iter).zfill(self.stopper.zfill)))
+                self.logger_lin_solv.addToLog("\n\t\t\tOuter iteration: %s"
+                                              % (str(outer_iter).zfill(self.stopper.zfill)))
                 
             if isnan(obj0):
                 raise ValueError("Objective function values NaN!")
@@ -657,7 +665,8 @@ class SplitBregmanSolver(Solver):
                 linear_problem.data.vecs[-1].vecs[-1].copy(breg_b)
                 linear_problem.data.vecs[-1].vecs[-1].scaleAdd(breg_d, -1., 1.)
                 for ii in range(problem.nregsL1):
-                    linear_problem.data.vecs[-1].vecs[problem.nregsL2 + ii].scale(np.sqrt(problem.epsL1[ii]))
+                    # linear_problem.data.vecs[-1].vecs[problem.nregsL2 + ii].scale(np.sqrt(problem.epsL1[ii]))
+                    linear_problem.data.vecs[-1].vecs[-1].vecs[ii].scale(np.sqrt(problem.epsL1[ii]))
                 linear_problem.setDefaults()
                 
                 # solve inner problem
