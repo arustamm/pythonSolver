@@ -814,7 +814,7 @@ class MCMCsolver(pySolver.Solver):
         Constructor for MCMC Solver/Sampler:
         :param stopper: Stopper object to terminate sampling
         :param prop_distr: proposal distribution to be employed ["Uni","Gauss"]
-        1) "Uni" = uniform distribution: provide max_step U~[-max_step,max_step]
+        1) "Uni" = uniform distribution: provide max_step U~[-min_step,max_step]
         2) "Gauss" = Gaussian distribution: provide sigma N~[0,sigma]
         :param logger: Logger, object to save inversion information at runtime [None]
         """
@@ -830,6 +830,7 @@ class MCMCsolver(pySolver.Solver):
         self.prop_dist = kwargs.get("prop_distr")
         if self.prop_dist == "Uni":
             self.max_step = kwargs.get("max_step")
+            self.min_step = kwargs.get("min_step", -self.max_step)
         elif self.prop_dist == "Gauss":
             self.sigma = kwargs.get("sigma")
         else:
@@ -909,7 +910,7 @@ class MCMCsolver(pySolver.Solver):
         while True:
             # Generate a candidate y from x according to the proposal distribution r(x_cur, x_prop)
             if self.prop_dist == "Uni":
-                mcmc_dmodl.getNdArray()[:] = np.random.uniform(low=-self.max_step, high=self.max_step,
+                mcmc_dmodl.getNdArray()[:] = np.random.uniform(low=self.min_step, high=self.max_step,
                                                                size=mcmc_dmodl.shape)
             elif self.prop_dist == "Gauss":
                 mcmc_dmodl.getNdArray()[:] = np.random.normal(scale=self.sigma, size=mcmc_dmodl.shape)

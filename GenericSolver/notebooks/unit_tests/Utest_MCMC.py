@@ -69,7 +69,7 @@ if __name__ == '__main__':
     sigma1 = np.array([[1., 3. / 5.], [3. / 5., 2.]])
     sigma2 = np.array([[2., -3. / 5.], [-3. / 5., 1.]])
     prblm = multi_gauss_prblm(mu1, mu2, sigma1, sigma2)
-    MCMC1 = MCMC(stopper=SamplingStopper(10000), prop_distr="Uni", max_step=0.1)
+    MCMC1 = MCMC(stopper=SamplingStopper(1000), prop_distr="Uni", max_step=np.array([0.1,0.2]), min_step=np.array([-0.1,-0.2]))
     MCMC1.setDefaults(save_obj=True, save_model=True)
     MCMC1.run(prblm, verbose=True)
     plt.plot(MCMC1.obj)
