@@ -836,8 +836,12 @@ class MCMCsolver(pySolver.Solver):
         else:
             raise ValueError("Not supported prop_distr")
         # print formatting
-        self.iter_msg = "sample number = %s, obj = %.5e, resnorm = %.2e, feval = %d, acceptance rate = %.4e"
+        self.iter_msg = "sample number = %s, log-obj = %.5e, resnorm = %.2e, feval = %d, acceptance rate %% = %2.5f, alpha = %.8e"
         self.ndigits = self.stopper.zfill
+        # Temperature Metropolis sampling algorithm (see, Monte Carlo sampling of
+        # solutions to inverse problems by Mosegaard and Tarantola, 1995)
+        # If not provided the likelihood is assumed to be passed to the run method
+        self.T = kwargs.get("T", None)
 
     def run(self, problem, verbose=False, restart=False):
         """Running MCMC solver/sampler"""
@@ -893,10 +897,11 @@ class MCMCsolver(pySolver.Solver):
         if not restart:
             # iteration info
             msg = self.iter_msg % (str(iiter).zfill(self.ndigits),
-                                   obj_current,
+                                   np.log(obj_current),
                                    res_norm,
                                    problem.get_fevals(),
-                                   float(accepted)/iiter)
+                                   100.*float(accepted)/iiter,
+                                   1.0)
             if verbose:
                 print(msg)
             # Writing on log file
@@ -921,27 +926,33 @@ class MCMCsolver(pySolver.Solver):
             mcmc_mdl_check.copy(mcmc_mdl_prop)
             # Projecting model onto the bounds (if any)
             if "bounds" in dir(problem):
-                mcmc_mdl_prop.bounds.apply(mcmc_mdl_check)
+                problem.bounds.apply(mcmc_mdl_check)
             if mcmc_mdl_prop.isDifferent(mcmc_mdl_check):
                 # Model hit bounds
                 if self.logger:
-                    self.logger.addToLog("\tModel hit provided bounds. Projecting it onto them.")
-                obj_prop = np.inf
-                alpha = 1.1  # Rejecting the model
+                    self.logger.addToLog("\tModel hit provided bounds. Resampling proposed point.")
+                continue
             else:
                 obj_prop = problem.get_obj(mcmc_mdl_prop)
                 # Check if objective function value is NaN
                 if isnan(obj_prop):
                     raise ValueError("objective function of proposed model is NaN!")
-                # computing log acceptance ratio
-                if obj_current > zero and obj_prop > zero:
-                    alpha = min(1.0, obj_prop / obj_current)
-                elif obj_current <= zero < obj_prop:
-                    # condition to avoid zero/zero
-                    alpha = 0.
+                if self.T:
+                    # Using Metropolis method assuming an objective function was passed
+                    alpha = 1.0
+                    if obj_prop > obj_current:
+                        alpha = np.exp(-(obj_prop-obj_current)/self.T)
                 else:
-                    # condition to avoid division by zero
-                    alpha = 1.
+                    # computing log acceptance ratio assuming likelihood function
+                    if obj_current > zero and obj_prop > zero:
+                        alpha = min(1.0, obj_prop/obj_current)
+                    elif obj_current <= zero < obj_prop:
+                        # condition to avoid zero/zero
+                        alpha = 0.
+                    else:
+                        # condition to avoid division by zero
+                        alpha = 1.
+
 
             # Increase counter of tested samples
             iiter += 1
@@ -957,10 +968,11 @@ class MCMCsolver(pySolver.Solver):
 
             # iteration info
             msg = self.iter_msg % (str(iiter).zfill(self.ndigits),
-                                   obj_current,
+                                   np.log(obj_current),
                                    res_norm,
                                    problem.get_fevals(),
-                                   float(accepted) / iiter)
+                                   100.*float(accepted) / iiter,
+                                   alpha)
             if verbose:
                 print(msg)
             # Writing on log file
