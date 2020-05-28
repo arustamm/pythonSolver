@@ -836,7 +836,7 @@ class MCMCsolver(pySolver.Solver):
         else:
             raise ValueError("Not supported prop_distr")
         # print formatting
-        self.iter_msg = "sample number = %s, log-obj = %.5e, resnorm = %.2e, feval = %d, acceptance rate %% = %2.5f, alpha = %.8e"
+        self.iter_msg = "sample number = %s, log-obj = %.5e, resnorm = %.2e, feval = %d, acceptance rate %% = %2.5f, alpha = %1.5f"
         self.ndigits = self.stopper.zfill
         # Temperature Metropolis sampling algorithm (see, Monte Carlo sampling of
         # solutions to inverse problems by Mosegaard and Tarantola, 1995)
