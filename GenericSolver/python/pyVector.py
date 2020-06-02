@@ -461,7 +461,7 @@ class superVector(vector):
         """Method to write to vector to file within a Vector set"""
         for ii, vec_cmp in enumerate(self.vecs):
             # Writing components to different files
-            filename_cmp = "".join(filename.split('.')[:-1]) + "_comp%s.H" % (ii + 1)
+            filename_cmp = ".".join(filename.split('.')[:-1]) + "_comp%s.H" % (ii + 1)
             # Writing files (recursively)
             vec_cmp.writeVec(filename_cmp, mode)
         return
