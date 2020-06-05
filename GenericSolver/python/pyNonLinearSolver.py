@@ -842,6 +842,8 @@ class MCMCsolver(pySolver.Solver):
         # solutions to inverse problems by Mosegaard and Tarantola, 1995)
         # If not provided the likelihood is assumed to be passed to the run method
         self.T = kwargs.get("T", None)
+        # Reject sample outside of bounds or project it onto them
+        self.reject_bound = True
 
     def run(self, problem, verbose=False, restart=False):
         """Running MCMC solver/sampler"""
@@ -928,30 +930,36 @@ class MCMCsolver(pySolver.Solver):
             if "bounds" in dir(problem):
                 problem.bounds.apply(mcmc_mdl_check)
             if mcmc_mdl_prop.isDifferent(mcmc_mdl_check):
+                msg = "\tModel hit provided bounds. Projecting onto them."
+                if self.reject_bound:
+                    msg = "\tModel hit provided bounds. Resampling proposed point."
                 # Model hit bounds
                 if self.logger:
-                    self.logger.addToLog("\tModel hit provided bounds. Resampling proposed point.")
-                continue
-            else:
-                obj_prop = problem.get_obj(mcmc_mdl_prop)
-                # Check if objective function value is NaN
-                if isnan(obj_prop):
-                    raise ValueError("objective function of proposed model is NaN!")
-                if self.T:
-                    # Using Metropolis method assuming an objective function was passed
-                    alpha = 1.0
-                    if obj_prop > obj_current:
-                        alpha = np.exp(-(obj_prop-obj_current)/self.T)
+                    self.logger.addToLog(msg)
+                if self.reject_bound:
+                    continue
                 else:
-                    # computing log acceptance ratio assuming likelihood function
-                    if obj_current > zero and obj_prop > zero:
-                        alpha = min(1.0, obj_prop/obj_current)
-                    elif obj_current <= zero < obj_prop:
-                        # condition to avoid zero/zero
-                        alpha = 0.
-                    else:
-                        # condition to avoid division by zero
-                        alpha = 1.
+                    mcmc_mdl_prop.copy(mcmc_mdl_check)
+
+            obj_prop = problem.get_obj(mcmc_mdl_prop)
+            # Check if objective function value is NaN
+            if isnan(obj_prop):
+                raise ValueError("objective function of proposed model is NaN!")
+            if self.T:
+                # Using Metropolis method assuming an objective function was passed
+                alpha = 1.0
+                if obj_prop > obj_current:
+                    alpha = np.exp(-(obj_prop-obj_current)/self.T)
+            else:
+                # computing log acceptance ratio assuming likelihood function
+                if obj_current > zero and obj_prop > zero:
+                    alpha = min(1.0, obj_prop/obj_current)
+                elif obj_current <= zero < obj_prop:
+                    # condition to avoid zero/zero
+                    alpha = 0.
+                else:
+                    # condition to avoid division by zero
+                    alpha = 1.
 
 
             # Increase counter of tested samples
