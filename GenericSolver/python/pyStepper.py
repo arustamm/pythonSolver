@@ -436,7 +436,7 @@ class CvSrchStep(Stepper):
             # Test for convergence
             if (brackt and (alpha <= alpha_int_min or alpha >= alpha_int_max)) or (not cstep_success):
                 if logger:
-                    logger.addToLog("\tRounding errors prevent further progress. There may not be a step which satisfies"
+                    logger.addToLog("\tRounding errors prevent further progress. There may not be a step which satisfies "
                                     "the sufficient decrease and curvature conditions. Tolerances may be too small.")
                 break
             if alpha == self.alpha_max and phi_alpha <= phi_test1 and dphi_alpha <= dphi_test:
