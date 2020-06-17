@@ -9,6 +9,7 @@ import numpy as np
 
 # For checking if a single argument was passed to a constructor
 from collections.abc import Iterable
+import time  # DEBUG
 
 
 def call_constructor(constr, args):
@@ -44,12 +45,6 @@ def call_adjoint(opObj, add, model, data):
     return res
 
 
-def add_from_NdArray(vecObj, arr):
-    """Function to add array to remote vector"""
-    vecObj.getNdArray()[:] += arr
-    return
-
-
 def getNdfuture(vecObj):
     """Function to obtain NdArray as a future object"""
     Nd = vecObj.getNdArray()
@@ -62,6 +57,7 @@ def call_func_name(opObj, func_name, *args):
     res = fun2call(*args)
     return res
 
+
 def add_from_NdArray(vecObj, NdArray):
     """Function to add vector values from numpy array"""
     vecObj.getNdArray()[:] += NdArray
@@ -72,7 +68,7 @@ class DaskOperator(Op.Operator):
     """
 	   Class to apply multiple operators in parallel through Dask and DaskVectors
 	"""
-    
+
     def __init__(self, dask_client, op_constructor, op_args, chunks, **kwargs):
         """
 		   Dask Operator constructor
@@ -100,7 +96,7 @@ class DaskOperator(Op.Operator):
                 "Number of provide chunks (%s) different than the number of workers (%s)" % (len(chunks), N_wrk))
         # Check if many arguments are passed to construct different operators
         N_args = len(op_args)
-        N_ops = np.sum(chunks)
+        N_ops = int(np.sum(chunks))
         if N_args > 1:
             if N_args != N_ops:
                 raise ValueError(
@@ -109,7 +105,7 @@ class DaskOperator(Op.Operator):
         else:
             if N_ops > 1:
                 op_args = [op_args for ii in range(N_ops)]
-        
+
         # Instantiation of the operators on each worker
         self.dask_ops = []
         for iwrk, wrkId in enumerate(wrkIds):
@@ -117,8 +113,10 @@ class DaskOperator(Op.Operator):
                 self.dask_ops.append(
                     self.client.submit(call_constructor, op_constructor, op_args.pop(0), workers=[wrkId], pure=False))
         daskD.wait(self.dask_ops)
-        if (self.dask_ops[0].status == 'error'):
-            print(self.dask_ops[0].result())
+        for idx in range(len(self.dask_ops)):
+            if (self.dask_ops[idx].status == 'error'):
+                print("Error for dask operator %s"%(idx))
+                print(self.dask_ops[idx].result())
         # Creating domain and range of the Dask operator
         dom_vecs = []  # List of remote domain vectors
         rng_vecs = []  # List of remote range vectors
@@ -150,7 +148,7 @@ class DaskOperator(Op.Operator):
 
     def __str__(self):
         return " DaskOp"
-    
+
     def forward(self, add, model, data):
         """Forward Dask operator"""
         if not isinstance(model, DaskVector):
@@ -163,7 +161,7 @@ class DaskOperator(Op.Operator):
         fwd_ftr = self.client.map(call_forward, self.dask_ops, add, model.vecDask, data.vecDask, pure=False)
         daskD.wait(fwd_ftr)
         return
-    
+
     def adjoint(self, add, model, data):
         """Adjoint Dask operator"""
         if not isinstance(model, DaskVector):
@@ -176,7 +174,7 @@ class DaskOperator(Op.Operator):
         adj_ftr = self.client.map(call_adjoint, self.dask_ops, add, model.vecDask, data.vecDask, pure=False)
         daskD.wait(adj_ftr)
         return
-    
+
     def set_background(self, model):
         """Function to call set_background function of each dask operator"""
         if self.set_background_name == None:
@@ -189,7 +187,7 @@ class DaskOperator(Op.Operator):
                                      pure=False)
         daskD.wait(setbkg_ftr)
         return
-    
+
     def set_aux(self, aux_vec):
         """Function to call set_nl or set_lin_jac functions of each dask operator"""
         if self.set_aux_name == None:
@@ -210,7 +208,7 @@ class DaskSpreadOp(Op.Operator):
 	   fwd: | v2 | = | I | v  adj: | v | = | I | v1 + | I | v2 + | I | v3
 	        | v3 |   | I |
 	"""
-    
+
     def __init__(self, dask_client, domain, chunks):
         """
 		   Dask Operator constructor
@@ -230,7 +228,7 @@ class DaskSpreadOp(Op.Operator):
 
     def __str__(self):
         return " DaskSpr"
-    
+
     def forward(self, add, model, data):
         """Forward operator"""
         if not isinstance(data, DaskVector):
@@ -245,7 +243,7 @@ class DaskSpreadOp(Op.Operator):
         else:
             # Getting the numpy array to the local model vector
             modelNd = model.getNdArray()
-        
+
         # Spreading model array to workers
         if len(self.chunks) == self.dask_client.getNworkers():
             dataVecList = data.vecDask.copy()
@@ -253,13 +251,14 @@ class DaskSpreadOp(Op.Operator):
                 arrD = self.client.scatter(modelNd, workers=[wrkId])
                 daskD.wait(arrD)
                 for ii in range(self.chunks[iwrk]):
-                    daskD.wait(self.client.submit(add_from_NdArray, dataVecList.pop(0), arrD, pure=False))
+                    daskD.wait(
+                        self.client.submit(add_from_NdArray, dataVecList.pop(0), arrD, workers=[wrkId], pure=False))
         else:
             # Letting Dask handling the scattering of the data (not ideal)
             futures = self.client.map(add_from_NdArray, data.vecDask, [modelNd] * len(data.vecDask), pure=False)
             daskD.wait(futures)
         return
-    
+
     def adjoint(self, add, model, data):
         """Adjoint operator"""
         if not isinstance(data, DaskVector):
@@ -273,12 +272,13 @@ class DaskSpreadOp(Op.Operator):
         daskD.wait(sum_array)
         if isinstance(model, DaskVector):
             # Getting the future to the first vector in the Dask vector
-            daskD.wait(self.client.submit(add_array, model, sum_array, pure=False))
+            daskD.wait(self.client.submit(add_from_NdArray, model, sum_array, pure=False))
         else:
             # Getting the numpy array to the local model vector
             modelNd = model.getNdArray()
             modelNd[:] += sum_array.result()
         return
+
 
 class DaskCollectOp(Op.Operator):
     """
@@ -315,7 +315,7 @@ class DaskCollectOp(Op.Operator):
         # Adding remove arrays to local one
         for arr in modelNd_list:
             n_elem = arr.size
-            dataNd[idx:idx+n_elem] += arr.ravel()
+            dataNd[idx:idx + n_elem] += arr.ravel()
             idx += n_elem
         return
 
@@ -335,9 +335,8 @@ class DaskCollectOp(Op.Operator):
         for idx, shape in enumerate(shapes):
             n_elem = np.prod(shape)
             wrkId = list(client.who_has(model.vecDask[idx]).values())[0]
-            arrD = client.scatter(dataNd[idx_el:idx_el+n_elem], workers=wrkId)
+            arrD = client.scatter(dataNd[idx_el:idx_el + n_elem], workers=wrkId)
             daskD.wait(arrD)
             daskD.wait(client.submit(add_from_NdArray, model.vecDask[idx], arrD, pure=False))
             idx_el += n_elem
         return
-
