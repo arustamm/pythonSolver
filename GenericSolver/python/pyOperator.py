@@ -53,7 +53,7 @@ class Operator:
             raise ValueError('Operator range and data domain mismatch')
 
         Stop = pyStopper.BasicStopper(niter=niter)
-        P = pyProblem.ProblemL2Linear(model=self.domain.cloneSpace(), data=other, op=self)
+        P = pyProblem.ProblemL2Linear(model=self.domain.clone(), data=other, op=self)
         Solver = pyLinearSolver.LCGsolver(Stop)
         Solver.run(P, verbose=False)
 
@@ -743,19 +743,19 @@ class NonLinearOperator(Operator):
             raise ValueError("ERROR! The two provided operators have different ranges")
         super(NonLinearOperator, self).__init__(self.nl_op.domain, self.nl_op.range)
 
-    def dotTest(self):
+    def dotTest(self, **kwargs):
         """
         Raising an exception, dot-product test must be performed directly onto linear operator.
         """
         raise NotImplementedError("Perform dot-product test directly on the linear operator.")
 
-    def linTest(self, background, pert=None, scale=np.logspace(-6,6,13), plot=False):
+    def linTest(self, background, pert=None, alpha=np.logspace(-6, 0, 100), plot=False):
         """
         Linearization test function. It plots the model-perturbation norm vs linearization error norm
         :param background: vector class - Background model used during the linearization test
         :param pert: vector class - Model-perturbation vector to be used during linearization test [None]
                      if not provided a random perturbation is employed
-        :param scale: array - array of scalars to scale the pert vector during the test [np.logspace(-6,6,13)]
+        :param alpha: array - array of scalars to scale the pert vector during the test [np.logspace(-6,0,100)]
         :param plot: boolean - whether to plot the linearization error vs perturbation scale or not
         :return:
         :param scale
@@ -776,33 +776,31 @@ class NonLinearOperator(Operator):
         self.nl_op.forward(False, m0, d0)
         # setting m0 for the Jacobian matrix
         self.set_background(m0)
-        for sc in scale:
-            # normalizing perturbation
-            pert.scale(1.0 / pert.norm())
+        # computing F(m0)dm = dlin
+        self.lin_op.forward(False, pert, dlin)
+        for sc in alpha:
+            # print(sc)
             # computing f(m0+dm) = d1
             m.copy(m0)
             m.scaleAdd(pert, 1.0, sc)
             self.nl_op.forward(False, m, d1)
-            # computing F(m0)dm = dlin
-            pert.scale(sc)
-            self.lin_op.forward(False, pert, dlin)
             # computing f(m0+dm) - f(m0)
             d1.scaleAdd(d0, 1.0, -1.0)
             # computing f(m0+dm) - f(m0) - F(m0)dm (i.e., linearization error)
-            d1.scaleAdd(dlin, 1.0, -1.0)
+            d1.scaleAdd(dlin, 1.0, -sc)
             lin_err.append(d1.norm())
         lin_err = np.array(lin_err)
         if plot:
             import matplotlib.pyplot as plt
             fig, ax = plt.subplots(figsize=(6, 3))
-            plt.loglog(scale*scale, lin_err*lin_err, 'r')
+            plt.plot(alpha, lin_err, 'r')
             ax.autoscale(enable=True, axis='y', tight=True)
             ax.autoscale(enable=True, axis='x', tight=True)
-            plt.xlabel("$|dm|_2^2$")
-            plt.ylabel("$|f(m_0+dm) - f(m_0) - F(m_0)dm|_2^2$")
+            plt.xlabel(r"$\alpha$")
+            plt.ylabel(r"$|f(m_0+\alpha dm) - f(m_0) - \alpha F(m_0)dm|_2$")
             plt.title('Linearization error')
             plt.show()
-        return scale, lin_err
+        return alpha, lin_err
 
 
 class _combNonLinearOperator(NonLinearOperator):
@@ -941,7 +939,7 @@ class cosJacobian(Operator):
         self.backgroundNd = self.background.getNdArray()
 
     def forward(self, add, model, data):
-        """Forward operator cos(x)"""
+        """Forward operator"""
         self.checkDomainRange(model, data)
         if not add:
             data.zero()
@@ -949,7 +947,7 @@ class cosJacobian(Operator):
         return
 
     def adjoint(self, add, model, data):
-        """Forward operator cos(x)"""
+        """Adjoint operator"""
         self.checkDomainRange(model, data)
         if not add:
             model.zero()
@@ -1059,7 +1057,7 @@ def main():
     xx_inv = S / yy
 
     # test for linTest method
-    x = pyVector.vectorIC((10, 1))
+    x = pyVector.vectorIC(np.zeros((10, 20)))
     cosOp = cosOperator(x)
     cosJac = cosJacobian(x)
     cosNl = NonLinearOperator(cosOp, cosJac, cosJac.set_background)
