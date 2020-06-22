@@ -57,9 +57,9 @@ def hashfile(binfile):
 
 def RunShellCmd(cmd, print_cmd=False, print_output=False, synch=True, check_code=True, get_stat=True, get_output=True):
     """Function to run a Shell command through python, return code and """
-	# Overwrites any previous definition (when used within other programs)
+    # Overwrites any previous definition (when used within other programs)
     global debug, debug_log
-	# Running command synchronously or asynchronously?
+    # Running command synchronously or asynchronously?
     if (synch):
         if debug:
             print_cmd = True
@@ -68,12 +68,12 @@ def RunShellCmd(cmd, print_cmd=False, print_output=False, synch=True, check_code
         info = "RunShellCmd running: \'%s\'" % cmd
         if (isinstance(debug_log, logger)): debug_log.addToLog(info)
         if print_cmd: print(info)
-		# Starting the process (Using PIPE to streaming output)
+        # Starting the process (Using PIPE to streaming output)
         proc = subprocess.Popen([cmd], stdout=subprocess.PIPE,
                                 stderr=subprocess.STDOUT, shell=True, universal_newlines=True)
-		# Creating Stdout to save command output
+        # Creating Stdout to save command output
         stdout = []
-		# Streaming the stdout to screen if requested
+        # Streaming the stdout to screen if requested
         while True:
             line = proc.stdout.readline()
             if (line == '' and proc.poll() is not None):
@@ -84,7 +84,7 @@ def RunShellCmd(cmd, print_cmd=False, print_output=False, synch=True, check_code
                 if (line != ''):
                     # Print to debug file?
                     if (isinstance(debug_log, logger)): debug_log.addToLog(line)
-					# Print to screen?
+                    # Print to screen?
                     if print_output: print(line)
                     sys.stdout.flush()
                 proc.stdout.flush()
@@ -94,18 +94,18 @@ def RunShellCmd(cmd, print_cmd=False, print_output=False, synch=True, check_code
         global DEVNULL
         proc = subprocess.Popen([cmd], stdout=DEVNULL, shell=True, universal_newlines=True)
         return proc, "Running command asynchronously, returning process"
-	# Command has finished, checking error code and returning requested variables
+    # Command has finished, checking error code and returning requested variables
     err_code = proc.poll()
     return_var = []
-	# Returning error code or status
+    # Returning error code or status
     if (get_stat): return_var.append(err_code)
-	# Returning output
+    # Returning output
     if (get_output): return_var.append(stdout)
-	# Checking error code
+    # Checking error code
     if (check_code and err_code != 0):
         # Writing error code to debug file if any
         info = "ERROR! Command failed: %s; Error code: %s" % (cmd, err_code)
         if (isinstance(debug_log, logger)): debug_log.addToLog(info)
         raise SystemError("ERROR! Command failed: %s; Error code: %s; Output: %s" % (cmd, err_code, stdout))
-	# Returning
+    # Returning
     return return_var
