@@ -75,6 +75,7 @@ class DaskClient:
     :param hostnames : - list; list of strings containing the host names or IP addresses of the machines that
     the user wants to use in their cluster/client (First hostname will be running the scheduler!) [None]
     :param scheduler_file_prefix : string; prefix to used to create dask scheduler-file.
+    :param logging : - boolean; Logging scheduler and worker stdout to files within dask_logs folder [True]
     Must be a mounted path on all the machines. Necessary if hostnames are provided [$HOME/scheduler-]
     2) PBS cluster:
     :param pbs_params : - dict; dictionary containing PBS Cluster options (see help(PBSCluster) for help) [None]
@@ -88,6 +89,7 @@ class DaskClient:
         hostnames = kwargs.get("hostnames", None)
         pbs_params = kwargs.get("pbs_params", None)
         lsf_params = kwargs.get("lsf_params", None)
+        logging = kwargs.get("logging", True)
         ClusterInit = None
         cluster_params = None
         if pbs_params:
@@ -103,12 +105,23 @@ class DaskClient:
             scheduler_file_prefix = kwargs.get("scheduler_file_prefix", os.path.expanduser("~") + "/scheduler-")
             # Random port number
             self.port = ''.join(["1"] + [str(random.randint(0, 9)) for _ in range(3)])
+            # Creating logging interface
+            stdout_scheduler = DEVNULL
+            stdout_workers = [DEVNULL]*len(hostnames)
+            if logging:
+                # Creating logging folder
+                try:
+                    os.mkdir("dask_logs")
+                except OSError:
+                    pass
+                stdout_scheduler = open("dask_logs/dask-scheduler.log", "w")
+                stdout_workers = [open("dask_logs/dask-worker-%s.log"%(ii+1), "w") for ii in range(len(hostnames))]
             # Starting scheduler
             scheduler_file = "%s%s" % (scheduler_file_prefix, self.port) + ".json"
             cmd = ["ssh"] + [hostnames[0]] + \
                   ["dask-scheduler"] + ["--scheduler-file"] + [scheduler_file] + \
                   ["--port"] + [self.port]
-            self.scheduler_proc = subprocess.Popen(cmd, stdout=DEVNULL, stderr=DEVNULL)
+            self.scheduler_proc = subprocess.Popen(cmd, stdout=stdout_scheduler, stderr=subprocess.STDOUT)
             # Checking if scheduler has started and getting tpc information
             t0 = time.time()
             while True:
@@ -122,10 +135,10 @@ class DaskClient:
             # Starting workers on all the other hosts
             self.worker_procs = []
             worker_ips = []
-            for hostname in hostnames:
+            for ii, hostname in enumerate(hostnames):
                 cmd = ["ssh"] + [hostname] + ["dask-worker"] + ["--scheduler-file"] + [scheduler_file]
                 # Starting worker
-                self.worker_procs.append(subprocess.Popen(cmd, stdout=DEVNULL, stderr=DEVNULL))
+                self.worker_procs.append(subprocess.Popen(cmd, stdout=stdout_workers[ii], stderr=subprocess.STDOUT))
                 # Obtaining IP address of host for the started worker (necessary to resort workers)
                 worker_ips.append(
                     subprocess.check_output(
