@@ -9,7 +9,7 @@ import json
 
 DEVNULL = open(os.devnull, 'wb')
 import dask.distributed as daskD
-from dask_jobqueue import PBSCluster, LSFCluster
+from dask_jobqueue import PBSCluster, LSFCluster, SLURMCluster
 
 
 def get_tcp_info(filename):
@@ -85,10 +85,15 @@ class DaskClient:
     :param lfs_params : - dict; dictionary containing LSF Cluster options (see help(LSFCluster) for help) [None]
     :param n_workers : - int; number of workers to be submitted to the cluster
     :param n_workers: - int; number of workers per job [1]
+    4) SLURM cluster:
+    :param slurm_params : - dict; dictionary containing SLURM Cluster options (see help(SLURMCluster) for help) [None]
+    :param n_workers : - int; number of workers to be submitted to the cluster
+    :param n_workers: - int; number of workers per job [1]
     """
         hostnames = kwargs.get("hostnames", None)
         pbs_params = kwargs.get("pbs_params", None)
         lsf_params = kwargs.get("lsf_params", None)
+        slurm_params = kwargs.get("slurm_params", None)
         logging = kwargs.get("logging", True)
         ClusterInit = None
         cluster_params = None
@@ -98,6 +103,9 @@ class DaskClient:
         elif lsf_params:
             cluster_params = lsf_params
             ClusterInit = LSFCluster
+        elif slurm_params:
+            cluster_params = slurm_params
+            ClusterInit = SLURMCluster
         # Checking interface to be used
         if hostnames:
             if not isinstance(hostnames, list):
@@ -176,7 +184,7 @@ class DaskClient:
             self.cluster = ClusterInit(**cluster_params)
             self.client, self.WorkerIds = client_startup(self.cluster, n_jobs, n_jobs*n_wrks)
         else:
-            raise ValueError("Either hostnames or pbs_params or lsf_params must be provided!")
+            raise ValueError("Either hostnames or pbs_params or lsf_params or slurm_params must be provided!")
         # Closing dask processes
         atexit.register(self.client.shutdown)
 
