@@ -8,6 +8,7 @@ from shutil import copyfile
 from sys import version_info
 
 import numpy as np
+import pickle, h5py
 import sep_util
 # other modules
 import sys_util
@@ -138,9 +139,118 @@ class vector:
         """Function to check to make sure the vectors exist in the same space"""
         raise NotImplementedError("checkSame must be overwritten")
 
+    # def writeVec(self, filename, mode='w'):
+    #     """Function to write vector to file"""
+    #     raise NotImplementedError("writeVec must be overwritten")
     def writeVec(self, filename, mode='w'):
         """Function to write vector to file"""
-        raise NotImplementedError("writeVec must be overwritten")
+        # Check writing mode
+        if not mode in 'wa':
+            raise ValueError("Mode must be appending 'a' or writing 'w' ")
+        # Construct ax_info if the object has getHyper
+        if hasattr(self, "getHyper"):
+            hyper = self.getHyper()
+            self.ax_info = []
+            for iaxis in range(hyper.getNdim()):
+                self.ax_info.append([hyper.getAxis(iaxis + 1).n,
+                                     hyper.getAxis(iaxis + 1).o,
+                                     hyper.getAxis(iaxis + 1).d,
+                                     hyper.getAxis(iaxis + 1).label])
+        
+        # check output file type
+        _, ext = os.path.splitext(filename)  # file extension
+        
+        # SEP vector with header in filename.H and binary in DATAPATH/filename.H@
+        if ext == ".H":
+            # writing header/pointer file if not present and not append mode
+            if not (os.path.isfile(filename) and mode in 'a'):
+                binfile = sep_util.datapath + filename.split('/')[-1] + '@'
+                with open(filename, mode) as f:
+                    # Writing axis info
+                    if self.ax_info:
+                        for ii, ax_info in enumerate(self.ax_info):
+                            ax_id = ii + 1
+                            f.write("n%s=%s o%s=%s d%s=%s label%s='%s'\n" % (
+                                ax_id, ax_info[0], ax_id, ax_info[1], ax_id, ax_info[2], ax_id, ax_info[3]))
+                    else:
+                        for ii, n_axis in enumerate(tuple(reversed(self.shape))):
+                            ax_id = ii + 1
+                            f.write("n%s=%s o%s=0.0 d%s=1.0 \n" % (ax_id, n_axis, ax_id, ax_id))
+                    # Writing last axis for allowing appending (unless we are dealing with a scalar)
+                    if self.shape != (1,):
+                        ax_id = self.ndims + 1
+                        f.write("n%s=%s o%s=0.0 d%s=1.0 \n" % (ax_id, 1, ax_id, ax_id))
+                    f.write("in='%s'\n" % (binfile))
+                    esize = "esize=4\n"
+                    if self.getNdArray().dtype == np.complex64:
+                        esize = "esize=8\n"
+                    f.write(esize)
+                    f.write("data_format=\"native_float\"\n")
+                f.close()
+            else:
+                binfile = sep_util.get_binary(filename)
+                if (mode in 'a'):
+                    axes = sep_util.get_axes(filename)
+                    # Number of vectors already present in the file
+                    if self.shape == (1,):
+                        n_vec = axes[0][0]
+                        append_dim = self.ndims
+                    else:
+                        n_vec = axes[self.ndims][0]
+                        append_dim = self.ndims + 1
+                    with open(filename, mode) as f:
+                        f.write("n%s=%s o%s=0.0 d%s=1.0 \n" % (append_dim, n_vec + 1, append_dim, append_dim))
+                    f.close()
+            # Writing binary file
+            fmt = '>f'
+            if self.getNdArray().dtype == np.complex64 or self.getNdArray().dtype == np.complex128:
+                format = '>c8'
+            with open(binfile, mode + 'b') as f:
+                # Writing big-ending floating point number
+                if np.isfortran(self.getNdArray()):  # Forcing column-wise binary writing
+                    # self.getNdArray().flatten('F').astype(fmt,copy=False).tofile(fid)
+                    self.getNdArray().flatten('F').tofile(f, format=fmt)
+                else:
+                    # self.getNdArray().astype(fmt,order='C',subok=False,copy=False).tofile(fid)
+                    self.getNdArray().tofile(f, format=fmt)
+            f.close()
+        
+        # numpy dictionary
+        elif ext == '.npy':
+            if mode not in 'a':
+                if self.ax_info:  # TODO fix saving of ax_info
+                    axes = dict()
+                    for ii, ax_info in enumerate(self.ax_info):
+                        axes['%s' %ii+1] = dict(n=ax_info[0], o=ax_info[1], d=ax_info[2], label=ax_info[3])
+                        
+                    np.save(file=filename,
+                            arr=dict(arr=self.getNdArray(),
+                                     ax_info=axes),
+                            allow_pickle=True)
+                else:
+                    np.save(file=filename, arr=self.getNdArray(), allow_pickle=False)
+        
+        elif ext == '.h5':  # TODO implement saving to hdf5
+            # if mode not in 'a':
+            #     with h5py.File(filename, 'wb') as f:
+            #         dset = f.create_dataset("vec", data=self.getNdArray())
+            # else:
+            raise NotImplementedError
+        
+        elif ext == '.pkl':
+            raise NotImplementedError
+            # # Save the whole vector in a pickle file
+            # if mode not in 'a':
+            #     with open(filename, 'wb') as f:
+            #         pickle.dump(self, f, pickle.HIGHEST_PROTOCOL)
+            #     f.close()
+            # else:
+            #     raise NotImplementedError
+            
+        else:
+            raise ValueError("ERROR! Output format has to be H, npy, h5 or pkl")
+            
+        return
 
     # TODO implement on seplib
     def abs(self):
@@ -459,11 +569,12 @@ class superVector(vector):
 
     def writeVec(self, filename, mode="w"):
         """Method to write to vector to file within a Vector set"""
+        _, ext = os.path.splitext(filename)
         for ii, vec_cmp in enumerate(self.vecs):
             # Writing components to different files
-            filename_cmp = ".".join(filename.split('.')[:-1]) + "_comp%s.H" % (ii + 1)
+            filename_cmp = ".".join(filename.split('.')[:-1]) + "_comp%s" % (ii + 1)
             # Writing files (recursively)
-            vec_cmp.writeVec(filename_cmp, mode)
+            vec_cmp.writeVec(filename_cmp+ext, mode)
         return
 
 
@@ -566,71 +677,71 @@ class vectorIC(vector):
         """Function to check dimensionality of vectors"""
         return self.shape == other.shape
 
-    def writeVec(self, filename, mode='w'):
-        """Function to write vector to file"""
-        # Check writing mode
-        if not mode in 'wa':
-            raise ValueError("Mode must be appending 'a' or writing 'w' ")
-        # Construct ax_info if the object has getHyper
-        if hasattr(self, "getHyper"):
-            hyper = self.getHyper()
-            self.ax_info = []
-            for iaxis in range(hyper.getNdim()):
-                self.ax_info.append([hyper.getAxis(iaxis + 1).n, hyper.getAxis(iaxis + 1).o, hyper.getAxis(iaxis + 1).d,
-                                     hyper.getAxis(iaxis + 1).label])
-        # writing header/pointer file if not present and not append mode
-        if not (os.path.isfile(filename) and mode in 'a'):
-            binfile = sep_util.datapath + filename.split('/')[-1] + '@'
-            with open(filename, mode) as fid:
-                # Writing axis info
-                if self.ax_info:
-                    for ii, ax_info in enumerate(self.ax_info):
-                        ax_id = ii + 1
-                        fid.write("n%s=%s o%s=%s d%s=%s label%s='%s'\n" % (
-                            ax_id, ax_info[0], ax_id, ax_info[1], ax_id, ax_info[2], ax_id, ax_info[3]))
-                else:
-                    for ii, n_axis in enumerate(tuple(reversed(self.shape))):
-                        ax_id = ii + 1
-                        fid.write("n%s=%s o%s=0.0 d%s=1.0 \n" % (ax_id, n_axis, ax_id, ax_id))
-                # Writing last axis for allowing appending (unless we are dealing with a scalar)
-                if self.shape != (1,):
-                    ax_id = self.ndims + 1
-                    fid.write("n%s=%s o%s=0.0 d%s=1.0 \n" % (ax_id, 1, ax_id, ax_id))
-                fid.write("in='%s'\n" % (binfile))
-                esize = "esize=4\n"
-                if self.getNdArray().dtype == np.complex64:
-                    esize = "esize=8\n"
-                fid.write(esize)
-                fid.write("data_format=\"native_float\"\n")
-            fid.close()
-        else:
-            binfile = sep_util.get_binary(filename)
-            if (mode in 'a'):
-                axes = sep_util.get_axes(filename)
-                # Number of vectors already present in the file
-                if self.shape == (1,):
-                    n_vec = axes[0][0]
-                    append_dim = self.ndims
-                else:
-                    n_vec = axes[self.ndims][0]
-                    append_dim = self.ndims + 1
-                with open(filename, mode) as fid:
-                    fid.write("n%s=%s o%s=0.0 d%s=1.0 \n" % (append_dim, n_vec + 1, append_dim, append_dim))
-                fid.close()
-        # Writing binary file
-        fmt = '>f'
-        if self.getNdArray().dtype == np.complex64 or self.getNdArray().dtype == np.complex128:
-            format = '>c8'
-        with open(binfile, mode + 'b') as fid:
-            # Writing big-ending floating point number
-            if np.isfortran(self.getNdArray()):  # Forcing column-wise binary writing
-                # self.getNdArray().flatten('F').astype(fmt,copy=False).tofile(fid)
-                self.getNdArray().flatten('F').tofile(fid, format=fmt)
-            else:
-                # self.getNdArray().astype(fmt,order='C',subok=False,copy=False).tofile(fid)
-                self.getNdArray().tofile(fid, format=fmt)
-        fid.close()
-        return
+    # def writeVec(self, filename, mode='w'):
+    #     """Function to write vector to file"""
+    #     # Check writing mode
+    #     if not mode in 'wa':
+    #         raise ValueError("Mode must be appending 'a' or writing 'w' ")
+    #     # Construct ax_info if the object has getHyper
+    #     if hasattr(self, "getHyper"):
+    #         hyper = self.getHyper()
+    #         self.ax_info = []
+    #         for iaxis in range(hyper.getNdim()):
+    #             self.ax_info.append([hyper.getAxis(iaxis + 1).n, hyper.getAxis(iaxis + 1).o, hyper.getAxis(iaxis + 1).d,
+    #                                  hyper.getAxis(iaxis + 1).label])
+    #     # writing header/pointer file if not present and not append mode
+    #     if not (os.path.isfile(filename) and mode in 'a'):
+    #         binfile = sep_util.datapath + filename.split('/')[-1] + '@'
+    #         with open(filename, mode) as fid:
+    #             # Writing axis info
+    #             if self.ax_info:
+    #                 for ii, ax_info in enumerate(self.ax_info):
+    #                     ax_id = ii + 1
+    #                     fid.write("n%s=%s o%s=%s d%s=%s label%s='%s'\n" % (
+    #                         ax_id, ax_info[0], ax_id, ax_info[1], ax_id, ax_info[2], ax_id, ax_info[3]))
+    #             else:
+    #                 for ii, n_axis in enumerate(tuple(reversed(self.shape))):
+    #                     ax_id = ii + 1
+    #                     fid.write("n%s=%s o%s=0.0 d%s=1.0 \n" % (ax_id, n_axis, ax_id, ax_id))
+    #             # Writing last axis for allowing appending (unless we are dealing with a scalar)
+    #             if self.shape != (1,):
+    #                 ax_id = self.ndims + 1
+    #                 fid.write("n%s=%s o%s=0.0 d%s=1.0 \n" % (ax_id, 1, ax_id, ax_id))
+    #             fid.write("in='%s'\n" % (binfile))
+    #             esize = "esize=4\n"
+    #             if self.getNdArray().dtype == np.complex64:
+    #                 esize = "esize=8\n"
+    #             fid.write(esize)
+    #             fid.write("data_format=\"native_float\"\n")
+    #         fid.close()
+    #     else:
+    #         binfile = sep_util.get_binary(filename)
+    #         if (mode in 'a'):
+    #             axes = sep_util.get_axes(filename)
+    #             # Number of vectors already present in the file
+    #             if self.shape == (1,):
+    #                 n_vec = axes[0][0]
+    #                 append_dim = self.ndims
+    #             else:
+    #                 n_vec = axes[self.ndims][0]
+    #                 append_dim = self.ndims + 1
+    #             with open(filename, mode) as fid:
+    #                 fid.write("n%s=%s o%s=0.0 d%s=1.0 \n" % (append_dim, n_vec + 1, append_dim, append_dim))
+    #             fid.close()
+    #     # Writing binary file
+    #     fmt = '>f'
+    #     if self.getNdArray().dtype == np.complex64 or self.getNdArray().dtype == np.complex128:
+    #         format = '>c8'
+    #     with open(binfile, mode + 'b') as fid:
+    #         # Writing big-ending floating point number
+    #         if np.isfortran(self.getNdArray()):  # Forcing column-wise binary writing
+    #             # self.getNdArray().flatten('F').astype(fmt,copy=False).tofile(fid)
+    #             self.getNdArray().flatten('F').tofile(fid, format=fmt)
+    #         else:
+    #             # self.getNdArray().astype(fmt,order='C',subok=False,copy=False).tofile(fid)
+    #             self.getNdArray().tofile(fid, format=fmt)
+    #     fid.close()
+    #     return
 
     def abs(self):
         self.getNdArray()[:] = np.abs(self.getNdArray())
