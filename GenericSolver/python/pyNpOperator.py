@@ -70,10 +70,21 @@ class MatrixOp(pyOp.Operator):
 class FirstDerivative(pyOp.Operator):
     def __init__(self, model, sampling=1., axis=0, kind='centered'):
         r"""
-        Compute 2nd order centered first derivative
-
-        .. math::
-            y[i] = 0.5 (x[i+1] - x[i-1]) / dx
+        First Derivative with a stencil
+            1) 2nd order centered:
+            
+            .. math::
+                y[i] = 0.5 (x[i+1] - x[i-1]) / dx
+            
+            2) 1st order forward:
+            
+            .. math::
+                y[i] = (x[i+1] - x[i]) / dx
+            
+            1) 1st order backward:
+            
+            .. math::
+                y[i] = 0.5 (x[i] - x[i-1]) / dx
 
         :param model    : vector class; domain vector
         :param sampling : scalar; sampling step [1.]
@@ -364,7 +375,7 @@ class SecondDerivative(pyOp.Operator):
 class Gradient(pyOp.Operator):
     def __init__(self, model, sampling=None):
         r"""
-        N-Dimensional Gradient operator.
+        N-Dimensional Gradient operator with 2nd order centered stencils
 
         :param model    : vector class; domain vector
         :param sampling : tuple; sampling step [1]

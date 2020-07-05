@@ -67,7 +67,7 @@ class MatrixOp(pyOp.Operator):
         return self.arr_module.array(self.M)
 
 
-class FirstDerivative(pyOp.Operator):
+class FirstDerivativeOld(pyOp.Operator):
     def __init__(self, model, sampling=1., axis=0):
         r"""
         Compute 2nd order centered first derivative
@@ -83,7 +83,7 @@ class FirstDerivative(pyOp.Operator):
         self.data_tmp = model.clone().zero()
         self.dims = model.getNdArray().shape
         self.axis = axis if axis >= 0 else len(self.dims) + axis
-        super(FirstDerivative, self).__init__(model, model)
+        super(FirstDerivativeOld, self).__init__(model, model)
     
     def __str__(self):
         return "1stDer_%d" % self.axis
@@ -130,6 +130,179 @@ class FirstDerivative(pyOp.Operator):
         model.getNdArray()[:] = x
         if add:
             model.scaleAdd(self.data_tmp)
+        return
+
+
+class FirstDerivative(pyOp.Operator):
+    def __init__(self, model, sampling=1., axis=0, kind='centered'):
+        r"""
+        First Derivative with a stencil
+            1) 2nd order centered:
+            
+            .. math::
+                y[i] = 0.5 (x[i+1] - x[i-1]) / dx
+            
+            2) 1st order forward:
+            
+            .. math::
+                y[i] = (x[i+1] - x[i]) / dx
+            
+            1) 1st order backward:
+            
+            .. math::
+                y[i] = 0.5 (x[i] - x[i-1]) / dx
+
+        :param model    : vector class; domain vector
+        :param sampling : scalar; sampling step [1.]
+        :param axis     : int; axis along which to compute the derivative [0]
+        :param kind     : str; derivative kind (centered, forward, backward)
+        """
+        self.sampling = sampling
+        self.dims = model.getNdArray().shape
+        self.axis = axis if axis >= 0 else len(self.dims) + axis
+        self.kind = kind
+        
+        if self.kind == 'centered':
+            self.forward = self._forwardC
+            self.adjoint = self._adjointC
+        elif self.kind == 'backward':
+            self.forward = self._forwardB
+            self.adjoint = self._adjointB
+        elif self.kind == 'forward':
+            self.forward = self._forwardF
+            self.adjoint = self._adjointF
+        else:
+            raise ValueError("Derivative kind must be centered, forward or backward")
+        
+        super(FirstDerivative, self).__init__(model, model)
+    
+    def __str__(self):
+        return "1stDer_%d" % self.axis
+    
+    def _forwardF(self, add, model, data):
+        """Forward operator for the 1st order forward stencil"""
+        self.checkDomainRange(model, data)
+        if add:
+            data_tmp = data.clone()
+        data.zero()
+        # Getting Ndarrays
+        x = model.clone().getNdArray()
+        if self.axis > 0:  # need to bring the dim. to derive to first dim
+            x = cp.get_array_module(x).swapaxes(x, self.axis, 0)
+        y = cp.get_array_module(x).zeros(x.shape)
+        
+        y[:-1] = (x[1:] - x[:-1]) / self.sampling
+        if self.axis > 0:  # reset axis order
+            y = cp.get_array_module(x).swapaxes(y, 0, self.axis)
+        data.getNdArray()[:] = y
+        if add:
+            data.scaleAdd(data_tmp)
+        return
+    
+    def _adjointF(self, add, model, data):
+        """Adjoint operator for the 1st order forward stencil"""
+        self.checkDomainRange(model, data)
+        if add:
+            model_temp = model.clone()
+        model.zero()
+        # Getting Ndarrays
+        y = data.clone().getNdArray()
+        if self.axis > 0:  # need to bring the dim. to derive to first dim
+            y = cp.get_array_module(y).swapaxes(y, self.axis, 0)
+        x = cp.get_array_module(y).zeros(y.shape)
+        
+        x[:-1] -= y[:-1] / self.sampling
+        x[1:] += y[:-1] / self.sampling
+        
+        if self.axis > 0:
+            x = cp.get_array_module(x).swapaxes(x, 0, self.axis)
+        model.getNdArray()[:] = x
+        if add:
+            model.scaleAdd(model_temp)
+        return
+    
+    def _forwardC(self, add, model, data):
+        """Forward operator for the 2nd order centered stencil"""
+        self.checkDomainRange(model, data)
+        if add:
+            data_tmp = data.clone()
+        data.zero()
+        # Getting Ndarrays
+        x = model.clone().getNdArray()
+        if self.axis > 0:  # need to bring the dim. to derive to first dim
+            x = cp.get_array_module(x).swapaxes(x, self.axis, 0)
+        y = cp.get_array_module(x).zeros(x.shape)
+        
+        y[1:-1] = (.5 * x[2:] - 0.5 * x[:-2]) / self.sampling
+        if self.axis > 0:  # reset axis order
+            y = cp.get_array_module(x).swapaxes(y, 0, self.axis)
+        data.getNdArray()[:] = y
+        if add:
+            data.scaleAdd(data_tmp)
+        return
+    
+    def _adjointC(self, add, model, data):
+        """Adjoint operator for the 2nd order centered stencil"""
+        self.checkDomainRange(model, data)
+        if add:
+            model_temp = model.clone()
+        model.zero()
+        # Getting Ndarrays
+        y = data.clone().getNdArray()
+        if self.axis > 0:  # need to bring the dim. to derive to first dim
+            y = cp.get_array_module(y).swapaxes(y, self.axis, 0)
+        x = cp.get_array_module(y).zeros(y.shape)
+        
+        x[:-2] -= 0.5 * y[1:-1] / self.sampling
+        x[2:] += 0.5 * y[1:-1] / self.sampling
+        
+        if self.axis > 0:
+            x = cp.get_array_module(x).swapaxes(x, 0, self.axis)
+        model.getNdArray()[:] = x
+        if add:
+            model.scaleAdd(model_temp)
+        return
+    
+    def _forwardB(self, add, model, data):
+        """Forward operator for the 1st order backward stencil"""
+        self.checkDomainRange(model, data)
+        if add:
+            data_tmp = data.clone()
+        data.zero()
+        # Getting Ndarrays
+        x = model.clone().getNdArray()
+        if self.axis > 0:  # need to bring the dim. to derive to first dim
+            x = cp.get_array_module(x).swapaxes(x, self.axis, 0)
+        y = cp.get_array_module(x).zeros(x.shape)
+        
+        y[1:] = (x[1:] - x[:-1]) / self.sampling
+        if self.axis > 0:  # reset axis order
+            y = cp.get_array_module(y).swapaxes(y, 0, self.axis)
+        data.getNdArray()[:] = y
+        if add:
+            data.scaleAdd(data_tmp)
+        return
+    
+    def _adjointB(self, add, model, data):
+        """Adjoint operator for the 1st order backward stencil"""
+        self.checkDomainRange(model, data)
+        if add:
+            model_temp = model.clone()
+        model.zero()
+        # Getting Ndarrays
+        y = data.clone().getNdArray()
+        if self.axis > 0:  # need to bring the dim. to derive to first dim
+            y = cp.get_array_module(y).swapaxes(y, self.axis, 0)
+        x = cp.get_array_module(y).zeros(y.shape)
+        
+        x[:-1] -= y[1:] / self.sampling
+        x[1:] += y[1:] / self.sampling
+        
+        if self.axis > 0:
+            x = cp.get_array_module(x).swapaxes(x, 0, self.axis)
+        model.getNdArray()[:] = x
+        if add:
+            model.scaleAdd(model_temp)
         return
 
 
@@ -201,63 +374,48 @@ class SecondDerivative(pyOp.Operator):
         return
 
 
-class TotalVariation(pyOp.Operator):
-    def __init__(self, model, axis=None, weights=None, sampling=None, iso=False):
+class Gradient(pyOp.Operator):
+    def __init__(self, model, sampling=None):
         r"""
-        (An)isotropic Total Variation operator.
-        The input parameters are tailored for >2D, but it works also for 1D.
-
+        N-Dimensional Gradient operator.
+        
         :param model    : vector class; domain vector
-        :param axis     : tuple; axis along which to compute the derivative [0, 1]
-        :param weights  : tuple; scalar weight for the axis [1, 1]
-        :param sampling : tuple; sampling step [1, 1]
-        :param iso      : bool; compute isotropic operator [False]
+        :param sampling : tuple; sampling step [1]
         """
         self.dims = model.getNdArray().shape
-        self.axis = axis if axis is not None else tuple(range(len(self.dims)))
         self.sampling = sampling if sampling is not None else tuple([1] * len(self.dims))
-        self.weights = weights if weights is not None else tuple([1] * len(self.dims))
         
-        assert len(self.axis) == len(self.weights) == len(self.sampling) != 0, \
-            "There is something wrong with the dimensions"
+        assert len(self.sampling) != 0, "There is something wrong with the dimensions"
         
-        self.isotropic = iso
-        
-        if self.isotropic:  # self.op is a list of operators
-            self.op = [self.weights[d] * FirstDerivative(model, sampling=self.sampling[d], axis=self.axis[d]) for d in
-                       range(len(self.axis))]
-        else:  # self.op is itself the final operator
-            self.op = self.weights[0] * FirstDerivative(model, sampling=self.sampling[0], axis=self.axis[0])
-            for d in range(1, len(self.axis)):
-                self.op += self.weights[d] * FirstDerivative(model, sampling=self.sampling[d], axis=self.axis[d])
-        
-        super(TotalVariation, self).__init__(model, model)
+        self.op = pyOp.Vstack([FirstDerivative(model, sampling=self.sampling[d], axis=d)
+                               for d in range(len(self.dims))])
+
+        super(Gradient, self).__init__(domain=self.op.domain, range=self.op.range)
     
     def __str__(self):
-        return "TotalVar"
+        return "Gradient"
     
     def forward(self, add, model, data):
-        if self.isotropic:
-            self.checkDomainRange(model, data)
-            if add:
-                data_tmp = data.clone()
-            data.zero()
-            for op in self.op:
-                temp = data.clone().zero()
-                op.forward(False, model, temp)
-                data.scaleAdd(temp.pow(2))
-            data.pow(.5)
-            if add:
-                data.scaleAdd(data_tmp)
-            return
-        else:
-            return self.op.forward(add, model, data)
+        return self.op.forward(add, model, data)
     
     def adjoint(self, add, model, data):
-        if self.isotropic:
-            raise ValueError("ERROR! The Isotropic Total Variation is nonlinear.")
+        return self.op.adjoint(add, model, data)
+
+    def merge_directions(self, add, model, data, iso=True):
+        """
+        Merge the different directional contributes, using the L2 norm (iso=True) or the simple sum (iso=False)
+        """
+        self.range.checkSame(model)
+        if not add:
+            data.zero()
+    
+        if iso:
+            for v in model.vecs:
+                data.scaleAdd(v.clone().pow(2), 1., 1.)
+                data.pow(.5)
         else:
-            return self.op.adjoint(add, model, data)
+            for v in model.vecs:
+                data.scaleAdd(v, 1., 1.)
 
 
 class Laplacian(pyOp.Operator):
