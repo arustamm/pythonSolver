@@ -378,11 +378,11 @@ class ProblemL2LinearReg(Problem):
         # Assuming identity operator if regularization operator was not provided
         if reg_op is None:
             reg_op = pyOp.IdentityOp(self.model)
-        # Checking if space of the prior model is constistent with range of
+        # Checking if space of the prior model is consistent with range of
         # regularization operator
         if self.prior_model is not None:
             if not self.prior_model.checkSame(reg_op.range):
-                raise ValueError("Prior model space no constistent with range of regularization operator")
+                raise ValueError("Prior model space no consistent with range of regularization operator")
         self.op = pyOp.stackOperator(op, reg_op)  # Modeling operator
         self.epsilon = epsilon  # Regularization weight
         # Checking if a gradient mask was provided

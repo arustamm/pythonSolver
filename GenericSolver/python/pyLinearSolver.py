@@ -795,7 +795,7 @@ class SymLCGsolver(pySolver.Solver):
             # Saving results
             self.save_results(iiter, problem, force_save=False)
             # Copying current model in case of early stop
-            prev_mdl.copy(prev_mdl)
+            prev_mdl.copy(cg_mdl)
 
             # Applying preconditioning to gradient (first time)
             if iiter == 0 and precond:
