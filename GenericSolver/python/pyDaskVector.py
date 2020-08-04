@@ -676,7 +676,7 @@ def _set_binfiles(binfiles, Nbytes, **kwargs):
             tmp_bin_files.append(binfiles[0])
             if NelmntBt >= Nbytes[0]:
                 # Entire binary file must be read
-                tmp_counts.append(np.int(Nbytes[0]/esize))
+                tmp_counts.append(np.int(Nbytes[0] / esize))
                 tmp_offsets.append(bytesRd)
                 # Updating variables
                 bytesRd = 0
@@ -686,7 +686,7 @@ def _set_binfiles(binfiles, Nbytes, **kwargs):
                 Nbytes.pop(0)
             else:
                 # Only part of the file needs to be read
-                tmp_counts.append(np.int(NelmntBt/esize))
+                tmp_counts.append(np.int(NelmntBt / esize))
                 tmp_offsets.append(bytesRd)
                 bytesRd += NelmntBt  # Number of bytes read
                 Nbytes[0] -= NelmntBt
@@ -698,6 +698,7 @@ def _set_binfiles(binfiles, Nbytes, **kwargs):
         counts.append(tmp_counts)
         offsets.append(tmp_offsets)
     return bin_chunks, counts, offsets
+
 
 def _read_vector_dask(shape, binaries, counts, offsets, **kwargs):
     """
@@ -711,20 +712,36 @@ def _read_vector_dask(shape, binaries, counts, offsets, **kwargs):
     """
     vector = None
     vtype = kwargs.get("vtype")
+    axes = kwargs.get("axes", None)
     fmt = kwargs.get("format", ">f")  # Default floating point number
-    esize = np.dtype(fmt).itemsize  # Byte size per vector element
-    if vtype == "vectorIC":
-        data = np.array([])  # Initialize an empty array
-        for ii, filename in enumerate(binaries):
+    # Reading binary data into data array
+    data = np.array([])  # Initialize an empty array
+    for ii, filename in enumerate(binaries):
+        _, ext = os.path.splitext(filename)  # Getting file extension
+        if ext == ".H@":
             fid = open(filename, 'r+b')
             # Default formatting big-ending floating point number
             data = np.append(data, np.fromfile(fid, count=counts[ii], offset=offsets[ii], dtype=fmt))
             fid.close()
-        # Reshaping array and forcing memory continuity
-        data = np.ascontiguousarray(np.reshape(data, shape))
+        else:
+            raise ValueError("ERROR! Unknown extension for binary file: %s" % filename)
+    # Reshaping array and forcing memory continuity
+    data = np.ascontiguousarray(np.reshape(data, shape))
+    if vtype == "vectorIC":
         vector = Vec.vectorIC(data)
     elif vtype == "SepVector":
-        raise NotImplementedError("ERROR! SepVector not supported yet")
+        if SepVector:
+            if axes:
+                # Instantiate using axis
+                vector = SepVector.getSepVector(axes=axes)
+            else:
+                # Instantiate using shape
+                shape.reverse()  # Reversing order of axis
+                vector = SepVector.getSepVector(ns=shape)
+            vector.getNdArray()[:] = data  # Copying data into SepVector instance
+            del data  # Removing data
+        else:
+            raise ImportError("ERROR! SepVector module not found!")
     else:
         raise ValueError("ERROR! Unknown vtype (%s)" % vtype)
     return vector
@@ -747,10 +764,10 @@ def readDaskVector(dask_client, **kwargs):
     client = dask_client.getClient()
     wrkIds = dask_client.getWorkerIds()
     # Args
-    filenames = kwargs.get("filenames")
     shapes = kwargs.get("shapes")
     chunks = kwargs.get("chunks")
     vtype = kwargs.get("vtype")
+    axes = kwargs.get("axes", None)  # Necessary for SepVector
     # Q/C steps
     if len(chunks) != Nwrks:
         raise ValueError(
@@ -774,20 +791,27 @@ def readDaskVector(dask_client, **kwargs):
     offset2read = list()
     # Preprocessing for vector-specific arguments
     # must be done in the next for loop
+    axes2read = list()  # List of axes
     for chunk in chunks:
         shps2read.append(shapes[:chunk])
         bin2read.append(bin_shps[:chunk])
         count2read.append(counts[:chunk])
         offset2read.append(offsets[:chunk])
         del shapes[:chunk], bin_shps[:chunk], counts[:chunk], offsets[:chunk]
+        # Checking if axis list was provided
+        if axes and vtype == "SepVector":
+            axes2read.append(axes[:chunk])
+            del axes[:chunk]
     # Loop over workers/chunks
     # Read binary files and place within vector objects
     fut_vec = []
     for iWrk, wrkId in enumerate(wrkIds):
         for ivec in range(len(shps2read[iWrk])):
+            if len(axes2read) > 0 and vtype == "SepVector":
+                kwargs.update({"axes": axes2read[iWrk][ivec]})
             fut_vec.append(client.submit(_read_vector_dask, shps2read[iWrk][ivec], bin2read[iWrk][ivec],
-                                                     count2read[iWrk][ivec], offset2read[iWrk][ivec], **kwargs,
-                                                     workers=[wrkId], pure=False))
+                                         count2read[iWrk][ivec], offset2read[iWrk][ivec], **kwargs,
+                                         workers=[wrkId], pure=False))
     # Waiting for all vector chunks to be instantiated
     daskD.wait(fut_vec)
     # Checking for errors
