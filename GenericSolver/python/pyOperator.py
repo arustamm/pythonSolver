@@ -847,7 +847,7 @@ class _combNonLinearOperator(NonLinearOperator):
 
 # Necessary for backward compatibility
 def CombNonlinearOp(g, f):
-    """Combination of non-linear opeartors: f(g(m))"""
+    """Combination of non-linear operators: f(g(m))"""
     return _combNonLinearOperator(f, g)
 
 
@@ -865,9 +865,9 @@ class _sumNlOperator(NonLinearOperator):
             raise ValueError('Cannot add operators: shape mismatch')
 
         self.args = (g, f)
-        # Defining f(g(m))
+        # Defining f(m) + g(m))
         self.nl_op = _sumOperator(f.nl_op, g.nl_op)
-        # Defining F(g(m0))G(m0)
+        # Defining F(m0) and G(m0)
         self.lin_op = _sumOperator(f.lin_op, g.lin_op)
         # Defining internal set_background functions
         self.set_background_f = f.set_background
@@ -889,6 +889,10 @@ class _sumNlOperator(NonLinearOperator):
         # Setting F(m0)
         self.set_background_f(model)
 
+
+def sumNlOperator(f, g):
+    """Sum of non-linear operators: f(m) + g(m)"""
+    return _sumNlOperator(f, g)
 
 
 class VstackNonLinearOperator(NonLinearOperator):
