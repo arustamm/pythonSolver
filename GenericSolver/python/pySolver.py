@@ -107,6 +107,7 @@ class Solver:
         self.resSet = Vec.vectorSet()       # Set for residual vectors
         self.gradSet = Vec.vectorSet()      # Set for gradient vectors
         self.inv_model = None               # Temporary saved inverted model
+        self.overwrite = True               # Flag to overwrite results if first time writing on disk
 
     def flush_results(self):
         """Flushing internal memory of the saved results"""
@@ -201,7 +202,10 @@ class Solver:
                                                                              >= self.iter_buffer_size) \
             else False
 
+        mode = "w" if self.overwrite else "a"
+
         if save:
+            self.overwrite = False  # Written at least once; do not overwrite files
             # Getting current saved results into an in-core list
             if not self.flush_memory:
                 self.model += self.modelSet.vecSet
@@ -221,16 +225,16 @@ class Solver:
             if self.save_model and self.prefix is not None:
                 inv_mod_file = self.prefix + "_inv_mod.H"  # File name in which the current inverted model is saved
                 model_file = self.prefix + "_model.H"  # File name in which the model vector is saved
-                self.modelSet.writeSet(model_file)
+                self.modelSet.writeSet(model_file, mode=mode)
                 self.inv_model.writeVec(inv_mod_file, mode="w") # Writing inverted model file
             # Writing gradient vectors on disk if requested
             if self.save_grad and self.prefix is not None:
                 grad_file = self.prefix + "_gradient.H"  # File name in which the gradient vector is saved
-                self.gradSet.writeSet(grad_file)
+                self.gradSet.writeSet(grad_file, mode=mode)
             # Writing residual vectors on disk if requested
             if self.save_res and self.prefix is not None:
                 res_file = self.prefix + "_residual.H"  # File name in which the residual vector is saved
-                self.resSet.writeSet(res_file)
+                self.resSet.writeSet(res_file, mode=mode)
 
     def run(self, prblm):
         """Dummy Solver running method"""
