@@ -49,6 +49,7 @@ class Solver:
         self.gradSet = Vec.vectorSet()
         self.inv_model = None
         self.iter_written = 0
+        self.overwrite = True
 
         # Set Restart object
         self.restart = Restart()

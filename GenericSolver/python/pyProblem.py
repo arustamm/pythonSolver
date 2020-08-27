@@ -497,7 +497,7 @@ class ProblemL2LinearReg(Problem):
         """Method to return objective function value 1/2|Lm-d|_2 + epsilon^2/2*|Am-m_prior|_2"""
         for idx in range(res.n):
             val = res.vecs[idx].norm()
-            self.obj_terms[idx] = 0.5 * val*val
+            self.obj_terms[idx] = 0.5 * val * val
         return sum(self.obj_terms)
 
 
@@ -557,7 +557,7 @@ class ProblemL1Lasso(Problem):
         """Method to return objective function value 1/2*| y - Am |_2 + lambda*| m |_1"""
         # data term
         val = res.vecs[0].norm()
-        self.obj_terms[0] = 0.5 * val*val
+        self.obj_terms[0] = 0.5 * val * val
         # model term
         self.obj_terms[1] = self.lambda_value * res.vecs[1].norm(1)
         return sum(self.obj_terms)
@@ -1022,7 +1022,8 @@ class ProblemL2VpReg(Problem):
     """
 
     def __init__(self, model_nl, lin_model, h_op, data, lin_solver, g_op=None, g_op_reg=None, h_op_reg=None,
-                 data_reg=None, epsilon=None, minBound=None, maxBound=None, boundProj=None, prec=None):
+                 data_reg=None, epsilon=None, minBound=None, maxBound=None, boundProj=None, prec=None,
+                 warm_start=False):
         """
             Constructor for solving a inverse problem using the variable-projection method
             Required arguments:
@@ -1041,6 +1042,7 @@ class ProblemL2VpReg(Problem):
             maxBound	= [None] - vector class; Maximum value bounds
             boundProj	= [None] - Bounds class; Class with a function "apply(input_vec)" to project input_vec onto some convex set
             prec       	= [None] - linear operator class; Preconditioning matrix for VP problem
+            warm_start  = [None] - boolean; Start VP problem from previous linearly inverted model
             ####################################################################################################################################
             Note that to save the results of the linear inversion the user has to specify the saving parameters within the setDefaults of the
             linear solver. The results can only be saved on files. To the prefix specified within the lin_solver f_eval_# will be added.
@@ -1097,8 +1099,8 @@ class ProblemL2VpReg(Problem):
         # Instantiating linear inversion problem
         if self.h_op_reg is not None:
             self.vp_linear_prob = ProblemL2LinearReg(self.lin_model, self.data, self.h_op.h_lin, self.epsilon,
-                                                            reg_op=self.h_op_reg.h_lin, prior_model=self.data_reg,
-                                                            prec=prec)
+                                                     reg_op=self.h_op_reg.h_lin, prior_model=self.data_reg,
+                                                     prec=prec)
         else:
             self.vp_linear_prob = ProblemL2Linear(self.lin_model, self.data, self.h_op.h_lin, prec=prec)
         # Zeroing out the residual vector
@@ -1115,6 +1117,7 @@ class ProblemL2VpReg(Problem):
         self.lin_solver.flush_memory = True
         self.lin_solver_prefix = self.lin_solver.prefix
         self.vp_linear_prob.linear = True
+        self.warm_start = warm_start
         return
 
     def __del__(self):
@@ -1198,7 +1201,8 @@ class ProblemL2VpReg(Problem):
         # Getting fevals for saving linear inversion results
         fevals = self.get_fevals()
         # Setting initial linear inversion model
-        self.lin_model.zero()
+        if not self.warm_start:
+            self.lin_model.zero()
         self.vp_linear_prob.set_model(self.lin_model)
         # Setting non-linear component of the model
         self.h_op.set_nl(model)
@@ -1294,4 +1298,3 @@ class ProblemL2VpReg(Problem):
             val = res.norm()
             obj = 0.5 * val * val
         return obj
-
