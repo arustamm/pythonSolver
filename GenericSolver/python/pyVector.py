@@ -346,8 +346,12 @@ class vectorSet:
         """Method to write to SEPlib file (by default it appends vectors to file)"""
         if mode not in "aw":
             raise ValueError("ERROR! mode must be either a (append) or w (write)")
-        for vec_i in self.vecSet:
-            vec_i.writeVec(filename, mode)
+        for iVec, vec_i in enumerate(self.vecSet):
+            if mode == "w" and iVec == 0:
+                wr_mode = "w"
+            else:
+                wr_mode = "a"
+            vec_i.writeVec(filename, wr_mode)
         self.vecSet = []  # List of vectors of the set
 
 
