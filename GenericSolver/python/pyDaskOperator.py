@@ -114,20 +114,19 @@ class DaskOperator(Op.Operator):
 
         # Check if kwargs for constructor was provided:
         op_kwargs = self.set_background_name = kwargs.get("op_kwargs", None)
-        N_kwargs = len(op_kwargs)
-        if N_kwargs != N_args:
-            raise ValueError("Length of kwargs (%d) different than args (%d)!"%(N_kwargs, N_args))
+        if op_kwargs is not None:
+            N_kwargs = len(op_kwargs)
+            if N_kwargs != N_args:
+                raise ValueError("Length of kwargs (%d) different than args (%d)!"%(N_kwargs, N_args))
+        else:
+            op_kwargs = [None]*N_args
 
         # Instantiation of the operators on each worker
         self.dask_ops = []
         for iwrk, wrkId in enumerate(wrkIds):
             for iop in range(chunks[iwrk]):
-                if op_kwargs is not None:
-                    self.dask_ops.append(
-                        self.client.submit(call_constructor, op_constructor, op_args.pop(0), workers=[wrkId], pure=False))
-                else:
-                    self.dask_ops.append(
-                        self.client.submit(call_constructor, op_constructor, op_args.pop(0), op_kwargs.pop(0), workers=[wrkId], pure=False))
+                self.dask_ops.append(
+                    self.client.submit(call_constructor, op_constructor, op_args.pop(0), op_kwargs.pop(0), workers=[wrkId], pure=False))
         daskD.wait(self.dask_ops)
         for idx in range(len(self.dask_ops)):
             if (self.dask_ops[idx].status == 'error'):
