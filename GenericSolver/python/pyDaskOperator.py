@@ -12,12 +12,18 @@ from collections.abc import Iterable
 import time  # DEBUG
 
 
-def call_constructor(constr, args):
+def call_constructor(constr, args, kwargs=None):
     """Function to call the constructor"""
-    if isinstance(args, Iterable):
-        op = constr(*args)
+    if kwargs is None:
+        if isinstance(args, Iterable):
+            op = constr(*args)
+        else:
+            op = constr(args)
     else:
-        op = constr(args)
+        if isinstance(args, Iterable):
+            op = constr(*args, **kwargs)
+        else:
+            op = constr(args, **kwargs)
     return op
 
 
@@ -106,12 +112,22 @@ class DaskOperator(Op.Operator):
             if N_ops > 1:
                 op_args = [op_args for ii in range(N_ops)]
 
+        # Check if kwargs for constructor was provided:
+        op_kwargs = self.set_background_name = kwargs.get("op_kwargs", None)
+        N_kwargs = len(op_kwargs)
+        if N_kwargs != N_args:
+            raise ValueError("Length of kwargs (%d) different than args (%d)!"%(N_kwargs, N_args))
+
         # Instantiation of the operators on each worker
         self.dask_ops = []
         for iwrk, wrkId in enumerate(wrkIds):
             for iop in range(chunks[iwrk]):
-                self.dask_ops.append(
-                    self.client.submit(call_constructor, op_constructor, op_args.pop(0), workers=[wrkId], pure=False))
+                if op_kwargs is not None:
+                    self.dask_ops.append(
+                        self.client.submit(call_constructor, op_constructor, op_args.pop(0), workers=[wrkId], pure=False))
+                else:
+                    self.dask_ops.append(
+                        self.client.submit(call_constructor, op_constructor, op_args.pop(0), op_kwargs.pop(0), workers=[wrkId], pure=False))
         daskD.wait(self.dask_ops)
         for idx in range(len(self.dask_ops)):
             if (self.dask_ops[idx].status == 'error'):
