@@ -27,8 +27,6 @@ class AugLagrangianSolver:
         """Default class constructor for Solver"""
         self.p_solver = inner_solver
         self.rho = rho
-        if len(rho) != nouter:
-            pass
         return
 
     def run(self, problem, verbose=False, restart=False):
