@@ -126,7 +126,7 @@ class ProblemAugLagrangian(P.Problem):
         obj += self.dual.dot(res.vecs[1])
         return obj
 
-    def update_dual(self, dual):
+    def update_dual(self):
         self.dual.scaleAdd(self.res.vecs[1],1.,self.rho)
         # Update A'dual term used in the gradient 
         self.op.lin_op.ops[1].adjoint(False, self.res_dual, self.dual)
