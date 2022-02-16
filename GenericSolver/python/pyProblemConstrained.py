@@ -1,9 +1,10 @@
 # Module containing the definition of abstract inverse problems
 import pyVector as pyVec
 import pyOperator as pyOp
+import pyProblem as P
 from math import isnan
 
-class ProblemAugLagrangian(Problem):
+class ProblemAugLagrangian(P.Problem):
     """
        NonLinear inverse Augmented Lagrangian problem of the form
             1/2*|f(m)-d|_2 + dual^T (Am-b) + rho^2/2*|Am - b|_2
@@ -36,14 +37,14 @@ class ProblemAugLagrangian(Problem):
         self.res.zero()
         # Dual variable
         if not dual_prior:
-            self.dual = self.eq_op.range.clone()
+            self.dual = self.op.lin_op.ops[1].range.clone()
             self.dual.zero()
         else:
             self.dual = dual_prior
         # Constraints residuals with added dual variable
-        self.res_dual = self.eq_op.range.clone()
+        self.res_dual = self.op.lin_op.ops[1].range.clone()
         # Computing dual residual constant for given dual variable
-        self.eq_op.adjoint(False, self.res_dual, self.dual)
+        self.op.lin_op.ops[1].adjoint(False, self.res_dual, self.dual)
         # Dresidual vector
         self.dres = self.res.clone()
         # Checking if a gradient mask was provided
@@ -119,7 +120,7 @@ class ProblemAugLagrangian(Problem):
     def update_dual(self, dual):
         self.dual.scaleAdd(self.res.vecs[1],1.,self.rho)
         # Update A'dual term used in the gradient 
-        self.eq_op.adjoint(False, self.res_dual, self.dual)
+        self.op.lin_op.ops[1].adjoint(False, self.res_dual, self.dual)
 
     def set_rho(self, rho):
         self.rho = rho
