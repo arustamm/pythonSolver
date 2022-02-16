@@ -8,7 +8,7 @@ from shutil import copyfile
 from sys import version_info
 
 import numpy as np
-import pickle, h5py
+import pickle
 import sep_util
 # other modules
 import sys_util
