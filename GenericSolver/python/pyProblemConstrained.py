@@ -107,9 +107,9 @@ class ProblemAugLagrangian(P.Problem):
         # Computing Ldm = dres_d
         self.op.lin_op.forward(False, dmodel, self.dres)
         # Scaling by epsilon
-        self.dres.vecs[1].scale(self.epsilon)
+        self.dres.vecs[1].scale(self.rho)
         return self.dres
-        
+
     def objf(self, res):
         """
         Method to return objective function value
