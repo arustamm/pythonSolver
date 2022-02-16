@@ -98,9 +98,18 @@ class ProblemAugLagrangian(P.Problem):
         return self.grad
 
     def dresf(self, model, dmodel):
-        raise NotImplementedError(
-            "ERROR! dresf is not currently supported! Provide an initial step-length value different than zero.")
-
+        """
+        Method to return residual vector
+        dres = [F + epsilon * (A or G)]dm
+        """
+        # Setting model point on which the F is evaluated
+        self.op.set_background(model)
+        # Computing Ldm = dres_d
+        self.op.lin_op.forward(False, dmodel, self.dres)
+        # Scaling by epsilon
+        self.dres.vecs[1].scale(self.epsilon)
+        return self.dres
+        
     def objf(self, res):
         """
         Method to return objective function value
