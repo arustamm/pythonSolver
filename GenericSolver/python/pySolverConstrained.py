@@ -35,4 +35,3 @@ class AugLagrangianSolver:
             self.p_solver.run(problem,verbose,restart)
             # Update dual variable
             problem.update_dual()
-            problem.setDefaults()
