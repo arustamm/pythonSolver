@@ -39,4 +39,4 @@ class AugLagrangianSolver:
             problem.setDefaults()
 
             dual_file = self.p_solver.prefix + "_dual.H"  # File name in which the dual vector is saved
-            self.dual.writeVec(dual_file, mode='a')
+            problem.dual.writeVec(dual_file, mode='a')
