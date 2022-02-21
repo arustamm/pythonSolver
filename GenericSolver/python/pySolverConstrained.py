@@ -4,6 +4,7 @@ from sys import path
 path.insert(0, '.')
 import pyProblem
 import pyVector as Vec
+import pySolver
 import atexit
 import os
 # Functions and modules necessary for writing on disk
@@ -35,3 +36,7 @@ class AugLagrangianSolver:
             self.p_solver.run(problem,verbose,restart)
             # Update dual variable
             problem.update_dual()
+            problem.setDefaults()
+
+            dual_file = self.p_solver.prefix + "_dual.H"  # File name in which the dual vector is saved
+            self.dual.writeVec(dual_file, mode='a')
