@@ -42,9 +42,9 @@ class ProblemAugLagrangian(P.Problem):
         else:
             self.dual = dual_prior
         # Constraints residuals with added dual variable
-        self.res_dual = self.op.lin_op.ops[1].range.clone()
+        self.g_dual = self.op.lin_op.ops[1].domain.clone()
         # Computing dual residual constant for given dual variable
-        self.op.lin_op.ops[1].adjoint(False, self.res_dual, self.dual)
+        self.op.lin_op.ops[1].adjoint(False, self.g_dual, self.dual)
         # Dresidual vector
         self.dres = self.res.clone()
         # Checking if a gradient mask was provided
@@ -89,7 +89,7 @@ class ProblemAugLagrangian(P.Problem):
         self.op.set_background(model)
         # g = rho*A'r_eq + A'dual
         self.op.lin_op.ops[1].adjoint(False, self.grad, res.vecs[1])
-        self.grad.scaleAdd(self.res_dual, self.rho, 1.)
+        self.grad.scaleAdd(self.g_dual, self.rho, 1.)
         # g = F'r_d + rho*A'r_eq + A'dual
         self.op.lin_op.ops[0].adjoint(True, self.grad, res.vecs[0])
         # Applying the gradient mask if present
@@ -123,13 +123,13 @@ class ProblemAugLagrangian(P.Problem):
         self.obj_terms[1] = 0.5 * val * val
         obj = self.obj_terms[0] + self.obj_terms[1]
         # dual term
-        obj += self.dual.dot(res.vecs[1])
+        obj += self.dual.dot(res.vecs[1]).real()
         return obj
 
     def update_dual(self):
         self.dual.scaleAdd(self.res.vecs[1],1.,self.rho)
         # Update A'dual term used in the gradient 
-        self.op.lin_op.ops[1].adjoint(False, self.res_dual, self.dual)
+        self.op.lin_op.ops[1].adjoint(False, self.g_dual, self.dual)
 
     def set_rho(self, rho):
         self.rho = rho
