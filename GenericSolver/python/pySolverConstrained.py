@@ -46,9 +46,9 @@ class AugLagrangianSolver:
                 if verbose:
                     msg = 90 * "*" + "\n"
                     msg += "\t\t\tAUGMENTED LAGRANGIAN (METHOD OF MULTIPLIERS)\n"
-                    msg += "\t Rho value used: %.5f" % self.rho[it]
-                    msg += "\t Inner problem solved %d times" % inner_count
-                    msg += "\t Dual variable updated %d times" % dual_count
+                    msg += "\t Rho value used: %.5f\n" % self.rho[it]
+                    msg += "\t Inner problem solved %d times\n" % inner_count
+                    msg += "\t Dual variable updated %d times\n" % dual_count
                     msg += 90 * "*" + "\n"
                     print(msg)
                     self.p_solver.logger.addToLog(msg)
@@ -80,7 +80,7 @@ class AugLagrangianSolver:
                     problem.dual.writeVec(dual_file, mode='a')
                 else:
                     if verbose:
-                        msg += "\t\t\tKeeping the dual variable and moving to the next rho"
+                        msg += "\t\t\tKeeping the dual variable and moving to the next rho\n"
                         print(msg)
                         self.p_solver.logger.addToLog(msg)
                     break
