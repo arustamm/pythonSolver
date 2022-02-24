@@ -36,9 +36,9 @@ class AugLagrangianSolver:
         c_ratio = 0
         dual_count = 0
         inner_count = 0
+        start_iter = 0 
         for it in range(len(self.rho)):
             problem.set_rho(self.rho[it])
-            start_iter = 0 
             while True:
                 problem.setDefaults()
                 # temporary solution for resetting the stepper
