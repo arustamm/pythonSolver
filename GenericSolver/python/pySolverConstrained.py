@@ -5,6 +5,7 @@ path.insert(0, '.')
 import pyProblem
 import pyVector as Vec
 import pySolver
+import pyStepper
 import atexit
 import os
 # Functions and modules necessary for writing on disk
@@ -24,19 +25,71 @@ class AugLagrangianSolver:
     """Solver parent object"""
 
     # Default class methods/functions
-    def __init__(self, inner_solver, rho=[0]):
+    def __init__(self, inner_solver, rho=[0], constraint_tol=0.25):
         """Default class constructor for Solver"""
         self.p_solver = inner_solver
         self.rho = rho
+        self.c_tol = constraint_tol
         return
 
     def run(self, problem, verbose=False, restart=False):
+        c_ratio = 0
+        dual_count = 0
+        inner_count = 0
         for it in range(len(self.rho)):
             problem.set_rho(self.rho[it])
-            self.p_solver.run(problem,verbose,restart)
-            # Update dual variable
-            problem.update_dual()
-            problem.setDefaults()
+            while True:
+                problem.setDefaults()
+                # temporary solution for resetting the stepper
+                problem.stepper = pyStepper.CvSrchStep()
 
-            dual_file = self.p_solver.prefix + "_dual.H"  # File name in which the dual vector is saved
-            problem.dual.writeVec(dual_file, mode='a')
+                if verbose:
+                    msg = 90 * "*" + "\n"
+                    msg += "\t\t\tAUGMENTED LAGRANGIAN (METHOD OF MULTIPLIERS)\n"
+                    msg += "\t Rho value used: %.5f" % self.rho[it]
+                    msg += "\t Inner problem solved %d times" % inner_count
+                    msg += "\t Dual variable updated %d times" % dual_count
+                    msg += 90 * "*" + "\n"
+                    print(msg)
+                    self.p_solver.logger.addToLog(msg)
+                
+                # Solver inner problem
+                self.p_solver.run(problem,verbose,restart)
+                inner_count += 1
+
+                # c_ratio = ||mod_res_final||/||max(mod_res)||
+                max = np.amax(self.p_solver.obj_terms[:,1])
+                if max > 0:
+                    c_ratio = self.p_solver.obj_terms[-1,1] / max
+                else:
+                    c_ratio = 0
+                
+                if verbose:
+                        msg = "\t\t\tCurrent decrease in the constraint-residual norm: %.5f\n" % c_ratio
+
+                if c_ratio <= self.c_tol:
+                    if verbose:
+                        msg += "\t\t\tUpdating dual variable and keeping the same rho = %.5f\n" % self.rho[it]
+                        print(msg)
+                        self.p_solver.logger.addToLog(msg)
+
+                    # Update dual variable
+                    problem.update_dual()
+                    dual_count += 1
+                    dual_file = self.p_solver.prefix + "_dual.H"  # File name in which the dual vector is saved
+                    problem.dual.writeVec(dual_file, mode='a')
+                else:
+                    if verbose:
+                        msg += "\t\t\tKeeping the dual variable and moving to the next rho"
+                        print(msg)
+                        self.p_solver.logger.addToLog(msg)
+                    break
+                
+                
+
+            
+            
+            
+            
+
+            
