@@ -25,10 +25,13 @@ class AugLagrangianSolver:
     """Solver parent object"""
 
     # Default class methods/functions
-    def __init__(self, inner_solver, rho=[0], constraint_tol=0.25):
+    def __init__(self, inner_solver, rho, constraint_tol=0.25, m_rho=0, outer=1):
         """Default class constructor for Solver"""
         self.p_solver = inner_solver
-        self.rho = rho
+        if m_rho:
+            self.rho = np.linspace(rho,rho*m_rho**(outer-1),outer)
+        if isinstance(rho,list):
+            self.rho = rho
         self.c_tol = constraint_tol
         return
 
