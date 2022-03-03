@@ -29,7 +29,7 @@ class AugLagrangianSolver:
         """Default class constructor for Solver"""
         self.p_solver = inner_solver
         if m_rho:
-            self.rho = np.linspace(rho,rho*m_rho**(outer-1),outer)
+            self.rho = np.geomspace(rho,rho*m_rho**(outer-1),outer)
         if isinstance(rho,list):
             self.rho = rho
         self.c_tol = constraint_tol
