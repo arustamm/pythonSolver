@@ -32,7 +32,7 @@ class Stepper:
             alpha_guess = 1.0 / dmodl.norm()
             return alpha_guess
         res = problem.get_res(modl)
-        dres_res = res.dot(dres)
+        dres_res = np.real(res.dot(dres))
         dres_dres = dres.dot(dres)
         if dres_dres == 0.:
             if logger:
@@ -347,7 +347,7 @@ class CvSrchStep(Stepper):
         phi_init = problem.get_obj(modl)
         # Getting pointer to problem's gradient vector
         prblm_grad = problem.get_grad(modl)
-        dphi_init = prblm_grad.dot(dmodl)
+        dphi_init = np.real(prblm_grad.dot(dmodl))
         if dphi_init > 0.0:
             if logger:
                 logger.addToLog("\tWarning! Current search direction is not a descent one!")
@@ -430,7 +430,7 @@ class CvSrchStep(Stepper):
             if logger:
                 logger.addToLog("\tObjective function value of %.5e (feval = %d)" % (phi_alpha, problem.get_fevals()))
             prblm_grad = problem.get_grad(model_step)
-            dphi_alpha = prblm_grad.dot(dmodl)
+            dphi_alpha = np.real(prblm_grad.dot(dmodl))
             phi_test1 = phi_init + alpha * dphi_test
 
             # Test for convergence
@@ -567,7 +567,7 @@ class ParabolicStep(Stepper):
         alpha = deepcopy(self.alpha)
         # Checking if current search direction is a descending one
         prblm_grad = problem.get_grad(prblm_mdl)
-        dphi = prblm_grad.dot(dmodl)
+        dphi = np.real(prblm_grad.dot(dmodl))
         if dphi > 0.0:
             if logger:
                 logger.addToLog("\tWarning! Current search direction is not a descent one!")
@@ -836,7 +836,7 @@ class ParabolicStepConst(Stepper):
         alpha = deepcopy(self.alpha)
         # Getting pointer to problem's gradient vector
         prblm_grad = problem.get_grad(prblm_mdl)
-        dphi = prblm_grad.dot(dmodl)
+        dphi = np.real(prblm_grad.dot(dmodl))
         if dphi > 0.0:
             if logger:
                 logger.addToLog("\tWarning! Current search direction is not a descent one!")
@@ -901,7 +901,7 @@ class ParabolicStepConst(Stepper):
                     itry = self.ntry  # To not repeat computation of linear guess
                     continue
             # Computing local constant curvature
-            phi_der = prblm_grad.dot(dmodl)  # First derivative of the objective function with respect to alpha
+            phi_der = np.real(prblm_grad.dot(dmodl))  # First derivative of the objective function with respect to alpha
             c = 2.0 * ((obj1 - obj0) / (self.c1 * alpha * self.c1 * alpha) - phi_der / (self.c1 * alpha))
             # Checking the curvature value
             if c <= 0.:
@@ -1069,7 +1069,7 @@ class StrongWolfe(Stepper):
             if (obj_i > obj0 + self.c1 * alpha_i * dphi0) or (obj_i >= obj_lo):
                 alpha_hi = alpha_i
             else:
-                dphi = grad_i.dot(dmodl)
+                dphi = np.real(grad_i.dot(dmodl))
                 if np.abs(dphi) <= -self.c2 * dphi0:
                     alpha = alpha_i
                     break
@@ -1103,7 +1103,7 @@ class StrongWolfe(Stepper):
         alpha = 0.0
         # Getting pointer to problem's gradient vector
         prblm_grad = problem.get_grad(modl).clone()
-        dphi0 = prblm_grad.dot(dmodl)
+        dphi0 = np.real(prblm_grad.dot(dmodl))
         itry = 0
         while itry < self.ntry:
             # Writing info to log file
@@ -1137,7 +1137,7 @@ class StrongWolfe(Stepper):
                 break
 
             # dphi = transpose(g_i) * p;
-            dphi = grad_i.dot(dmodl)
+            dphi = np.real(grad_i.dot(dmodl))
             if np.abs(dphi) <= -self.c2 * dphi0:
                 alpha = alpha_i
                 if logger:
