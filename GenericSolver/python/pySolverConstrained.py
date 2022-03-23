@@ -50,7 +50,7 @@ class AugLagrangianSolver:
                 if verbose:
                     msg = 90 * "*" + "\n"
                     msg += "\t\t\tAUGMENTED LAGRANGIAN (METHOD OF MULTIPLIERS)\n"
-                    msg += "\t Rho value used: %.5f\n" % self.rho[it]
+                    msg += "\t Rho value used: %.5f\n" % self.rho
                     msg += "\t Inner problem solved %d times\n" % inner_count
                     msg += "\t Dual variable updated %d times\n" % dual_count
                     msg += 90 * "*" + "\n"
@@ -74,7 +74,7 @@ class AugLagrangianSolver:
 
                 if c_ratio <= self.c_tol:
                     if verbose:
-                        msg += "\t\t\tUpdating dual variable and decreasing rho = %.5f\n" % self.rho[it]
+                        msg += "\t\t\tUpdating dual variable and decreasing rho = %.5f\n" % self.rho
                         print(msg)
                         self.p_solver.logger.addToLog(msg)
 
