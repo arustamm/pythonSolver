@@ -25,14 +25,14 @@ class AugLagrangianSolver:
     """Solver parent object"""
 
     # Default class methods/functions
-    def __init__(self, inner_solver, rho, constraint_tol=0.25, m_rho=0, outer=1):
+    def __init__(self, inner_solver, rho, p_rho, constraint_tol=0.25, m_rho=1, outer=1):
         """Default class constructor for Solver"""
         self.p_solver = inner_solver
-        if m_rho:
-            self.rho = np.geomspace(rho,rho*m_rho**(outer-1),outer)
-        if isinstance(rho,list):
-            self.rho = rho
+        self.rho = rho
+        self.p_rho = p_rho
+        self.m_rho = m_rho
         self.c_tol = constraint_tol
+        self.outer = outer
         return
 
     def run(self, problem, verbose=False, restart=False):
@@ -40,8 +40,8 @@ class AugLagrangianSolver:
         dual_count = 0
         inner_count = 0
         start_iter = 0 
-        for it in range(len(self.rho)):
-            problem.set_rho(self.rho[it])
+        for it in range(self.outer):
+            problem.set_rho(self.rho)
             while True:
                 problem.setDefaults()
                 # temporary solution for resetting the stepper
@@ -74,7 +74,7 @@ class AugLagrangianSolver:
 
                 if c_ratio <= self.c_tol:
                     if verbose:
-                        msg += "\t\t\tUpdating dual variable and keeping the same rho = %.5f\n" % self.rho[it]
+                        msg += "\t\t\tUpdating dual variable and decreasing rho = %.5f\n" % self.rho[it]
                         print(msg)
                         self.p_solver.logger.addToLog(msg)
 
@@ -83,11 +83,15 @@ class AugLagrangianSolver:
                     dual_count += 1
                     dual_file = self.p_solver.prefix + "_dual.H"  # File name in which the dual vector is saved
                     problem.dual.writeVec(dual_file, mode='a')
+                    # decrease rho
+                    self.rho *= self.m_rho
                 else:
                     if verbose:
-                        msg += "\t\t\tKeeping the dual variable and moving to the next rho\n"
+                        msg += "\t\t\tKeeping the dual variable and increasing rho\n"
                         print(msg)
                         self.p_solver.logger.addToLog(msg)
+                    # increase rho
+                    self.rho *= self.p_rho
                     break
                 
                 
