@@ -1079,7 +1079,7 @@ class LBFGSsolver(pySolver.Solver):
             # Check positivity, if not true skip the update
             if self.rho[ii] > 0.0:
                 # alpha_i=rho_i*s_i'r
-                alpha[ii] = self.rho[ii] * self.step_vectors[ii].dot(dmodl)
+                alpha[ii] = self.rho[ii] * np.real(self.step_vectors[ii].dot(dmodl))
                 # r=r-alpha_i*y_i
                 dmodl.scaleAdd(self.grad_diff_vectors[ii], 1.0, -alpha[ii])
         # Comput center (If not provide Identity matrix is assumed)
@@ -1093,7 +1093,7 @@ class LBFGSsolver(pySolver.Solver):
             # Check positivity, if not true skip the update
             if self.rho[ii] > 0.0:
                 # beta=rhoiyi'r
-                beta = self.rho[ii] * self.grad_diff_vectors[ii].dot(dmodl)
+                beta = self.rho[ii] * np.real(self.grad_diff_vectors[ii].dot(dmodl))
                 dmodl.scaleAdd(self.step_vectors[ii], 1.0, alpha[ii] - beta)
         return
 
@@ -1273,7 +1273,7 @@ class LBFGSsolver(pySolver.Solver):
                 self.step_vectors.append(bfgs_dmodl.clone())
                 self.step_vectors[step_index].scale(alpha)
             # rhon+1=1/yn+1'sn+1
-            denom_dot = self.grad_diff_vectors[step_index].dot(self.step_vectors[step_index])
+            denom_dot = np.real(self.grad_diff_vectors[step_index].dot(self.step_vectors[step_index]))
             # Checking rho
             self.check_rho(denom_dot, step_index, self.iistep)
 
