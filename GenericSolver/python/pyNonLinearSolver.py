@@ -1021,7 +1021,7 @@ class LBFGSsolver(pySolver.Solver):
 
     def check_rho(self, denom_dot, step_index, iiter):
         """Function to check scaling factor of Hessian inverse estimate"""
-        if denom_dot == 0.:
+        if np.real(denom_dot) == 0.:
             if self.m_steps is not None:
                 self.rho[step_index] = 0.
             else:
@@ -1029,7 +1029,7 @@ class LBFGSsolver(pySolver.Solver):
             msg = "Skipping update to estimated Hessian; y vector orthogonal to s vector at iteration %s" % iiter
             if self.logger:
                 self.logger.addToLog(msg)
-        elif denom_dot < 0.:
+        elif np.real(denom_dot) < 0.:
             if self.m_steps is not None:
                 self.rho[step_index] = 0.
             else:
@@ -1042,6 +1042,7 @@ class LBFGSsolver(pySolver.Solver):
                 self.rho[step_index] = 1.0 / denom_dot
             else:
                 self.rho.append(1.0 / denom_dot)
+                self.logger.addToLog(1.0/denom_dot)
             # Saving current update for inverse Hessian estimate (i.e., gradient-difference and model-step vectors)
             self.save_hessian_estimate(step_index, iiter)
         return
@@ -1077,9 +1078,9 @@ class LBFGSsolver(pySolver.Solver):
         # Apply right-hand series of operators
         for ii in rloop:
             # Check positivity, if not true skip the update
-            if self.rho[ii] > 0.0:
+            if np.real(self.rho[ii]) > 0.0:
                 # alpha_i=rho_i*s_i'r
-                alpha[ii] = self.rho[ii] * np.real(self.step_vectors[ii].dot(dmodl))
+                alpha[ii] = self.rho[ii] * self.step_vectors[ii].dot(dmodl)
                 # r=r-alpha_i*y_i
                 dmodl.scaleAdd(self.grad_diff_vectors[ii], 1.0, -alpha[ii])
         # Comput center (If not provide Identity matrix is assumed)
@@ -1091,9 +1092,9 @@ class LBFGSsolver(pySolver.Solver):
         # Apply left-hand series of operators
         for ii in lloop:
             # Check positivity, if not true skip the update
-            if self.rho[ii] > 0.0:
+            if np.real(self.rho[ii]) > 0.0:
                 # beta=rhoiyi'r
-                beta = self.rho[ii] * np.real(self.grad_diff_vectors[ii].dot(dmodl))
+                beta = self.rho[ii] * self.grad_diff_vectors[ii].dot(dmodl)
                 dmodl.scaleAdd(self.step_vectors[ii], 1.0, alpha[ii] - beta)
         return
 
@@ -1273,7 +1274,7 @@ class LBFGSsolver(pySolver.Solver):
                 self.step_vectors.append(bfgs_dmodl.clone())
                 self.step_vectors[step_index].scale(alpha)
             # rhon+1=1/yn+1'sn+1
-            denom_dot = np.real(self.grad_diff_vectors[step_index].dot(self.step_vectors[step_index]))
+            denom_dot = self.grad_diff_vectors[step_index].dot(self.step_vectors[step_index])
             # Checking rho
             self.check_rho(denom_dot, step_index, self.iistep)
 
