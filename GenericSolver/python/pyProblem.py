@@ -983,7 +983,7 @@ class ProblemL2NonLinearReg(Problem):
         # Applying the gradient mask if present
         if self.grad_mask is not None:
             self.grad.multiply(self.grad_mask)
-        return self.grad.conj()
+        return self.grad
 
     def dresf(self, model, dmodel):
         """

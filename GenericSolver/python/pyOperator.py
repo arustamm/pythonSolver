@@ -227,10 +227,9 @@ class Operator:
         """
 
         def _testing(add, dt1, dt2, tol, verbose=False):
-            if isinstance(dt2, np.complex):
-                dt2 = np.conj(dt2)
+            dt2 = np.conj(dt2)
             abs_err = dt1 - dt2
-            err_rel = abs_err / abs(dt2)
+            err_rel = abs(abs_err / dt2)
             if verbose:
                 print("Dot products add=%s: domain=%.6e range=%.6e " % (str(add), abs(dt1), abs(dt2)))
                 print("Absolute error: %.6e" % abs(abs_err))

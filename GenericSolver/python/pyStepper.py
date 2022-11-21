@@ -42,7 +42,7 @@ class Stepper:
             alpha_guess = 1.0 / dmodl.norm()
         else:
             # alpha = -phi'(0)/phi''(0)
-            alpha_guess = -dres_res / dres_dres
+            alpha_guess = np.real(-dres_res / dres_dres)
         return alpha_guess
 
 

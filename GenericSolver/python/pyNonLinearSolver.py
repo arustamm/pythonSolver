@@ -1042,7 +1042,6 @@ class LBFGSsolver(pySolver.Solver):
                 self.rho[step_index] = 1.0 / denom_dot
             else:
                 self.rho.append(1.0 / denom_dot)
-                self.logger.addToLog(1.0/denom_dot)
             # Saving current update for inverse Hessian estimate (i.e., gradient-difference and model-step vectors)
             self.save_hessian_estimate(step_index, iiter)
         return
