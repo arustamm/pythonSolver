@@ -1078,9 +1078,9 @@ class LBFGSsolver(pySolver.Solver):
         # Apply right-hand series of operators
         for ii in rloop:
             # Check positivity, if not true skip the update
-            if np.real(self.rho[ii]) > 0.0:
+            if self.rho[ii] > 0.0:
                 # alpha_i=rho_i*s_i'r
-                alpha[ii] = self.rho[ii] * self.step_vectors[ii].dot(dmodl)
+                alpha[ii] = self.rho[ii] * np.real(self.step_vectors[ii].dot(dmodl))
                 # r=r-alpha_i*y_i
                 dmodl.scaleAdd(self.grad_diff_vectors[ii], 1.0, -alpha[ii])
         # Comput center (If not provide Identity matrix is assumed)
@@ -1092,9 +1092,9 @@ class LBFGSsolver(pySolver.Solver):
         # Apply left-hand series of operators
         for ii in lloop:
             # Check positivity, if not true skip the update
-            if np.real(self.rho[ii]) > 0.0:
+            if self.rho[ii] > 0.0:
                 # beta=rhoiyi'r
-                beta = self.rho[ii] * self.grad_diff_vectors[ii].dot(dmodl)
+                beta = self.rho[ii] * np.real(self.grad_diff_vectors[ii].dot(dmodl))
                 dmodl.scaleAdd(self.step_vectors[ii], 1.0, alpha[ii] - beta)
         return
 
