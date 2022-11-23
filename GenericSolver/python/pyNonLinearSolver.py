@@ -1021,7 +1021,8 @@ class LBFGSsolver(pySolver.Solver):
 
     def check_rho(self, denom_dot, step_index, iiter):
         """Function to check scaling factor of Hessian inverse estimate"""
-        if np.real(denom_dot) == 0.:
+        denom_dot = np.real(denom_dot)
+        if denom_dot == 0.:
             if self.m_steps is not None:
                 self.rho[step_index] = 0.
             else:
@@ -1029,7 +1030,7 @@ class LBFGSsolver(pySolver.Solver):
             msg = "Skipping update to estimated Hessian; y vector orthogonal to s vector at iteration %s" % iiter
             if self.logger:
                 self.logger.addToLog(msg)
-        elif np.real(denom_dot) < 0.:
+        elif denom_dot < 0.:
             if self.m_steps is not None:
                 self.rho[step_index] = 0.
             else:
