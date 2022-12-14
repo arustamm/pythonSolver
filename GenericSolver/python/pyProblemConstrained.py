@@ -3,6 +3,7 @@ import pyVector as pyVec
 import pyOperator as pyOp
 import pyProblem as P
 from math import isnan
+import numpy as np
 
 class ProblemAugLagrangian(P.Problem):
     """
