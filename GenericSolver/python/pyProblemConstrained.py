@@ -123,7 +123,7 @@ class ProblemAugLagrangian(P.Problem):
         self.obj_terms[1] = 0.5 * val * val
         obj = self.obj_terms[0] + self.obj_terms[1]
         # dual term
-        obj += self.dual.dot(res.vecs[1])
+        obj += np.real(self.dual.dot(res.vecs[1]))
         return obj
 
     def update_dual(self):
