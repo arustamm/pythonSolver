@@ -27,7 +27,7 @@ def _betaFR(grad, grad0, dir, logger):
         if logger:
             logger.addToLog("Setting beta to zero since norm of previous gradient is zero!!!")
     else:
-        beta = dot_grad / dot_grad0
+        beta = np.real(dot_grad / dot_grad0)
     return beta
 
 
