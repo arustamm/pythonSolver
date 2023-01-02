@@ -25,7 +25,7 @@ class AugLagrangianSolver:
     """Solver parent object"""
 
     # Default class methods/functions
-    def __init__(self, inner_solver, rho, p_rho, constraint_tol=0.25, m_rho=1, outer=1):
+    def __init__(self, inner_solver, rho, p_rho, constraint_tol=0.25, m_rho=1, outer=1, save_dual=False):
         """Default class constructor for Solver"""
         self.p_solver = inner_solver
         self.rho = rho
@@ -33,6 +33,7 @@ class AugLagrangianSolver:
         self.m_rho = m_rho
         self.c_tol = constraint_tol
         self.outer = outer
+        self.save_dual = save_dual
         return
 
     def run(self, problem, verbose=False, restart=False):
@@ -81,10 +82,13 @@ class AugLagrangianSolver:
                     # Update dual variable
                     problem.update_dual()
                     dual_count += 1
-                    dual_file = self.p_solver.prefix + "_dual.H"  # File name in which the dual vector is saved
-                    problem.dual.writeVec(dual_file, mode='a')
+                    if self.save_dual and self.p_solver.prefix is not None:
+                        dual_file = self.p_solver.prefix + "_dual.H"  
+                        problem.dual.writeVec(dual_file, mode="a")
+                    
                     # decrease rho
                     self.rho *= self.m_rho
+                    break
                 else:
                     if verbose:
                         msg += "\t\t\tKeeping the dual variable and increasing rho\n"
