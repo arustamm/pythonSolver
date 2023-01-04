@@ -14,7 +14,7 @@ class RayObject:
         """
 
         # List containing references to ray-remote actors
-        self.actors = ActorPool([])
+        self.actors = []
         # Creating a ray-remote wrapper for object
         if isinstance(objCls, type) or isinstance(objCls, types.FunctionType):
             objRemote = ray.remote(objCls)
@@ -23,9 +23,11 @@ class RayObject:
         
         for par in constructor_pars:
             # creating actual instances of remote vectors
+            print(objRemote)
             vecHandle = objRemote.remote(**par)
+            print(vecHandle)
             # collect all vectors into the pool
-            self.actors.push(vecHandle)
+            self.actors.append(vecHandle)
         
         # TODO
         # wait for all the actors to be created?
@@ -85,7 +87,7 @@ class RayVector(RayObject, Vector.vector):
 
 
     def getNdArray(self):
-        return list(self.vecRay.submit(lambda v: v.getNdArray.remote()))
+        return ray.get([v.getNdArray.remote() for v in self.actors])
 
     @property
     def shape(self):
@@ -93,7 +95,7 @@ class RayVector(RayObject, Vector.vector):
 
     def norm(self, N=2):
         norm = 0.
-        norms = list(self.vecRay.submit(lambda v: v.norm.remote(), N=N))
+        norms = list(self.actors.submit(lambda v, n: v.norm.remote(N=n), N))
         for n in norms:
             norm += np.power(np.float64(n), N)
         return np.power(norm, 1/N)
