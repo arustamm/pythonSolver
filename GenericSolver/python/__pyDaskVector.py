@@ -169,27 +169,27 @@ class DaskVector(DaskObject, Vector.vector):
 
     def reciprocal(self):
         """Return a vector containing the reciprocals of self"""
-        _ = ray.get([v.reciprocal.remote() for v in self])
+        wait(self.client.map(self.cls.reciprocal, self, pure=False))
         return self
 
     def conj(self):
         """Compute conjugate transpose of the vector"""
-        _ = ray.get([v.conj.remote() for v in self])
+        wait(self.client.map(self.cls.conj, self, pure=False))
         return self
 
     def real(self):
         """Return the real part of the vector"""
-        _ = ray.get([v.real.remote() for v in self])
+        wait(self.client.map(self.cls.real, self, pure=False))
         return self
 
     def imag(self):
         """Return the imaginary part of the vector"""
-        _ = ray.get([v.imag.remote() for v in self])
+        wait(self.client.map(self.cls.real, self, pure=False))
         return self
 
     def pow(self, power):
         """Compute element-wise power of the vector"""
-        _ = ray.get([v.pow.remote(power) for v in self])
+        wait(self.client.map(self.cls.pow, self, power=power, pure=False))
         return self
 
     # Methods combinaning different vectors
@@ -203,7 +203,8 @@ class DaskVector(DaskObject, Vector.vector):
     def cloneSpace(self):
         """Function to clone vector space"""
         fut = self.client.map(self.cls.cloneSpace, self, pure=False)
-        return DaskVector(self.dask_client, self.cls, self.ns, self.os, self.ds, futures=fut)
+        return DaskVector(self.dask_client, self.cls, self.ns, self.os, self.ds, 
+                            chunks=self.chunks, futures=fut)
 
     def check(self, vec):
         # check if number of chunks is the same
@@ -220,17 +221,17 @@ class DaskVector(DaskObject, Vector.vector):
         fut = self.client.map(self.cls.checkSame, self, vec, pure=False)
         return all(self.client.gather(fut))
         
-    # def maximum(self, vec2):
-    #     """Return a new vector of element-wise maximum of self and vec2"""
-    #     checkVector(self, vec2)
-    #     daskD.wait(self.client.map(call_maximum, self.vecDask, vec2.vecDask, pure=False))
-    #     return self
+    def maximum(self, vec2):
+        """Return a new vector of element-wise maximum of self and vec2"""
+        self.check(vec2)
+        wait(self.client.map(self.cls.maximum, self, vec2, pure=False))
+        return self
 
-    # def copy(self, vec2):
-    #     """Function to copy vector"""
-    #     checkVector(self, vec2)
-    #     daskD.wait(self.client.map(call_copy, self.vecDask, vec2.vecDask, pure=False))
-    #     return self
+    def copy(self, vec2):
+        """Function to copy vector"""
+        self.check(vec2)
+        wait(self.client.map(self.cls.copy, self, vec2, pure=False))
+        return self
 
     def scaleAdd(self, vec2, sc1=1.0, sc2=1.0):
         """Function to scale two vectors and add them to the first one"""
@@ -245,31 +246,27 @@ class DaskVector(DaskObject, Vector.vector):
         # Adding all the results together
         dot = 0.0
         for future, result in as_completed(dots, with_results=True):
-            dot += np.float64(result)
+            dot += result
         return dot
 
     def multiply(self, vec2):
         """Function to multiply element-wise two vectors"""
-        checkVector(self, vec2)
-        futures = self.client.map(call_multiply, self.vecDask, vec2.vecDask, pure=False)
-        daskD.wait(futures)
+        self.check(vec2)
+        wait(self.client.map(self.cls.multiply, self, vec2, pure=False))
         return self
 
     def isDifferent(self, vec2):
         """Function to check if two vectors are identical"""
-        checkVector(self, vec2)
-        futures = self.client.map(call_isDifferent, self.vecDask, vec2.vecDask,
-                                  pure=False)
-        results = self.client.gather(futures)
+        self.check(vec2)
+        fut = self.client.map(self.cls.isDifferent, self, vec2, pure=False)
+        results = self.client.gather(fut)
         return any(results)
 
     def clipVector(self, low, high):
         """Function to bound vector values based on input vectors min and max"""
-        checkVector(self, low)  # Checking low-bound vector
-        checkVector(self, high)  # Checking high-bound vector
-        futures = self.client.map(call_clipVector, self.vecDask, low.vecDask,
-                                  high.vecDask, pure=False)
-        daskD.wait(futures)
+        self.check(low)  # Checking low-bound vector
+        self.check(high)  # Checking high-bound vector
+        wait(self.client.map(self.cls.clipVector, self, low, high, pure=False))
         return self
 
 
