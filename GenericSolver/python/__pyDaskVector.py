@@ -24,26 +24,42 @@ class DaskObject:
         self.client = client = self.dask_client.getClient()
 
         # List containing references to ray-remote actors
-        self.obj = []
+        self.fut = []
         self.client = dask_client.getClient()
-        # Creating a ray-remote wrapper for object
-        if not isinstance(objCreator, type) and not isinstance(objCreator, types.FunctionType):
-            raise TypeError("DaskObject can only be created by providing the class name or creator-function!")
-        if futures and len(futures) == len(constructor_pars):
-            self.obj = futures
-        else:
-            for par in constructor_pars:
-                future = client.submit(objCreator, **par)
-                # collect all vectors into the pool
-                self.obj.append(future)
         
-        self.cls = objCreator
-
+        # option 1
+        if isinstance(objCreator, type):
+            self.cls = objCreator
+            if futures and len(futures) == len(constructor_pars):
+                self.fut = futures
+            else:
+                for par in constructor_pars:
+                    future = client.submit(objCreator, **par)
+                    # collect all vectors into the pool
+                    self.fut.append(future)
+        # option 2
+        elif isinstance(objCreator, types.FunctionType):
+            if kw.get("from_object"):
+                obj = kw.get("from_object")
+                self.cls = type(obj)
+                if futures and len(futures) == len(constructor_pars):
+                    self.fut = futures
+                else:
+                    for par in constructor_pars:
+                        future = client.submit(objCreator, obj, **par)
+                        # collect all vectors into the pool
+                        self.fut.append(future)
+            else:
+                raise ValueError("Need to pass from_object when using generator function!")
+        else:
+            raise TypeError("DaskObject can only be created by providing the class name or creator-function!")
+        
+        
     def __getitem__(self, index):
-        return self.obj[index]
+        return self.fut[index]
 
     def __len__(self):
-        return len(self.obj)
+        return len(self.fut)
 
     def __del__(self):
         """Default destructor"""
@@ -51,20 +67,59 @@ class DaskObject:
 
 class DaskVector(DaskObject, Vector.vector):
 
-    def __init__(self, dask_client, 
-                vecCls, ns: List[int], os: List[float], ds: List[float], 
-                chunks=None, futures=None, **kw):
+    def __init__(self, dask_client, **kw):
         """
-            veCls -- Vector class that MUST take kwargs as [ns=..., ds=..., os=...]
+            veCcls -- Vector class that MUST take kwargs as [ns=..., ds=..., os=...]
             chunks -- List corresponding to number of chunks along each dimension
         """
         #
+        
+        self.chunks = chunks = kw.get("chunks")
+        #  Client to submit tasks
+        if not isinstance(dask_client, DaskClient):
+            raise TypeError("Passed client is not a Dask Client object!")
+        self.dask_client = dask_client
 
-        self.ns = ns
-        self.os = os
-        self.ds = ds
-        self.chunks = chunks
+        # option 1
+        if kw.get("vecCls"):
+            self.ns = ns = kw.get("ns")
+            self.os = os = kw.get("os")
+            self.ds = ds = kw.get("ds")    
+            vecCls = kw.get("vecCls")
+            
+        # option 2
+        elif kw.get("from_vector"):
+            vec = kw.get("from_vector")
+            axes = vec.getHyper().axes
+            self.ns = ns = [ax.n for ax in axes]
+            self.os = os = [ax.o for ax in axes]
+            self.ds = ds = [ax.d for ax in axes]
 
+        # TODO need to fix the order of the ns, ds os -- now it's reversed compared to SepVector
+        ns_list, ds_list, os_list = self._calculate_chunks_(ns, ds, os, chunks)
+        # list of hypercubes for each inividual Vector 
+        hypers = [Hypercube.hypercube(ns=ns.tolist(), os=os.tolist(), ds=ds.tolist())
+                                for (ns, os, ds) in zip(ns_list, os_list, ds_list)]
+        
+        if kw.get("vecCls"):
+            constructor_pars = [{"fromHyper" : hyper} for hyper in hypers]
+            DaskObject.__init__(self, dask_client, vecCls, constructor_pars, futures=kw.get("futures"))
+        elif kw.get("from_vector"):
+            vecCls = type(vec)
+            constructor_pars = []
+            f = [0] * len(ns)
+            for n in ns_list:
+                wpars = {}
+                for i in range(len(n)):
+                    wpars["n%d" % (i+1)] = n[i]
+                    wpars["f%d" % (i+1)] = f[i]
+                f = n
+                constructor_pars.append(wpars)
+            # generate using windowing function provided by the vecCls class
+            DaskObject.__init__(self, dask_client, vecCls.window, constructor_pars, 
+                                from_object=vec,futures=kw.get("futures"))
+
+    def _calculate_chunks_(self, ns, ds, os, chunks):
         # spread vectors across ray-workers if chunks is present
         if chunks: 
             nchunks = np.prod(np.array(chunks))
@@ -88,18 +143,14 @@ class DaskVector(DaskObject, Vector.vector):
                 for j in range(every_index[i],len(ns_list)+every_index[i],every_index[i]):
                     sublist = ns_list[int(j-before[i]):j]
                     sublist[:,i] += ns[i] % chunks[i]
-        # else scatter the vector across workers
+        # else scatter the vector across workers equally
         else:
-            nchunks = dask_client.getNworkers()
+            nchunks = self.dask_client.getNworkers()
             ns_list = np.asarray([ns for i in range(nchunks)], dtype=object)
             ds_list = np.asarray([ds for i in range(nchunks)], dtype=object)
             os_list = np.asarray([os for i in range(nchunks)], dtype=object)
-        
-        # list of parameters for each inividual Vector 
-        constructor_pars = [{"fromHyper" : Hypercube.hypercube(ns=ns.tolist(), os=os.tolist(), ds=ds.tolist())} 
-                                for (ns, os, ds) in zip(ns_list, os_list, ds_list)]
 
-        DaskObject.__init__(self, dask_client, vecCls, constructor_pars, futures=futures)
+        return ns_list, ds_list, os_list
 
 
     def getNdArray(self):
@@ -197,13 +248,13 @@ class DaskVector(DaskObject, Vector.vector):
     def clone(self):
         """Function to clone (deep copy) a vector from a vector or a Space"""
         fut = self.client.map(self.cls.clone, self, pure=False)
-        return DaskVector(self.dask_client, self.cls, self.ns, self.os, self.ds, 
+        return DaskVector(self.dask_client, vecCls=self.cls, ns=self.ns, os=self.os, ds=self.ds, 
                             chunks=self.chunks, futures=fut)
 
     def cloneSpace(self):
         """Function to clone vector space"""
         fut = self.client.map(self.cls.cloneSpace, self, pure=False)
-        return DaskVector(self.dask_client, self.cls, self.ns, self.os, self.ds, 
+        return DaskVector(self.dask_client, vecCls=self.cls, ns=self.ns, os=self.os, ds=self.ds, 
                             chunks=self.chunks, futures=fut)
 
     def check(self, vec):
@@ -269,21 +320,16 @@ class DaskVector(DaskObject, Vector.vector):
         wait(self.client.map(self.cls.clipVector, self, low, high, pure=False))
         return self
 
+    def writeVec(self, filename, mode='w', multi_file=False):
+        # TODO
+        pass
 
-def scatter(vector):
-    pass
 
-# class RayOperator(RayObject, Operator.Operator):
-
-#     def __init__(self, domain, range, opCls, constructor_par, **kw):
-#         RayObject.__init__(opCls, constructor_par, kw)
-
-#     def forward(self, add, model, data):
-#         self.objRemote.map(...)
-             
-
-#     def adjoint(self, add, model, data):
-#         pass 
+def readDaskVector(vector, chunks=None) -> "DaskVector":
+    """
+       Vector is read in chunks in parallel by different Dask workers
+       (uses windowed read from genericIO)
+    """
 
 
     
