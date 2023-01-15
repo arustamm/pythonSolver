@@ -45,8 +45,10 @@ class DaskObject:
                 if futures and len(futures) == len(constructor_pars):
                     self.fut = futures
                 else:
+                    # scatter the object first to avoid repeated work
+                    obj_fut = client.scatter(obj, broadcast=True)
                     for par in constructor_pars:
-                        future = client.submit(objCreator, obj, **par)
+                        future = client.submit(objCreator, obj_fut, **par)
                         # collect all vectors into the pool
                         self.fut.append(future)
             else:
@@ -95,12 +97,10 @@ class DaskVector(DaskObject, Vector.vector):
             self.os = os = [ax.o for ax in axes]
             self.ds = ds = [ax.d for ax in axes]
 
-        # TODO need to fix the order of the ns, ds os -- now it's reversed compared to SepVector
         ns_list, ds_list, os_list = self._calculate_chunks_(ns, ds, os, chunks)
         # list of hypercubes for each inividual Vector 
         hypers = [Hypercube.hypercube(ns=ns.tolist(), os=os.tolist(), ds=ds.tolist())
                                 for (ns, os, ds) in zip(ns_list, os_list, ds_list)]
-        print("\n",os_list)
         # option 1
         if kw.get("vecCls"):
             constructor_pars = [{"fromHyper" : hyper} for hyper in hypers]
@@ -119,6 +119,7 @@ class DaskVector(DaskObject, Vector.vector):
                     wpars["n%d" % (i+1)] = n[i]
                     wpars["f%d" % (i+1)] = int(o[i] * prev[i])
                     prev[i] = 1 / d[i]
+                # print(wpars)
                 constructor_pars.append(wpars)
             # generate using windowing function provided by the vecCls class
             DaskObject.__init__(self, dask_client, vecCls.window, constructor_pars, 
@@ -138,12 +139,19 @@ class DaskVector(DaskObject, Vector.vector):
             every_index = np.flip(np.cumprod(chunks)).astype(int)
             before = np.ones(len(chunks)).astype(int)
             before[:-1] = every_index[1:]
+
+            ntiles = nrep = 1
             for i in range(len(chunks)):
                 # calculate origins
-                print("Axis %d" % i)
                 oos = np.array([os[i] + j*nns[i]*ds[i] for j in range(chunks[i])])
-                oos = np.tile(oos, before[i])
-                oos = np.repeat(oos, len(os_list)//oos.size)
+
+                oos = np.repeat(oos, nrep)
+                
+                nrep *= chunks[i]
+                ntiles = max(1, int(nchunks / oos.size))
+                
+                oos = np.tile(oos, ntiles)
+
                 os_list[:,i] = oos[:]
                 # calculate sizes at the boundaries
                 for j in range(every_index[i],len(ns_list)+every_index[i],every_index[i]):
@@ -156,6 +164,7 @@ class DaskVector(DaskObject, Vector.vector):
             ds_list = np.asarray([ds for i in range(nchunks)], dtype=object)
             os_list = np.asarray([os for i in range(nchunks)], dtype=object)
 
+        print(os_list)
         return ns_list, ds_list, os_list
 
 
