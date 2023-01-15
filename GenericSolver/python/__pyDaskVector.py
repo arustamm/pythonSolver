@@ -100,27 +100,32 @@ class DaskVector(DaskObject, Vector.vector):
         # list of hypercubes for each inividual Vector 
         hypers = [Hypercube.hypercube(ns=ns.tolist(), os=os.tolist(), ds=ds.tolist())
                                 for (ns, os, ds) in zip(ns_list, os_list, ds_list)]
-        
+        print("\n",os_list)
+        # option 1
         if kw.get("vecCls"):
             constructor_pars = [{"fromHyper" : hyper} for hyper in hypers]
             DaskObject.__init__(self, dask_client, vecCls, constructor_pars, futures=kw.get("futures"))
+        # option 2
         elif kw.get("from_vector"):
             vecCls = type(vec)
+            # we need window function to generate new vectors
+            if not vecCls.__dict__.get("window"):
+                raise ValueError("To generate DaskVector from %s, it should containt window function!" % typ)
             constructor_pars = []
-            f = [0] * len(ns)
-            for n in ns_list:
+            prev = [0] * len(ns)
+            for n, o, d in zip(ns_list, os_list, ds_list):
                 wpars = {}
                 for i in range(len(n)):
                     wpars["n%d" % (i+1)] = n[i]
-                    wpars["f%d" % (i+1)] = f[i]
-                f = n
+                    wpars["f%d" % (i+1)] = int(o[i] * prev[i])
+                    prev[i] = 1 / d[i]
                 constructor_pars.append(wpars)
             # generate using windowing function provided by the vecCls class
             DaskObject.__init__(self, dask_client, vecCls.window, constructor_pars, 
                                 from_object=vec,futures=kw.get("futures"))
 
     def _calculate_chunks_(self, ns, ds, os, chunks):
-        # spread vectors across ray-workers if chunks is present
+        # spread vectors across ray-workers if chunks is present        
         if chunks: 
             nchunks = np.prod(np.array(chunks))
             # size of an individual chunk
@@ -130,14 +135,15 @@ class DaskVector(DaskObject, Vector.vector):
             os_list = np.asarray([os for i in range(nchunks)], dtype=object)
             
             # handle the chunks at the boundaries 
-            every_index = np.flip(np.cumprod(chunks))
-            before = np.ones(len(chunks))
+            every_index = np.flip(np.cumprod(chunks)).astype(int)
+            before = np.ones(len(chunks)).astype(int)
             before[:-1] = every_index[1:]
             for i in range(len(chunks)):
                 # calculate origins
+                print("Axis %d" % i)
                 oos = np.array([os[i] + j*nns[i]*ds[i] for j in range(chunks[i])])
-                oos = np.repeat(oos, before[i])
-                oos = np.tile(oos, len(os_list)//oos.size)
+                oos = np.tile(oos, before[i])
+                oos = np.repeat(oos, len(os_list)//oos.size)
                 os_list[:,i] = oos[:]
                 # calculate sizes at the boundaries
                 for j in range(every_index[i],len(ns_list)+every_index[i],every_index[i]):
