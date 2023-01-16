@@ -6,7 +6,8 @@ import numpy as np
 import Hypercube
 from dask_util import DaskClient
 from dask.distributed import wait, as_completed
-import copy
+from dask import delayed
+import dask.array as da
 
 class DaskObject:
     """ Remote object based on the Ray runtime """
@@ -125,6 +126,7 @@ class DaskVector(DaskObject, Vector.vector):
             DaskObject.__init__(self, dask_client, vecCls.window, constructor_pars, 
                                 from_object=vec,futures=kw.get("futures"))
 
+
     def _calculate_chunks_(self, ns, ds, os, chunks):
         # spread vectors across ray-workers if chunks is present        
         if chunks: 
@@ -141,22 +143,25 @@ class DaskVector(DaskObject, Vector.vector):
             before[:-1] = every_index[1:]
 
             ntiles = nrep = 1
-            for i in range(len(chunks)):
+            
+            for i in range(len(self.ns)):
                 # calculate origins
                 oos = np.array([os[i] + j*nns[i]*ds[i] for j in range(chunks[i])])
+                # calculate remainder in the last block
+                rem = np.zeros(chunks[i], dtype=int)
+                rem[-1] = int(self.ns[i] % chunks[i])
 
                 oos = np.repeat(oos, nrep)
-                
+                rem = np.repeat(rem, nrep)
                 nrep *= chunks[i]
                 ntiles = max(1, int(nchunks / oos.size))
                 
                 oos = np.tile(oos, ntiles)
-
+                rem = np.tile(rem, ntiles)
+                
+                # final lists
                 os_list[:,i] = oos[:]
-                # calculate sizes at the boundaries
-                for j in range(every_index[i],len(ns_list)+every_index[i],every_index[i]):
-                    sublist = ns_list[int(j-before[i]):j]
-                    sublist[:,i] += ns[i] % chunks[i]
+                ns_list[:,i] += rem[:]
         # else scatter the vector across workers equally
         else:
             nchunks = self.dask_client.getNworkers()
@@ -164,17 +169,22 @@ class DaskVector(DaskObject, Vector.vector):
             ds_list = np.asarray([ds for i in range(nchunks)], dtype=object)
             os_list = np.asarray([os for i in range(nchunks)], dtype=object)
 
-        print(os_list)
         return ns_list, ds_list, os_list
 
 
     def getNdArray(self):
         # maybe return a dask array instead?
+        # TODO does not support zero-copy so assigning a value would not work
         fut = self.client.map(self.cls.getNdArray, self, pure=False)
+        # TODO the next line moves all the futures to the local worker so need to scatter back if we want to change it
         return self.client.gather(fut)
 
     @property
     def shape(self):
+        return tuple(list(reversed(self.ns)))
+
+    @property
+    def chunksizes(self):
         arrs = self.getNdArray()
         return [arr.shape for arr in arrs]
 
