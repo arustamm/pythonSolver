@@ -13,6 +13,8 @@ import sep_util
 # other modules
 import sys_util
 
+from numbers import Number
+
 # regex to read output of Solver_ops
 re_dpr = re.compile("DOT RESULT(.*)")
 
@@ -81,6 +83,15 @@ class vector:
             self.multiply(other.clone().reciprocal())
         else:
             raise TypeError('other has to be either a scalar or a vector')
+
+    # these were needed for dask
+    def __getitem__(self, it):
+        arr = self.getNdArray()
+        return arr[it]
+
+    def __setitem__(self, it, val):
+        arr = self.getNdArray()
+        arr[it] = val
 
     # Class vector operations
     def getNdArray(self):
@@ -608,10 +619,19 @@ class vectorIC(vector):
             raise ValueError("ERROR! Input variable not currently supported!")
 
         # Number of elements per axis (tuple). Checking also the memory order
-        self.shape = self.arr.shape  # If fortran the first axis is the "fastest"
         self.ndims = len(self.shape)  # Number of axes integer
         self.size = self.arr.size # Total number of elements
         super(vectorIC, self).__init__()
+
+    @property
+    def shape(self):
+        return self.arr.shape
+    @property
+    def ndim(self):
+        return self.arr.ndim
+    @property
+    def dtype(self):
+        return self.arr.dtype
 
     def getNdArray(self):
         """Function to return Ndarray of the vector"""

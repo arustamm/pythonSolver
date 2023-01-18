@@ -1,6 +1,6 @@
 import pyVector as Vector
 import pyOperator as Operator
-from typing import List
+from typing import List, Tuple
 import types
 import numpy as np
 import Hypercube
@@ -58,7 +58,7 @@ class DaskObject:
             raise TypeError("DaskObject can only be created by providing the class name or creator-function!")
         
         
-    def __getitem__(self, index):
+    def getFuture(self, index):
         return self.fut[index]
 
     def __len__(self):
@@ -99,6 +99,7 @@ class DaskVector(DaskObject, Vector.vector):
             self.ds = ds = [ax.d for ax in axes]
 
         ns_list, ds_list, os_list = self._calculate_chunks_(ns, ds, os, chunks)
+        self.ns_list = ns_list
         # list of hypercubes for each inividual Vector 
         hypers = [Hypercube.hypercube(ns=ns.tolist(), os=os.tolist(), ds=ds.tolist())
                                 for (ns, os, ds) in zip(ns_list, os_list, ds_list)]
@@ -171,13 +172,68 @@ class DaskVector(DaskObject, Vector.vector):
 
         return ns_list, ds_list, os_list
 
+    def _get_ind_and_block_(self, it: Tuple[slice]):
+        # takes global it index as an input and outputs corresponding iblock and local index
+        # list of block indices (slices)
+        ibs = []
+        # list of local indices (slices)
+        ilocs = []
+        chsize = np.array(self.ns) // np.array(self.chunks)
+        # if only one slice given convert to tuple
+        if isinstance(it, slice):
+            itt = slice(*it.indices(self.size))
+            if itt.step > 1:
+                raise NotImplementedError("Step indexing is not implemented")
+        
+        elif isinstance(it, tuple):
+            if len(it) != self.ndim:
+                raise ValueError("Need to provide indices along all axes")
+            for i, s in enumerate(it):
+                # TODO check if s is a number
+                itt = slice(*s.indices(self.shape[i]))
+                if itt.start >= self.shape[i]:
+                    raise ValueError("Starting index at axis %d is out of bounds" % i)
+                if itt.step > 1:
+                    raise NotImplementedError("Step indexing is not implemented")
+
+                # first block 
+                ib0 = itt.start // chsize[i]
+                # last block
+                ib1 = min(chsize[i], itt.stop // chsize[i] + 1)
+                ibs.append(slice(ib0, ib1, 1))
+
+                # calculate local indices for each block
+                loc = []
+                for j in range(ib0, ib1):
+                    start = max(itt.start - j*chsize[i], 0)
+                    end = min(itt.stop - j*chsize[i], chsize[i])
+                    loc.append(slice(start, end ,1))
+                ilocs.append(loc)
+        else:
+            raise TypeError("Indexes can only be slice objects or integers")
+        ilocs = np.array(np.meshgrid(*ilocs)).T.reshape((-1,self.ndim))
+        ilocs = list(map(tuple,ilocs))
+        return tuple(ibs), ilocs
+        
+
+    def __getitem__(self, it) -> "np.ndarray":
+        fut = self.getNdArray()
+        # get block ibs and corresponding indices in those blocks 
+        ib, iloc = self._get_ind_and_block_(it)
+        fut_ib = fut[ib].flatten()
+        fut_vals = self.client.map(np.ndarray.__getitem__, fut_ib, iloc, pure=False)
+        return self.client.gather(fut_vals)
+
+    def __setitem__(self, it, val):
+        fut = self.getNdArray().flatten()
+        # get the correct block and corresponding index in that block
+        iblock, ind = self._map_it_to_block_(it)
+        wait(elf.client.submit(self.cls.__setitem__, fut[iblock], ind, val, pure=False))
 
     def getNdArray(self):
-        # maybe return a dask array instead?
-        # TODO does not support zero-copy so assigning a value would not work
-        fut = self.client.map(self.cls.getNdArray, self, pure=False)
-        # TODO the next line moves all the futures to the local worker so need to scatter back if we want to change it
-        return self.client.gather(fut)
+        # return array of futures in the shape of block x block
+        fut = self.client.map(self.cls.getNdArray, self.fut, pure=False)
+        return np.array(fut).reshape(self.chunks)
 
     @property
     def shape(self):
@@ -185,100 +241,104 @@ class DaskVector(DaskObject, Vector.vector):
 
     @property
     def chunksizes(self):
-        arrs = self.getNdArray()
-        return [arr.shape for arr in arrs]
+        shape = tuple(reversed(list(self.chunks)))
+        return self.ns_list.reshape(shape + (self.ndim,))
 
     @property
     def size(self):
         return np.prod(self.ns)
 
+    @property
+    def ndim(self):
+        return len(self.ns)
+
     def norm(self, N=2):
         norm = 0.
-        fut = self.client.map(self.cls.norm, self, N=N, pure=False)
+        fut = self.client.map(self.cls.norm, self.fut, N=N, pure=False)
         for future, result in as_completed(fut, with_results=True):
             norm += np.power(np.float64(result), N)
         return np.power(norm, 1. / N)
 
     def zero(self):
-        wait(self.client.map(self.cls.zero, self, pure=False))
+        wait(self.client.map(self.cls.zero, self.fut, pure=False))
         return self
 
     def max(self):
         """Function to obtain maximum value within a vector"""
-        maxs = self.client.gather(self.client.map(self.cls.max, self, pure=False))
+        maxs = self.client.gather(self.client.map(self.cls.max, self.fut, pure=False))
         return np.array(maxs).max()
 
     def min(self):
         """Function to obtain minimum value within a vector"""
-        mins = self.client.gather(self.client.map(self.cls.min, self, pure=False))
+        mins = self.client.gather(self.client.map(self.cls.min, self.fut, pure=False))
         return np.array(mins).min()
 
     def set(self, val):
         """Function to set all values in the vector"""
-        wait(self.client.map(self.cls.set, self, val=val, pure=False))
+        wait(self.client.map(self.cls.set, self.fut, val=val, pure=False))
         return self
 
     def scale(self, sc):
         """Function to scale a vector"""
-        wait(self.client.map(self.cls.scale, self, sc=sc, pure=False))
+        wait(self.client.map(self.cls.scale, self.fut, sc=sc, pure=False))
         return self
 
     def addbias(self, bias):
         """Function to add bias to a vector"""
-        wait(self.client.map(self.cls.addbias, self, bias=bias, pure=False))
+        wait(self.client.map(self.cls.addbias, self.fut, bias=bias, pure=False))
         return self
 
     def rand(self):
         """Function to randomize a vector"""
-        wait(self.client.map(self.cls.rand, self, pure=False))
+        wait(self.client.map(self.cls.rand, self.fut, pure=False))
         return self
 
     def abs(self):
         """Return a vector containing the absolute values"""
-        wait(self.client.map(self.cls.abs, self, pure=False))
+        wait(self.client.map(self.cls.abs, self.fut, pure=False))
         return self
 
     def sign(self):
         """Return a vector containing the signs"""
-        wait(self.client.map(self.cls.sign, self, pure=False))
+        wait(self.client.map(self.cls.sign, self.fut, pure=False))
         return self
 
     def reciprocal(self):
         """Return a vector containing the reciprocals of self"""
-        wait(self.client.map(self.cls.reciprocal, self, pure=False))
+        wait(self.client.map(self.cls.reciprocal, self.fut, pure=False))
         return self
 
     def conj(self):
         """Compute conjugate transpose of the vector"""
-        wait(self.client.map(self.cls.conj, self, pure=False))
+        wait(self.client.map(self.cls.conj, self.fut, pure=False))
         return self
 
     def real(self):
         """Return the real part of the vector"""
-        wait(self.client.map(self.cls.real, self, pure=False))
+        wait(self.client.map(self.cls.real, self.fut, pure=False))
         return self
 
     def imag(self):
         """Return the imaginary part of the vector"""
-        wait(self.client.map(self.cls.real, self, pure=False))
+        wait(self.client.map(self.cls.real, self.fut, pure=False))
         return self
 
     def pow(self, power):
         """Compute element-wise power of the vector"""
-        wait(self.client.map(self.cls.pow, self, power=power, pure=False))
+        wait(self.client.map(self.cls.pow, self.fut, power=power, pure=False))
         return self
 
     # Methods combinaning different vectors
 
     def clone(self):
         """Function to clone (deep copy) a vector from a vector or a Space"""
-        fut = self.client.map(self.cls.clone, self, pure=False)
+        fut = self.client.map(self.cls.clone, self.fut, pure=False)
         return DaskVector(self.dask_client, vecCls=self.cls, ns=self.ns, os=self.os, ds=self.ds, 
                             chunks=self.chunks, futures=fut)
 
     def cloneSpace(self):
         """Function to clone vector space"""
-        fut = self.client.map(self.cls.cloneSpace, self, pure=False)
+        fut = self.client.map(self.cls.cloneSpace, self.fut, pure=False)
         return DaskVector(self.dask_client, vecCls=self.cls, ns=self.ns, os=self.os, ds=self.ds, 
                             chunks=self.chunks, futures=fut)
 
@@ -294,31 +354,31 @@ class DaskVector(DaskObject, Vector.vector):
     def checkSame(self, vec):
         """Function to check to make sure the vectors exist in the same space"""
         self.check(vec)
-        fut = self.client.map(self.cls.checkSame, self, vec, pure=False)
+        fut = self.client.map(self.cls.checkSame, self.fut, vec.fut, pure=False)
         return all(self.client.gather(fut))
         
     def maximum(self, vec2):
         """Return a new vector of element-wise maximum of self and vec2"""
         self.check(vec2)
-        wait(self.client.map(self.cls.maximum, self, vec2, pure=False))
+        wait(self.client.map(self.cls.maximum, self.fut, vec2.fut, pure=False))
         return self
 
     def copy(self, vec2):
         """Function to copy vector"""
         self.check(vec2)
-        wait(self.client.map(self.cls.copy, self, vec2, pure=False))
+        wait(self.client.map(self.cls.copy, self.fut, vec2.fut, pure=False))
         return self
 
     def scaleAdd(self, vec2, sc1=1.0, sc2=1.0):
         """Function to scale two vectors and add them to the first one"""
         self.check(vec2)
-        wait(self.client.map(self.cls.scaleAdd, self, vec2, [sc1]*len(self), [sc2]*len(self), pure=False))
+        wait(self.client.map(self.cls.scaleAdd, self.fut, vec2.fut, [sc1]*len(self), [sc2]*len(self), pure=False))
         return self
 
     def dot(self, vec2):
         """Function to compute dot product between two vectors"""
         self.check(vec2)
-        dots = self.client.map(self.cls.dot, self, vec2, pure=False)
+        dots = self.client.map(self.cls.dot, self.fut, vec2.fut, pure=False)
         # Adding all the results together
         dot = 0.0
         for future, result in as_completed(dots, with_results=True):
@@ -328,13 +388,13 @@ class DaskVector(DaskObject, Vector.vector):
     def multiply(self, vec2):
         """Function to multiply element-wise two vectors"""
         self.check(vec2)
-        wait(self.client.map(self.cls.multiply, self, vec2, pure=False))
+        wait(self.client.map(self.cls.multiply, self.fut, vec2.fut, pure=False))
         return self
 
     def isDifferent(self, vec2):
         """Function to check if two vectors are identical"""
         self.check(vec2)
-        fut = self.client.map(self.cls.isDifferent, self, vec2, pure=False)
+        fut = self.client.map(self.cls.isDifferent, self.fut, vec2.fut, pure=False)
         results = self.client.gather(fut)
         return any(results)
 
@@ -342,7 +402,7 @@ class DaskVector(DaskObject, Vector.vector):
         """Function to bound vector values based on input vectors min and max"""
         self.check(low)  # Checking low-bound vector
         self.check(high)  # Checking high-bound vector
-        wait(self.client.map(self.cls.clipVector, self, low, high, pure=False))
+        wait(self.client.map(self.cls.clipVector, self.fut, low, high, pure=False))
         return self
 
     def writeVec(self, filename, mode='w', multi_file=False):
@@ -357,4 +417,3 @@ def readDaskVector(vector, chunks=None) -> "DaskVector":
     """
 
 
-    
