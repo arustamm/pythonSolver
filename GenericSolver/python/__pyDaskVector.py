@@ -225,11 +225,13 @@ class DaskVector(DaskObject, Vector.vector):
         return self.client.gather(fut_vals)
 
     def __setitem__(self, it, val):
-        fut = self.getNdArray().flatten()
-        # get the correct block and corresponding index in that block
-        iblock, ind = self._map_it_to_block_(it)
-        wait(elf.client.submit(self.cls.__setitem__, fut[iblock], ind, val, pure=False))
-
+        fut = self.getNdArray()
+        # get block ibs and corresponding indices in those blocks 
+        ib, iloc = self._get_ind_and_block_(it)
+        fut_ib = fut[ib].flatten()
+        vals = [val] * len(fut_ib)
+        wait(self.client.map(np.ndarray.__setitem__, fut_ib, iloc, vals, pure=False))
+        
     def getNdArray(self):
         # return array of futures in the shape of block x block
         fut = self.client.map(self.cls.getNdArray, self.fut, pure=False)
