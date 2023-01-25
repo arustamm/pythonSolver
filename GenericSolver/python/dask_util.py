@@ -186,7 +186,7 @@ class DaskClient:
                 raise ValueError("n_wrks must equal or greater than 1!")
             if "local_params" in kwargs:
                 # Starting local cluster
-                n_jobs = n_wrks
+                n_jobs = kwargs.get("local_params").get("n_workers")
                 n_wrks = 1
             else:
                 # Starting scheduler-based clusters

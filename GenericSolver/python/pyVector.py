@@ -39,6 +39,17 @@ class vector:
         else:
             raise TypeError('Argument has to be either scalar or vector, got %r instead' % other)
 
+    def __iadd__(self, other):  # self + other
+        if type(other) in [int, float]:
+            self.addbias(other)
+            return self
+        elif isinstance(other, vector):
+            self.scaleAdd(other)
+            return self
+        else:
+            raise TypeError('Argument has to be either scalar or vector, got %r instead' % other)
+
+
     def __sub__(self, other):  # self - other
         self.__add__(-other)
         return self
@@ -149,6 +160,12 @@ class vector:
     def checkSame(self):
         """Function to check to make sure the vectors exist in the same space"""
         raise NotImplementedError("checkSame must be overwritten")
+
+    def window(self):
+        """ A function to create a chunk of a Vector
+            This is needed for creating DaskVector from existing Vector
+        """
+        raise NotImplementedError("Need to overwrite windowing function!")
 
     # def writeVec(self, filename, mode='w'):
     #     """Function to write vector to file"""

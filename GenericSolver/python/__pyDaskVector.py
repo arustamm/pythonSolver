@@ -10,12 +10,8 @@ from dask import delayed
 import dask.array as da
 
 class DaskObject:
-    """ Remote object based on the Ray runtime """
     
-    def __init__(self, dask_client, 
-                objCreator,  constructor_pars: List[dict], 
-                futures: List=None,
-                **kw):
+    def __init__(self, dask_client, **kw):
         """
         """
         #  Client to submit tasks
@@ -24,41 +20,85 @@ class DaskObject:
         self.dask_client = dask_client
         self.client = client = self.dask_client.getClient()
 
-        # List containing references to ray-remote actors
         self.fut = []
         self.client = dask_client.getClient()
         
-        # option 1
-        if isinstance(objCreator, type):
-            self.cls = objCreator
-            if futures and len(futures) == len(constructor_pars):
-                self.fut = futures
-            else:
-                for par in constructor_pars:
-                    future = client.submit(objCreator, **par)
-                    # collect all vectors into the pool
-                    self.fut.append(future)
-        # option 2
-        elif isinstance(objCreator, types.FunctionType):
-            if kw.get("from_object"):
-                obj = kw.get("from_object")
-                self.cls = type(obj)
-                if futures and len(futures) == len(constructor_pars):
-                    self.fut = futures
+        if kw.get("objCreator"):
+            objCreator = kw.get("objCreator")
+            constructor_kw = kw.get("constructor_kw")
+            constructor_args = kw.get("constructor_args")
+            # option 1
+            if isinstance(objCreator, type):
+                self.cls = objCreator
+                if kw.get("futures"):
+                    self.fut = kw.get("futures")
+                else:
+                    if constructor_kw:
+                        if constructor_args:
+                            for c_arg, c_kw in zip(constructor_args, constructor_kw):
+                                future = client.submit(objCreator, *c_arg, **c_kw)
+                                # collect all vectors into the pool
+                                self.fut.append(future)
+                        else:
+                            for c_kw in constructor_kw:
+                                future = client.submit(objCreator, **c_kw)
+                                # collect all vectors into the pool
+                                self.fut.append(future)
+                    elif constructor_args:
+                        for c_arg in constructor_args:
+                            future = client.submit(objCreator, *c_arg)
+                            # collect all vectors into the pool
+                            self.fut.append(future)
+                    
+            # option 2
+            elif isinstance(objCreator, types.FunctionType) or isinstance(objCreator, types.MethodType):
+                if kw.get("from_object"):
+                    obj = kw.get("from_object")
+                    if isinstance(obj, type):
+                        self.cls = obj
+                    else:
+                        self.cls = type(obj)
+                else:
+                    raise ValueError("Need to pass 'from_object' when using generator function!")
+
+                if kw.get("futures"):
+                    self.fut = kw.get("futures")
                 else:
                     # scatter the object first to avoid repeated work
                     obj_fut = client.scatter(obj, broadcast=True)
-                    for par in constructor_pars:
-                        future = client.submit(objCreator, obj_fut, **par)
-                        # collect all vectors into the pool
-                        self.fut.append(future)
+                    if constructor_kw:
+                        if constructor_args:
+                            for c_arg, c_kw in zip(constructor_args, constructor_kw):
+                                if isinstance(obj, type):
+                                    future = client.submit(objCreator, *c_arg, **c_kw)
+                                else:
+                                    future = client.submit(objCreator, obj_fut, *c_arg, **c_kw)
+                                # collect all vectors into the pool
+                                self.fut.append(future)
+                        else:
+                            for c_kw in constructor_kw:
+                                if isinstance(obj, type):
+                                    future = client.submit(objCreator, **c_kw)
+                                else:
+                                    future = client.submit(objCreator, obj_fut, **c_kw)
+                                # collect all vectors into the pool
+                                self.fut.append(future)
+                    elif constructor_args:
+                        for c_arg in constructor_args:
+                            if isinstance(obj, type):
+                                future = client.submit(objCreator, *c_arg)
+                            else:
+                                future = client.submit(objCreator, obj_fut, *c_arg)
+                            # collect all vectors into the pool
+                            self.fut.append(future)
             else:
-                raise ValueError("Need to pass from_object when using generator function!")
-        else:
-            raise TypeError("DaskObject can only be created by providing the class name or creator-function!")
+                raise NotImplementedError("DaskObject can only be created by providing the class name or creator-function!")
+    
         
-        
-    def getFuture(self, index):
+    def get_futures(self):
+        return self.fut
+
+    def get(self, index):
         return self.fut[index]
 
     def __len__(self):
@@ -106,13 +146,14 @@ class DaskVector(DaskObject, Vector.vector):
         # option 1
         if kw.get("vecCls"):
             constructor_pars = [{"fromHyper" : hyper} for hyper in hypers]
-            DaskObject.__init__(self, dask_client, vecCls, constructor_pars, futures=kw.get("futures"))
+            DaskObject.__init__(self, dask_client, objCreator=vecCls, constructor_kw=constructor_pars, futures=kw.get("futures"))
         # option 2
         elif kw.get("from_vector"):
+            # TODO add the case when just scatter the vector
             vecCls = type(vec)
             # we need window function to generate new vectors
-            if not vecCls.__dict__.get("window"):
-                raise ValueError("To generate DaskVector from %s, it should containt window function!" % typ)
+            if not "window" in dir(vecCls):
+                raise ValueError("To generate DaskVector from %s, it should contain window function!" % vecCls)
             constructor_pars = []
             prev = [0] * len(ns)
             for n, o, d in zip(ns_list, os_list, ds_list):
@@ -124,8 +165,7 @@ class DaskVector(DaskObject, Vector.vector):
                 # print(wpars)
                 constructor_pars.append(wpars)
             # generate using windowing function provided by the vecCls class
-            DaskObject.__init__(self, dask_client, vecCls.window, constructor_pars, 
-                                from_object=vec,futures=kw.get("futures"))
+            DaskObject.__init__(self, dask_client, objCreator=vecCls.window, constructor_kw=constructor_pars, from_object=vec, futures=kw.get("futures"))
 
 
     def _calculate_chunks_(self, ns, ds, os, chunks):
@@ -170,13 +210,15 @@ class DaskVector(DaskObject, Vector.vector):
             ds_list = np.asarray([ds for i in range(nchunks)], dtype=object)
             os_list = np.asarray([os for i in range(nchunks)], dtype=object)
 
+        self.nchunks = nchunks
         return ns_list, ds_list, os_list
 
     def _get_ind_and_block_(self, it: Tuple[slice]):
         # takes global it index as an input and outputs corresponding iblock and local index
         # list of block indices (slices)
+        # TODO if the array is scattered equally this won't work
+        # TODO need to recompute indices (start and stop)
         ibs = []
-        # list of local indices (slices)
         ilocs = []
         chsize = np.array(self.ns) // np.array(self.chunks)
         # if only one slice given convert to tuple
@@ -184,13 +226,21 @@ class DaskVector(DaskObject, Vector.vector):
             itt = slice(*it.indices(self.size))
             if itt.step > 1:
                 raise NotImplementedError("Step indexing is not implemented")
-        
+            if itt.start != 0 or itt.stop != self.size:
+                raise NotImplementedError("When using one index, can only use colons")
+            ibs.append(itt)
+            ilocs.append(np.repeat(itt, self.nchunks))
+            ilocs.append(np.repeat(itt, self.nchunks))
         elif isinstance(it, tuple):
             if len(it) != self.ndim:
                 raise ValueError("Need to provide indices along all axes")
             for i, s in enumerate(it):
-                # TODO check if s is a number
-                itt = slice(*s.indices(self.shape[i]))
+                if isinstance(s, slice):
+                    itt = slice(*s.indices(self.shape[i]))
+                elif isinstance(s, int):
+                    itt = slice(s, s+1, 1)
+                else:
+                    raise ValueError("Index should be slice or integer")
                 if itt.start >= self.shape[i]:
                     raise ValueError("Starting index at axis %d is out of bounds" % i)
                 if itt.step > 1:
@@ -206,36 +256,45 @@ class DaskVector(DaskObject, Vector.vector):
                 loc = []
                 for j in range(ib0, ib1):
                     start = max(itt.start - j*chsize[i], 0)
+                    # TODO fix this
                     end = min(itt.stop - j*chsize[i], chsize[i])
                     loc.append(slice(start, end ,1))
                 ilocs.append(loc)
         else:
-            raise TypeError("Indexes can only be slice objects or integers")
+            raise TypeError("Indices can only be slice objects or integers")
+
         ilocs = np.array(np.meshgrid(*ilocs)).T.reshape((-1,self.ndim))
         ilocs = list(map(tuple,ilocs))
+        
         return tuple(ibs), ilocs
         
 
     def __getitem__(self, it) -> "np.ndarray":
-        fut = self.getNdArray()
+        fut = np.array(self.fut).reshape(self.chunks)
         # get block ibs and corresponding indices in those blocks 
         ib, iloc = self._get_ind_and_block_(it)
         fut_ib = fut[ib].flatten()
-        fut_vals = self.client.map(np.ndarray.__getitem__, fut_ib, iloc, pure=False)
+        fut_vals = self.client.map(self.cls.__getitem__, fut_ib, iloc, pure=False)
         return self.client.gather(fut_vals)
 
     def __setitem__(self, it, val):
-        fut = self.getNdArray()
+        fut = np.array(self.fut).reshape(self.chunks)
         # get block ibs and corresponding indices in those blocks 
         ib, iloc = self._get_ind_and_block_(it)
         fut_ib = fut[ib].flatten()
         vals = [val] * len(fut_ib)
-        wait(self.client.map(np.ndarray.__setitem__, fut_ib, iloc, vals, pure=False))
+        wait(self.client.map(self.cls.__setitem__, fut_ib, iloc, vals, pure=False))
         
     def getNdArray(self):
         # return array of futures in the shape of block x block
         fut = self.client.map(self.cls.getNdArray, self.fut, pure=False)
         return np.array(fut).reshape(self.chunks)
+
+    def getChunkHyper(self):
+        # return array of hypercubes in the shape of block x block
+        fut = self.client.map(self.cls.getHyper, self.fut, pure=False)
+        hypers = self.client.gather(fut)
+        return np.array(hypers).reshape(self.chunks)
 
     @property
     def shape(self):
@@ -408,7 +467,7 @@ class DaskVector(DaskObject, Vector.vector):
         return self
 
     def writeVec(self, filename, mode='w', multi_file=False):
-        # TODO
+        # TODO probably should use genericIO "append" functionality
         pass
 
 
@@ -419,3 +478,63 @@ def readDaskVector(vector, chunks=None) -> "DaskVector":
     """
 
 
+class DaskOperator(DaskObject, Operator.Operator):
+    
+    def __init__(self, dask_client, domain, range, **kw):
+        if not isinstance(domain, DaskVector):
+            raise TypeError("Domain vector must be a DaskVector!")
+        if not isinstance(range, DaskVector):
+            raise TypeError("Range vector must be a DaskVector!")
+
+        if kw.get("opCls"):
+            opCls = kw.get("opCls")
+            if not "from_subspace" in dir(opCls):
+                raise ValueError("To generate DaskOperator from %s, it should contain from_subspace function!" % opCls)
+            op_params = []
+
+            dom, ran = self._prepare_spaces_(domain.get_futures(), range.get_futures())
+
+            for d,r in zip(dom, ran) :
+                param = []
+                param.append(d)
+                param.append(r)
+                if kw.get("op_args"):
+                    param.append(*kw.get("op_args"))
+                op_params.append(tuple(param))
+            
+            DaskObject.__init__(self, dask_client, objCreator=opCls.from_subspace, constructor_args=op_params, from_object=opCls)
+            
+            Operator.Operator.__init__(self, domain, range)
+
+    def _prepare_spaces_(self, domain, range):
+        arr = np.array(np.meshgrid(domain, range)).reshape(2,-1)
+        return arr[0,:], arr[1,:]
+
+    def check(self, model, data):
+        if not isinstance(model, DaskVector):
+            raise TypeError("Model vector must be a DaskVector!")
+        if not isinstance(data, DaskVector):
+            raise TypeError("Data vector must be a DaskVector!")
+
+    def forward(self, add, model, data):
+        self.check(model, data)
+        if not add:
+            data.scale(0)
+        
+        self.checkDomainRange(model, data)
+        mod = model.get_futures()
+        dat = data.get_futures()
+        ops = np.array(self.fut).reshape(model.nchunks, data.nchunks)
+        reduce = [True] * ops.shape[0]
+        # serial across model chunks to avoid race condition
+        for i, m in enumerate(mod):
+            wait(self.client.map(fwd, ops[:,i], reduce, [m]*len(dat), dat, pure=False))
+
+    def adjoint(self, add, model, data):
+        self.check(model, data)
+
+# TODO trye async?
+# Need helper functions because DaskOperator 
+# is potentially a heterogeneous object (contains different types of Operators)
+def fwd(op, add, model, data):
+    return op.forward(add, model, data)

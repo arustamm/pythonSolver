@@ -13,7 +13,7 @@ class Operator:
     """Abstract python operator class"""
 
     # Default class methods/functions
-    def __init__(self, domain, range):
+    def __init__(self, domain, range, *args, **kwargs):
         """Generic class for operator"""
         self.domain = domain.cloneSpace()
         self.range = range.cloneSpace()
@@ -58,6 +58,24 @@ class Operator:
         Solver.run(P, verbose=False)
 
         return P.model
+
+    @classmethod
+    def as_dummy_operator(cls):
+        dummy = DummyOp()
+        cls.forward = dummy.forward
+        cls.adjoint = dummy.adjoint
+        # set bg
+        return cls
+    
+    @classmethod
+    def from_subspace(cls, subdomain, subrange, *op_args, **op_kwargs) -> "Operator":
+        """ A function to create an operator based on the subdomain and subrange
+            This is needed for creating DaskOperators guided by the chunks of DaskVectors
+            subdomain, subrange -- 
+            op_args -- other parameters needed for creating an Operator
+        """
+        # TODO override the default behaviour
+        return cls(subdomain, subrange, *op_args, **op_kwargs)
 
     # main function for all kinds of multiplication
     def dot(self, other):
@@ -612,6 +630,21 @@ def ChainOperator(A, B):
 # SOME USEFUL OPERATORS #
 #########################
 
+class DummyOp(Operator):
+    """Operator that does nothing"""
+
+    def __init__(self):
+        pass
+
+    def forward(self, add, model, data):
+        pass
+
+    def adjoint(self, add, model, data):
+        pass
+
+    def checkDomainRange(self, domain, range):
+        pass
+
 class ZeroOp(Operator):
     """Zero matrix operator; useful for Jacobian matrices that are zeros"""
 
@@ -668,6 +701,13 @@ class scalingOp(Operator):
     def __str__(self):
         return "Scaling "
 
+    @classmethod
+    def from_subspace(cls, subdomain, subrange, scalar):
+        if subdomain.checkSame(subrange):
+            return cls(subdomain, scalar)
+        else:
+            return DummyOp()
+        
     def forward(self, add, model, data):
         self.checkDomainRange(model, data)
         data.scaleAdd(model, 1. if add else 0., self.scalar)
