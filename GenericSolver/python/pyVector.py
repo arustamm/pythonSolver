@@ -30,12 +30,13 @@ class vector:
         """Default destructor"""
 
     def __add__(self, other):  # self + other
+        res = self.clone()
         if type(other) in [int, float]:
-            self.addbias(other)
-            return self
+            res.addbias(other)
+            return res
         elif isinstance(other, vector):
-            self.scaleAdd(other)
-            return self
+            res.scaleAdd(other)
+            return res
         else:
             raise TypeError('Argument has to be either scalar or vector, got %r instead' % other)
 
@@ -49,10 +50,9 @@ class vector:
         else:
             raise TypeError('Argument has to be either scalar or vector, got %r instead' % other)
 
-
     def __sub__(self, other):  # self - other
-        self.__add__(-other)
-        return self
+        res = self.__add__(-other)
+        return res
 
     def __neg__(self):  # -self
         self.scale(-1)

@@ -93,7 +93,6 @@ class DaskObject:
                             self.fut.append(future)
             else:
                 raise NotImplementedError("DaskObject can only be created by providing the class name or creator-function!")
-    
         
     def get_futures(self):
         return self.fut
@@ -390,18 +389,26 @@ class DaskVector(DaskObject, Vector.vector):
         return self
 
     # Methods combinaning different vectors
+    def copy_futures(self, futures):
+        if len(futures) != len(self):
+            raise ValueError("Futures are of a wrong size!")
+        self.fut = futures
+
+    def clone_from_futures(self, futures):
+        if len(futures) != len(self):
+            raise ValueError("Futures are of a wrong size!")
+        return DaskVector(self.dask_client, vecCls=self.cls, ns=self.ns, os=self.os, ds=self.ds, 
+                            chunks=self.chunks, futures=futures)
 
     def clone(self):
         """Function to clone (deep copy) a vector from a vector or a Space"""
         fut = self.client.map(self.cls.clone, self.fut, pure=False)
-        return DaskVector(self.dask_client, vecCls=self.cls, ns=self.ns, os=self.os, ds=self.ds, 
-                            chunks=self.chunks, futures=fut)
+        return self.clone_from_futures(fut)
 
     def cloneSpace(self):
         """Function to clone vector space"""
         fut = self.client.map(self.cls.cloneSpace, self.fut, pure=False)
-        return DaskVector(self.dask_client, vecCls=self.cls, ns=self.ns, os=self.os, ds=self.ds, 
-                            chunks=self.chunks, futures=fut)
+        return self.clone_from_futures(fut)
 
     def check(self, vec):
         # check if number of chunks is the same
@@ -493,7 +500,6 @@ class DaskOperator(DaskObject, Operator.Operator):
             op_params = []
 
             dom, ran = self._prepare_spaces_(domain.get_futures(), range.get_futures())
-
             for d,r in zip(dom, ran) :
                 param = []
                 param.append(d)
@@ -524,17 +530,36 @@ class DaskOperator(DaskObject, Operator.Operator):
         self.checkDomainRange(model, data)
         mod = model.get_futures()
         dat = data.get_futures()
-        ops = np.array(self.fut).reshape(model.nchunks, data.nchunks)
-        reduce = [True] * ops.shape[0]
-        # serial across model chunks to avoid race condition
+        add = [False] * len(dat)
+        ops = np.array(self.fut).reshape(data.nchunks, model.nchunks)
+        # TODO there's still some race condition going on...
+        # submit all tasks
+        res = []
         for i, m in enumerate(mod):
-            wait(self.client.map(fwd, ops[:,i], reduce, [m]*len(dat), dat, pure=False))
+            fut = self.client.map(fwd, ops[:,i], add, [m]*len(dat), dat, pure=False)
+            res.append(fut)
+        # accumulate 
+        for d in res:
+            dat = self.client.map(data.cls.__add__, dat, d, pure=False)
+        # create a new DaskVector using the futures (zero-copy)
+        data.copy_futures(dat)
 
     def adjoint(self, add, model, data):
         self.check(model, data)
 
-# TODO trye async?
 # Need helper functions because DaskOperator 
 # is potentially a heterogeneous object (contains different types of Operators)
+import time
 def fwd(op, add, model, data):
-    return op.forward(add, model, data)
+    """ makes a copy to avoid race condition in reduction"""
+    if not isinstance(op, Operator.DummyOp):
+        d = data.clone()
+        # test
+        time.sleep(3)
+        op.forward(add, model, d)
+        return d
+    else:
+        # TODO bad solution need to fix
+        d = data.clone()
+        d.zero()
+        return d
