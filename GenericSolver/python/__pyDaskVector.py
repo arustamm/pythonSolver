@@ -389,7 +389,7 @@ class DaskVector(DaskObject, Vector.vector):
         return self
 
     # Methods combinaning different vectors
-    def copy_futures(self, futures):
+    def set_futures(self, futures):
         if len(futures) != len(self):
             raise ValueError("Futures are of a wrong size!")
         self.fut = futures
@@ -530,36 +530,61 @@ class DaskOperator(DaskObject, Operator.Operator):
         self.checkDomainRange(model, data)
         mod = model.get_futures()
         dat = data.get_futures()
-        add = [False] * len(dat)
         ops = np.array(self.fut).reshape(data.nchunks, model.nchunks)
-        # TODO there's still some race condition going on...
         # submit all tasks
         res = []
         for i, m in enumerate(mod):
-            fut = self.client.map(fwd, ops[:,i], add, [m]*len(dat), dat, pure=False)
+            fut = self.client.map(fwd, ops[:,i], [m]*len(dat), dat, pure=False)
             res.append(fut)
         # accumulate 
         for d in res:
             dat = self.client.map(data.cls.__add__, dat, d, pure=False)
-        # create a new DaskVector using the futures (zero-copy)
-        data.copy_futures(dat)
+        # copy the futures
+        data.set_futures(dat)
 
     def adjoint(self, add, model, data):
         self.check(model, data)
+        if not add:
+            model.scale(0)
+        
+        self.checkDomainRange(model, data)
+        mod = model.get_futures()
+        dat = data.get_futures()
+        ops = np.array(self.fut).reshape(data.nchunks, model.nchunks).T
+        # submit all tasks
+        res = []
+        for i, d in enumerate(dat):
+            fut = self.client.map(adj, ops[:,i], mod, [d]*len(mod), pure=False)
+            res.append(fut)
+        # accumulate 
+        for m in res:
+            mod = self.client.map(model.cls.__add__, mod, m, pure=False)
+        # copy the futures
+        model.set_futures(mod)
 
 # Need helper functions because DaskOperator 
 # is potentially a heterogeneous object (contains different types of Operators)
 import time
-def fwd(op, add, model, data):
+def fwd(op, model, data):
     """ makes a copy to avoid race condition in reduction"""
     if not isinstance(op, Operator.DummyOp):
         d = data.clone()
-        # test
-        time.sleep(3)
-        op.forward(add, model, d)
+        op.forward(False, model, d)
         return d
     else:
-        # TODO bad solution need to fix
+        # TODO not the best solution need to fix
         d = data.clone()
         d.zero()
         return d
+
+def adj(op, model, data):
+    """ makes a copy to avoid race condition in reduction"""
+    if not isinstance(op, Operator.DummyOp):
+        m = model.clone()
+        op.adjoint(False, m, data)
+        return m
+    else:
+        # TODO not the best solution need to fix
+        m = model.clone()
+        m.zero()
+        return m
