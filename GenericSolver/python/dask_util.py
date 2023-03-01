@@ -181,24 +181,25 @@ class DaskClient:
                 wrkIds.pop(idx)
                 wrk_ips.pop(idx)
         elif ClusterInit:
-            n_wrks = kwargs.get("n_wrks", 1)
-            if n_wrks <= 0:
-                raise ValueError("n_wrks must equal or greater than 1!")
+            # TODO remove workers_per_job -- it is equivalent to processes
+            workers_per_job = kwargs.get("workers_per_job", 1)
+            if workers_per_job <= 0:
+                raise ValueError("workers_per_job must equal or greater than 1!")
             if "local_params" in kwargs:
                 # Starting local cluster
                 n_jobs = kwargs.get("local_params").get("n_workers")
-                n_wrks = 1
+                workers_per_job = 1
             else:
                 # Starting scheduler-based clusters
                 n_jobs = kwargs.get("n_jobs")
                 if n_jobs <= 0:
                     raise ValueError("n_jobs must equal or greater than 1!")
-                cluster_params.update({"processes": n_wrks})
-                if n_wrks > 1:
+                cluster_params.update({"processes": workers_per_job})
+                if workers_per_job > 1:
                     # forcing nanny to be true (otherwise, dask-worker command will fail)
                     cluster_params.update({"nanny": True})
             self.cluster = ClusterInit(**cluster_params)
-            self.client, self.WorkerIds = client_startup(self.cluster, n_jobs, n_jobs*n_wrks)
+            self.client, self.WorkerIds = client_startup(self.cluster, n_jobs, n_jobs*workers_per_job)
         else:
             raise ValueError("Either hostnames or local_params or pbs_params or lsf_params or slurm_params must be "
                              "provided!")

@@ -58,14 +58,6 @@ class Operator:
         Solver.run(P, verbose=False)
 
         return P.model
-
-    @classmethod
-    def as_dummy_operator(cls):
-        dummy = DummyOp()
-        cls.forward = dummy.forward
-        cls.adjoint = dummy.adjoint
-        # set bg
-        return cls
     
     @classmethod
     def from_subspace(cls, subdomain, subrange, *op_args, **op_kwargs) -> "Operator":
