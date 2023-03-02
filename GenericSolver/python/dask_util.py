@@ -6,6 +6,7 @@ import subprocess
 import os
 import time
 import json
+import pickle
 
 DEVNULL = open(os.devnull, 'wb')
 import dask.distributed as daskD
@@ -206,6 +207,17 @@ class DaskClient:
         # Closing dask processes
         atexit.register(self.client.shutdown)
 
+    def __getstate__(self):
+        state = {}
+        state['worker_ids'] = self.WorkerIds
+        # client object is not serializable, get the ip instead
+        state['client_address'] = self.client.scheduler_info()['address']
+        return state
+    
+    def __setstate__(self, state):
+        self.WorkerIds = state.get('worker_ids')
+        self.client = daskD.Client(state['client_address'])
+
     def getClient(self):
         """
     Accessor for obtaining the client object
@@ -223,3 +235,16 @@ class DaskClient:
     Accessor for obtaining the number of workers
     """
         return len(self.getWorkerIds())
+
+
+
+
+def save(client, file):
+    with open(file, 'wb') as f:
+        pickle.dump(client, f)
+
+def load(file):
+    with open(file, 'rb') as f:
+        client = pickle.load(f)
+    return client
+
