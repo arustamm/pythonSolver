@@ -57,14 +57,14 @@ def client_startup(cluster, n_jobs, total_workers):
     client = daskD.Client(cluster)
     workers = 0
     t0 = time.time()
-    while workers < total_workers:
-        workers = len(client.get_worker_logs().keys())
-        # If the number of workers is not reached in 5 minutes raise exception
-        if time.time() - t0 > 300.0:
-            raise SystemError(
-                "Dask could not start the requested workers within 5 minutes! Try different n_jobs.")
-    WorkerIds = list(client.get_worker_logs().keys())
-    return client, WorkerIds
+    # while workers < total_workers:
+    #     workers = len(client.get_worker_logs().keys())
+    #     # If the number of workers is not reached in 5 minutes raise exception
+    #     if time.time() - t0 > 300.0:
+    #         raise SystemError(
+    #             "Dask could not start the requested workers within 5 minutes! Try different n_jobs.")
+    # WorkerIds = list(client.get_worker_logs().keys())
+    return client
 
 
 class DaskClient:
@@ -200,11 +200,12 @@ class DaskClient:
                     # forcing nanny to be true (otherwise, dask-worker command will fail)
                     cluster_params.update({"nanny": True})
             self.cluster = ClusterInit(**cluster_params)
-            self.client, self.WorkerIds = client_startup(self.cluster, n_jobs, n_jobs*workers_per_job)
+            self.client = client_startup(self.cluster, n_jobs, n_jobs*workers_per_job)
         else:
             raise ValueError("Either hostnames or local_params or pbs_params or lsf_params or slurm_params must be "
                              "provided!")
         # Closing dask processes
+        self.WorkerIds = []
         atexit.register(self.client.shutdown)
 
     def __getstate__(self):

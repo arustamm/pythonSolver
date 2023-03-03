@@ -10,25 +10,6 @@ from dask import delayed
 import dask.array as da
 from __pyDaskVector import DaskObject, DaskVector
 
-class DaskSpread:
-    """ Operator spreading and stacking a vector across Dask workers"""
-    def __init__(self, dask_client, dask_vector):
-        self.client = dask_client.getClient()
-        fut = dask_vector.get_futures()
-        d = self.client.who_has(fut)
-        self.workers = set()
-        for k, v in d.items():
-            self.workers.add(v)
-
-    def forward(self, model):
-        fut = []
-        for w in self.workers:
-            fut.append(self.client.submit(model.cls.clone, model.fut, worker=w))
-        return fut
-    
-    def adjoint(self, data):
-        pass
-
 class DaskOperator(DaskObject, Operator.Operator):
     
     def __init__(self, dask_client, domain, range, broadcast_what='domain', **kw):
@@ -42,13 +23,6 @@ class DaskOperator(DaskObject, Operator.Operator):
             if not "from_subspace" in dir(opCls):
                 raise ValueError("To generate DaskOperator from %s, it should contain from_subspace function!" % opCls)
             op_params = []
-
-            # if broadcast_what == 'domain':
-            #     # build operator spreading vectors to the workers containing range
-            #     spread_op = DaskSpread(range)
-            #     dom = spread_op.forward(domain.get_futures())
-            # elif broadcast_what == 'domain':
-
 
             dom, ran = self._prepare_spaces_(domain.get_futures(), range.get_futures())
             for d,r in zip(dom, ran) :
