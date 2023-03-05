@@ -425,6 +425,7 @@ class DaskVector(DaskObject, Vector.vector):
         """Function to check to make sure the vectors exist in the same space"""
         self.check(vec)
         fut = self.client.map(self.cls.checkSame, self.fut, vec.fut, pure=False)
+        wait(fut)
         return all(self.client.gather(fut))
         
     def maximum(self, vec2):
