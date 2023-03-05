@@ -70,7 +70,7 @@ class DaskOperator(DaskObject, Operator.Operator):
         for d in res:
             dat = self.client.map(data.cls.__add__, dat, d, pure=False)
         # copy the futures
-        wait(fut)
+        wait(dat)
         data.set_futures(dat)
 
     def adjoint(self, add, model, data):
