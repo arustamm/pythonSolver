@@ -93,6 +93,7 @@ class DaskObject:
                             self.fut.append(future)
             else:
                 raise NotImplementedError("DaskObject can only be created by providing the class name or creator-function!")
+        wait(self.fut)
         
     def get_futures(self):
         return self.fut
@@ -393,6 +394,7 @@ class DaskVector(DaskObject, Vector.vector):
         if len(futures) != len(self):
             raise ValueError("Futures are of a wrong size!")
         self.fut = futures
+        wait(self.fut)
 
     def clone_from_futures(self, futures):
         if len(futures) != len(self):
