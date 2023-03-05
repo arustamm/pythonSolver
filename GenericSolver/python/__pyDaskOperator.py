@@ -51,7 +51,7 @@ class DaskOperator(DaskObject, Operator.Operator):
         """ This is not blocking """
 
         self.check(model, data)
-        self.checkDomainRange(model, data)
+        # self.checkDomainRange(model, data)
         if not add:
             data.scale(0)
         
@@ -77,7 +77,7 @@ class DaskOperator(DaskObject, Operator.Operator):
         """ This is not blocking """
 
         self.check(model, data)
-        self.checkDomainRange(model, data)
+        # self.checkDomainRange(model, data)
         if not add:
             model.scale(0)
         
