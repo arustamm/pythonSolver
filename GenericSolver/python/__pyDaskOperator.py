@@ -62,8 +62,6 @@ class DaskOperator(DaskObject, Operator.Operator):
         res = []
         # loop across model chunks 
         for i, m in enumerate(mod):
-            # spread a chunk to each worker containing data 
-            # m_on_wrkrs = spread.forward(m)
             fut = self.client.map(fwd, ops[:,i], [m]*len(dat), dat, pure=False)
             res.append(fut)
         # accumulate 

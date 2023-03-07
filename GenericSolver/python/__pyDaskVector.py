@@ -216,11 +216,12 @@ class DaskVector(DaskObject, Vector.vector):
     def _get_ind_and_block_(self, it: Tuple[slice]):
         # takes global it index as an input and outputs corresponding iblock and local index
         # list of block indices (slices)
-        # TODO if the array is scattered equally this won't work
         # TODO need to recompute indices (start and stop)
         ibs = []
         ilocs = []
-        chsize = np.array(self.ns) // np.array(self.chunks)
+        # need to flip to match to a numpy representation of indices
+        chunks = np.flip(self.chunks)
+        chsize = np.flip(np.array(self.ns) // np.array(self.chunks))
         # if only one slice given convert to tuple
         if isinstance(it, slice):
             itt = slice(*it.indices(self.size))
@@ -247,17 +248,18 @@ class DaskVector(DaskObject, Vector.vector):
                     raise NotImplementedError("Step indexing is not implemented")
 
                 # first block 
-                ib0 = itt.start // chsize[i]
+                ib0 = min(itt.start // chsize[i], chunks[i]-1)
                 # last block
-                ib1 = min(chsize[i], itt.stop // chsize[i] + 1)
+                ib1 = max(ib0 + 1, itt.stop // chsize[i])
+                ib1 = min(ib1, chunks[i])
                 ibs.append(slice(ib0, ib1, 1))
 
                 # calculate local indices for each block
                 loc = []
+                rem = 0
                 for j in range(ib0, ib1):
                     start = max(itt.start - j*chsize[i], 0)
-                    # TODO fix this
-                    end = min(itt.stop - j*chsize[i], chsize[i])
+                    end = itt.stop - j*chsize[i]
                     loc.append(slice(start, end ,1))
                 ilocs.append(loc)
         else:
@@ -265,8 +267,7 @@ class DaskVector(DaskObject, Vector.vector):
 
         ilocs = np.array(np.meshgrid(*ilocs)).T.reshape((-1,self.ndim))
         ilocs = list(map(tuple,ilocs))
-        
-        return tuple(ibs), ilocs
+        return tuple(list(reversed(ibs))), ilocs
         
 
     def __getitem__(self, it) -> "np.ndarray":
