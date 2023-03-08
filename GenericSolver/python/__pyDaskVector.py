@@ -8,6 +8,7 @@ from dask_util import DaskClient
 from dask.distributed import wait, as_completed
 from dask import delayed
 import dask.array as da
+import os
 
 class DaskObject:
     
@@ -256,7 +257,6 @@ class DaskVector(DaskObject, Vector.vector):
 
                 # calculate local indices for each block
                 loc = []
-                rem = 0
                 for j in range(ib0, ib1):
                     start = max(itt.start - j*chsize[i], 0)
                     end = itt.stop - j*chsize[i]
@@ -476,9 +476,13 @@ class DaskVector(DaskObject, Vector.vector):
         wait(self.client.map(self.cls.clipVector, self.fut, low, high, pure=False))
         return self
 
-    def writeVec(self, filename, mode='w', multi_file=False):
+    def writeVec(self, filename, mode='w'):
         # TODO probably should use genericIO "append" functionality
-        pass
+        vec_names = [
+            os.getcwd() + "/" + "".join(filename.split('.')[:-1]) + "_chunk%s.H" % (
+                    ii + 1) for ii in range(len(self.fut))]
+        wait(self.client.map(self.cls.writeVec, self.fut, vec_names, [mode] * len(self.fut), pure=False))
+
 
 
 def readDaskVector(vector, chunks=None) -> "DaskVector":
