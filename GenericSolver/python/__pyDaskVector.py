@@ -28,6 +28,7 @@ class DaskObject:
             objCreator = kw.get("objCreator")
             constructor_kw = kw.get("constructor_kw")
             constructor_args = kw.get("constructor_args")
+
             # option 1
             if isinstance(objCreator, type):
                 self.cls = objCreator
@@ -139,6 +140,7 @@ class DaskVector(DaskObject, Vector.vector):
             self.os = os = [ax.o for ax in axes]
             self.ds = ds = [ax.d for ax in axes]
 
+        self.hyper = Hypercube.hypercube(ns=ns, ds=ds, os=os)
         ns_list, ds_list, os_list = self._calculate_chunks_(ns, ds, os, chunks)
         self.ns_list = ns_list
         # list of hypercubes for each inividual Vector 
@@ -290,6 +292,9 @@ class DaskVector(DaskObject, Vector.vector):
         # return array of futures in the shape of block x block
         fut = self.client.map(self.cls.getNdArray, self.fut, pure=False)
         return np.array(fut).reshape(self.chunks)
+    
+    def getHyper(self):
+        return self.hyper
 
     def getChunkHyper(self):
         # return array of hypercubes in the shape of block x block

@@ -12,30 +12,32 @@ from __pyDaskVector import DaskObject, DaskVector
 
 class DaskOperator(DaskObject, Operator.Operator):
     
-    def __init__(self, dask_client, domain, range, broadcast_what='domain', **kw):
+    def __init__(self, dask_client, operator_cls, domain, range, *args, **kw):
         if not isinstance(domain, DaskVector):
             raise TypeError("Domain vector must be a DaskVector!")
         if not isinstance(range, DaskVector):
             raise TypeError("Range vector must be a DaskVector!")
+        
+        opCls = operator_cls
+        if not "from_subspace" in dir(opCls):
+            raise ValueError("To generate DaskOperator from %s, it should contain from_subspace function!" % opCls)
+        op_args = []
+        op_kwargs = []
 
-        if kw.get("opCls"):
-            opCls = kw.get("opCls")
-            if not "from_subspace" in dir(opCls):
-                raise ValueError("To generate DaskOperator from %s, it should contain from_subspace function!" % opCls)
-            op_params = []
+        dom, ran = self._prepare_spaces_(domain.get_futures(), range.get_futures())
+        for d,r in zip(dom, ran) :
+            param = []
+            param.append(d)
+            param.append(r)
+            for p in list(args):
+                param.append(p)
+            op_args.append(tuple(param))
+            op_kwargs.append(kw)
 
-            dom, ran = self._prepare_spaces_(domain.get_futures(), range.get_futures())
-            for d,r in zip(dom, ran) :
-                param = []
-                param.append(d)
-                param.append(r)
-                if kw.get("op_args"):
-                    for p in kw.get("op_args"):
-                        param.append(p)
-                op_params.append(tuple(param))
-            
-            DaskObject.__init__(self, dask_client, objCreator=opCls.from_subspace, constructor_args=op_params, from_object=opCls)
-            Operator.Operator.__init__(self, domain, range)
+        DaskObject.__init__(self, dask_client, objCreator=opCls.from_subspace, 
+                            constructor_args=op_args, constructor_kw=op_kwargs, from_object=opCls)
+        Operator.Operator.__init__(self, domain, range)
+
 
     def _prepare_spaces_(self, domain, range):
         arr = np.array(np.meshgrid(domain, range)).reshape(2,-1)
@@ -46,18 +48,19 @@ class DaskOperator(DaskObject, Operator.Operator):
             raise TypeError("Model vector must be a DaskVector!")
         if not isinstance(data, DaskVector):
             raise TypeError("Data vector must be a DaskVector!")
+        
+    def as_matrix(self):
+        return np.array(self.fut).reshape(self.range.nchunks, self.domain.nchunks)
 
     def forward(self, add, model, data):
-        """ This is not blocking """
 
         self.check(model, data)
         self.checkDomainRange(model, data)
-        if not add:
-            data.scale(0)
+        if not add: data.zero()
         
         mod = model.get_futures()
         dat = data.get_futures()
-        ops = np.array(self.fut).reshape(data.nchunks, model.nchunks)
+        ops = self.as_matrix()
         # submit all tasks
         res = []
         # loop across model chunks 
@@ -72,16 +75,14 @@ class DaskOperator(DaskObject, Operator.Operator):
         data.set_futures(dat)
 
     def adjoint(self, add, model, data):
-        """ This is not blocking """
 
         self.check(model, data)
         self.checkDomainRange(model, data)
-        if not add:
-            model.scale(0)
+        if not add: model.zero()
         
         mod = model.get_futures()
         dat = data.get_futures()
-        ops = np.array(self.fut).reshape(data.nchunks, model.nchunks).T
+        ops = self.as_matrix().T
         # submit all tasks
         res = []
         for i, d in enumerate(dat):
@@ -93,6 +94,17 @@ class DaskOperator(DaskObject, Operator.Operator):
         # copy the futures
         wait(mod)
         model.set_futures(mod)
+
+    def set_background(self, model):
+        mod = model.get_futures()
+        ops = self.as_matrix()
+        # submit all tasks
+        res = []
+        # loop across model chunks 
+        for i, m in enumerate(mod):
+            fut = self.client.map(set_bg, ops[:,i],[m]*ops.shape[0], pure=False)
+            res.append(fut)
+        wait(res)
 
 # Need helper functions because DaskOperator 
 # is potentially a heterogeneous object (contains different types of Operators)
@@ -120,3 +132,7 @@ def adj(op, model, data):
         m = model.clone()
         m.zero()
         return m
+
+def set_bg(op, model):
+    op.set_background(model)
+    return

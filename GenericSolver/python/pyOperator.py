@@ -68,6 +68,10 @@ class Operator:
         """
         # TODO override the default behaviour
         return cls(subdomain, subrange, *op_args, **op_kwargs)
+    
+    def set_background(self, model):
+        """Does nothing by default"""
+        return
 
     # main function for all kinds of multiplication
     def dot(self, other):
@@ -622,93 +626,6 @@ def ChainOperator(A, B):
 # SOME USEFUL OPERATORS #
 #########################
 
-class DummyOp(Operator):
-    """Operator that does nothing"""
-
-    def __init__(self):
-        pass
-
-    def forward(self, add, model, data):
-        pass
-
-    def adjoint(self, add, model, data):
-        pass
-
-    def checkDomainRange(self, domain, range):
-        pass
-
-class ZeroOp(Operator):
-    """Zero matrix operator; useful for Jacobian matrices that are zeros"""
-
-    def __init__(self, domain, range):
-        super(ZeroOp, self).__init__(domain, range)
-
-    def __str__(self):
-        return "  Zero  "
-
-    def forward(self, add, model, data):
-        self.checkDomainRange(model, data)
-        if not add:
-            data.zero()
-
-    def adjoint(self, add, model, data):
-        self.checkDomainRange(model, data)
-        if not add:
-            model.zero()
-
-
-class IdentityOp(Operator):
-    """Identity operator"""
-
-    def __init__(self, domain):
-        super(IdentityOp, self).__init__(domain, domain)
-
-    def __str__(self):
-        return "Identity"
-
-    def forward(self, add, model, data):
-        self.checkDomainRange(model, data)
-        if add:
-            data.scaleAdd(model)
-        else:
-            data.copy(model)
-
-    def adjoint(self, add, model, data):
-        self.checkDomainRange(model, data)
-        if add:
-            model.scaleAdd(data)
-        else:
-            model.copy(data)
-
-
-class scalingOp(Operator):
-    """scalar multiplication operator"""
-
-    def __init__(self, domain, scalar):
-        super(scalingOp, self).__init__(domain, domain)
-        if not np.isscalar(scalar):
-            raise ValueError('scalar has to be (indeed) a scalar variable')
-        self.scalar = scalar
-
-    def __str__(self):
-        return "Scaling "
-
-    @classmethod
-    def from_subspace(cls, subdomain, subrange, scalar):
-        if subdomain.checkSame(subrange):
-            return cls(subdomain, scalar)
-        else:
-            return DummyOp()
-        
-    def forward(self, add, model, data):
-        self.checkDomainRange(model, data)
-        data.scaleAdd(model, 1. if add else 0., self.scalar)
-
-    def adjoint(self, add, model, data):
-        self.checkDomainRange(model, data)
-        model.scaleAdd(data, 1. if add else 0., self.scalar)
-
-
 class DiagonalOp(Operator):
     """Diagonal operator for performing element-wise multiplication"""
 
@@ -731,27 +648,101 @@ class DiagonalOp(Operator):
         model.scaleAdd(data, 1. if add else 0.)
         model.multiply(self.diag)
 
+    @classmethod
+    def from_subspace(cls, subdomain, subrange, *args, **kwargs):
+        if subdomain.checkSame(subrange):
+            return cls(subdomain, *args, **kwargs)
+        else:
+            return DummyOp()
+
+class DummyOp(Operator):
+    """Operator that does nothing"""
+
+    def __init__(self):
+        pass
+
+    def forward(self, add, model, data):
+        pass
+
+    def adjoint(self, add, model, data):
+        pass
+
+    def checkDomainRange(self, domain, range):
+        pass
+
+class ZeroOp(DiagonalOp):
+    """Zero matrix operator; useful for Jacobian matrices that are zeros"""
+
+    def __init__(self, domain):
+        super(ZeroOp, self).__init__(domain)
+
+    def __str__(self):
+        return "  Zero  "
+
+    def forward(self, add, model, data):
+        self.checkDomainRange(model, data)
+        if not add:
+            data.zero()
+
+    def adjoint(self, add, model, data):
+        self.checkDomainRange(model, data)
+        if not add:
+            model.zero()
+
+
+class IdentityOp(DiagonalOp):
+    """Identity operator"""
+
+    def __init__(self, domain):
+        super(IdentityOp, self).__init__(domain)
+
+    def __str__(self):
+        return "Identity"
+
+    def forward(self, add, model, data):
+        self.checkDomainRange(model, data)
+        if add:
+            data.scaleAdd(model)
+        else:
+            data.copy(model)
+
+    def adjoint(self, add, model, data):
+        self.checkDomainRange(model, data)
+        if add:
+            model.scaleAdd(data)
+        else:
+            model.copy(data)
+
+
+class scalingOp(DiagonalOp):
+    """scalar multiplication operator"""
+
+    def __init__(self, domain, scalar):
+        super(scalingOp, self).__init__(domain)
+        if not np.isscalar(scalar):
+            raise ValueError('scalar has to be (indeed) a scalar variable')
+        self.scalar = scalar
+
+    def __str__(self):
+        return "Scaling "
+        
+    def forward(self, add, model, data):
+        self.checkDomainRange(model, data)
+        data.scaleAdd(model, 1. if add else 0., self.scalar)
+
+    def adjoint(self, add, model, data):
+        self.checkDomainRange(model, data)
+        model.scaleAdd(data, 1. if add else 0., self.scalar)
 
 #######################
 # NONLINEAR OPERATORS #
 #######################
-
-# Dummy function to use Non-linear operator class for Linear ones
-
-
-def dummy_set_background(dummy_arg):
-    """
-    Dummy function to use Non-linear operator class for Linear ones (it takes one argument and does nothing)
-    """
-    return
-
-
 class NonLinearOperator(Operator):
     """
     Non-linear operator class
     """
 
-    def __init__(self, nl_op, lin_op=None, set_background_func=dummy_set_background):
+    def __init__(self, nl_op, lin_op=None):
         """
            Constructor for non-linear operator class:
            nl_op                = [no default] - operator class;
@@ -766,7 +757,7 @@ class NonLinearOperator(Operator):
         # Setting non-linear and linearized operators
         self.nl_op = nl_op
         self.lin_op = lin_op if lin_op != None else nl_op
-        self.set_background = set_background_func
+        self.set_background = self.lin_op.set_background
         # Checking if domain of the operators is the same
         if not self.nl_op.domain.checkSame(self.lin_op.domain):
             raise ValueError("ERROR! The two provided operators have different domains")
