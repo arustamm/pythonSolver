@@ -854,7 +854,7 @@ class _combNonLinearOperator(NonLinearOperator):
         # Defining non_linear operator g(m) for Jacobian definition
         self.g_nl_op = g.nl_op
         self.g_range_tmp = g.nl_op.range.clone()
-        super(_combNonLinearOperator, self).__init__(self.nl_op, self.lin_op, self.set_background)
+        super(_combNonLinearOperator, self).__init__(self.nl_op, self.lin_op)
 
     def set_background(self, model):
         """
@@ -897,7 +897,7 @@ class _sumNlOperator(NonLinearOperator):
         # Defining non_linear operator g(m) for Jacobian definition
         self.g_nl_op = g.nl_op
         self.g_range_tmp = g.nl_op.range.clone()
-        super(_sumNlOperator, self).__init__(self.nl_op, self.lin_op, self.set_background)
+        super(_sumNlOperator, self).__init__(self.nl_op, self.lin_op)
 
     def __str__(self):
         return self.args[0].__str__()[:3] + "+" + self.args[1].__str__()[:4]
@@ -939,7 +939,7 @@ class VstackNonLinearOperator(NonLinearOperator):
         # Defining internal set_background functions
         self.set_background1 = nl_op1.set_background
         self.set_background2 = nl_op2.set_background
-        super(VstackNonLinearOperator, self).__init__(self.nl_op, self.lin_op, self.set_background)
+        super(VstackNonLinearOperator, self).__init__(self.nl_op, self.lin_op)
 
     def __str__(self):
         return "NLVstack"

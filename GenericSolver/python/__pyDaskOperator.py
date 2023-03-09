@@ -128,7 +128,7 @@ def adj(op, model, data):
         op.adjoint(False, m, data)
         return m
     else:
-        # TODO not the best solution need to fix
+        # TODO not the best solution 
         m = model.clone()
         m.zero()
         return m
