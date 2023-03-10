@@ -71,7 +71,6 @@ class DaskOperator(DaskObject, Operator.Operator):
         for d in res:
             dat = self.client.map(data.cls.__add__, dat, d, pure=False)
         # copy the futures
-        wait(dat)
         data.set_futures(dat)
 
     def adjoint(self, add, model, data):
@@ -92,7 +91,6 @@ class DaskOperator(DaskObject, Operator.Operator):
         for m in res:
             mod = self.client.map(model.cls.__add__, mod, m, pure=False)
         # copy the futures
-        wait(mod)
         model.set_futures(mod)
 
     def set_background(self, model):
@@ -103,8 +101,8 @@ class DaskOperator(DaskObject, Operator.Operator):
         # loop across model chunks 
         for i, m in enumerate(mod):
             fut = self.client.map(set_bg, ops[:,i],[m]*ops.shape[0], pure=False)
-            res.append(fut)
-        wait(res)
+        #     res.append(fut)
+        # wait(res)
 
 # Need helper functions because DaskOperator 
 # is potentially a heterogeneous object (contains different types of Operators)
