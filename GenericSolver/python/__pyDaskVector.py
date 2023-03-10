@@ -33,7 +33,7 @@ class DaskObject:
             if isinstance(objCreator, type):
                 self.cls = objCreator
                 if kw.get("futures"):
-                    self.fut = kw.get("futures")
+                    self.set_futures(kw.get("futures"))
                 else:
                     if constructor_kw:
                         if constructor_args:
@@ -64,7 +64,7 @@ class DaskObject:
                     raise ValueError("Need to pass 'from_object' when using generator function!")
 
                 if kw.get("futures"):
-                    self.fut = kw.get("futures")
+                    self.set_futures(kw.get("futures"))
                 else:
                     # scatter the object first to avoid repeated work
                     obj_fut = client.scatter(obj, broadcast=True)
@@ -102,6 +102,12 @@ class DaskObject:
 
     def get(self, index):
         return self.fut[index]
+    
+    def set_futures(self, futures):
+        if len(futures) != len(self):
+            raise ValueError("Futures are of a wrong size!")
+        self.fut = futures.copy()
+        wait(self.fut)
 
     def __len__(self):
         return len(self.fut)
@@ -387,7 +393,7 @@ class DaskVector(DaskObject, Vector.vector):
 
     def imag(self):
         """Return the imaginary part of the vector"""
-        wait(self.client.map(self.cls.real, self.fut, pure=False))
+        wait(self.client.map(self.cls.imag, self.fut, pure=False))
         return self
 
     def pow(self, power):
@@ -396,11 +402,6 @@ class DaskVector(DaskObject, Vector.vector):
         return self
 
     # Methods combinaning different vectors
-    def set_futures(self, futures):
-        if len(futures) != len(self):
-            raise ValueError("Futures are of a wrong size!")
-        self.fut = futures
-        wait(self.fut)
 
     def clone_from_futures(self, futures):
         if len(futures) != len(self):
@@ -431,7 +432,8 @@ class DaskVector(DaskObject, Vector.vector):
         """Function to check to make sure the vectors exist in the same space"""
         self.check(vec)
         fut = self.client.map(self.cls.checkSame, self.fut, vec.fut, pure=False)
-        return all(self.client.gather(fut))
+        res = self.client.gather(fut)
+        return all(res)
         
     def maximum(self, vec2):
         """Return a new vector of element-wise maximum of self and vec2"""

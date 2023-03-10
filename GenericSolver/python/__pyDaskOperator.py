@@ -36,7 +36,7 @@ class DaskOperator(DaskObject, Operator.Operator):
 
         DaskObject.__init__(self, dask_client, objCreator=opCls.from_subspace, 
                             constructor_args=op_args, constructor_kw=op_kwargs, from_object=opCls)
-        Operator.Operator.__init__(self, domain, range)
+        self.setDomainRange(domain, range)
 
 
     def _prepare_spaces_(self, domain, range):
