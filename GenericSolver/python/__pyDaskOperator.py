@@ -18,6 +18,7 @@ class DaskOperator(DaskObject, Operator.Operator):
         if not isinstance(range, DaskVector):
             raise TypeError("Range vector must be a DaskVector!")
         
+        client = dask_client.getClient()
         opCls = operator_cls
         if not "from_subspace" in dir(opCls):
             raise ValueError("To generate DaskOperator from %s, it should contain from_subspace function!" % opCls)
@@ -27,8 +28,8 @@ class DaskOperator(DaskObject, Operator.Operator):
         dom, ran = self._prepare_spaces_(domain.get_futures(), range.get_futures())
         for d,r in zip(dom, ran) :
             param = []
-            param.append(d)
-            param.append(r)
+            param.append(client.submit(lambda x: x, d, pure=False))
+            param.append(client.submit(lambda x: x, r, pure=False))
             for p in list(args):
                 param.append(p)
             op_args.append(tuple(param))
@@ -101,8 +102,8 @@ class DaskOperator(DaskObject, Operator.Operator):
         # loop across model chunks 
         for i, m in enumerate(mod):
             fut = self.client.map(set_bg, ops[:,i],[m]*ops.shape[0], pure=False)
-        #     res.append(fut)
-        # wait(res)
+            res.append(fut)
+        wait(*res)
 
 # Need helper functions because DaskOperator 
 # is potentially a heterogeneous object (contains different types of Operators)
@@ -133,4 +134,4 @@ def adj(op, model, data):
 
 def set_bg(op, model):
     op.set_background(model)
-    return
+    return True
