@@ -98,24 +98,20 @@ class DaskObject:
         wait(self.fut)
         
     def get_futures(self):
-        fut = self.client.map(lambda x: x, self.fut, pure=False)
-        wait(fut)
-        return fut
+        return self.fut
 
     def get(self, index):
         return self.fut[index]
     
     def set_futures(self, futures):
         # copy futures
-        self.fut = self.client.map(lambda x: x, futures, pure=False)
-        wait(self.fut)
+        self.fut = futures.copy()
 
     def __len__(self):
         return len(self.fut)
 
     def __del__(self):
         """Default destructor"""
-
 
 class DaskVector(DaskObject, Vector.vector):
 
@@ -276,8 +272,7 @@ class DaskVector(DaskObject, Vector.vector):
 
         ilocs = np.array(np.meshgrid(*ilocs)).T.reshape((-1,self.ndim))
         ilocs = list(map(tuple,ilocs))
-        return tuple(list(reversed(ibs))), ilocs
-        
+        return tuple(list(reversed(ibs))), ilocs    
 
     def __getitem__(self, it) -> "np.ndarray":
         fut = np.array(self.fut).reshape(self.chunks)
@@ -417,7 +412,7 @@ class DaskVector(DaskObject, Vector.vector):
 
     def cloneSpace(self):
         """Function to clone vector space"""
-        fut = self.client.map(self.cls.cloneSpace, self.fut, pure=False)
+        fut = self.client.map(self.cls.clone, self.fut, pure=False)
         return self.clone_from_futures(fut)
 
     def check(self, vec):

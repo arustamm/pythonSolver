@@ -28,8 +28,8 @@ class DaskOperator(DaskObject, Operator.Operator):
         dom, ran = self._prepare_spaces_(domain.get_futures(), range.get_futures())
         for d,r in zip(dom, ran) :
             param = []
-            param.append(client.submit(lambda x: x, d, pure=False))
-            param.append(client.submit(lambda x: x, r, pure=False))
+            param.append(d)
+            param.append(r)
             for p in list(args):
                 param.append(p)
             op_args.append(tuple(param))
