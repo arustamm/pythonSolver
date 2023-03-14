@@ -757,13 +757,15 @@ class NonLinearOperator(Operator):
         # Setting non-linear and linearized operators
         self.nl_op = nl_op
         self.lin_op = lin_op if lin_op != None else nl_op
-        self.set_background = self.lin_op.set_background
         # Checking if domain of the operators is the same
         if not self.nl_op.domain.checkSame(self.lin_op.domain):
             raise ValueError("ERROR! The two provided operators have different domains")
         if not self.nl_op.range.checkSame(self.lin_op.range):
             raise ValueError("ERROR! The two provided operators have different ranges")
         super(NonLinearOperator, self).__init__(self.nl_op.domain, self.nl_op.range)
+
+    def set_background(self, model):
+        self.lin_op.set_background(model)
 
     def dotTest(self, **kwargs):
         """

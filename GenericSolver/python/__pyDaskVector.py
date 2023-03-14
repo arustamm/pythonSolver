@@ -6,8 +6,7 @@ import numpy as np
 import Hypercube
 from dask_util import DaskClient
 from dask.distributed import wait, as_completed
-from dask import delayed
-import dask.array as da
+from dask import persist
 import os
 
 class DaskObject:
@@ -95,6 +94,7 @@ class DaskObject:
                             self.fut.append(future)
             else:
                 raise NotImplementedError("DaskObject can only be created by providing the class name or creator-function!")
+        
         wait(self.fut)
         
     def get_futures(self):
@@ -105,7 +105,15 @@ class DaskObject:
     
     def set_futures(self, futures):
         # copy futures
-        self.fut = futures.copy()
+        wait(futures)
+        self.fut = futures
+
+    def get_workers(self):
+        self.workers = [
+            self.client.who_has()[self.fut[i].key][0] for i in range(len(self))
+            ]
+        return self.workers
+        
 
     def __len__(self):
         return len(self.fut)
@@ -293,6 +301,7 @@ class DaskVector(DaskObject, Vector.vector):
     def getNdArray(self):
         # return array of futures in the shape of block x block
         fut = self.client.map(self.cls.getNdArray, self.fut, pure=False)
+        wait(fut)
         return np.array(fut).reshape(self.chunks)
     
     def getHyper(self):
@@ -412,8 +421,11 @@ class DaskVector(DaskObject, Vector.vector):
 
     def cloneSpace(self):
         """Function to clone vector space"""
+        # TODO cloneSpace is seg-faulting in SepVector
         fut = self.client.map(self.cls.clone, self.fut, pure=False)
-        return self.clone_from_futures(fut)
+        v = self.clone_from_futures(fut)
+        v.zero()
+        return v
 
     def check(self, vec):
         # check if number of chunks is the same
@@ -427,7 +439,7 @@ class DaskVector(DaskObject, Vector.vector):
     def checkSame(self, vec):
         """Function to check to make sure the vectors exist in the same space"""
         self.check(vec)
-        fut = self.client.map(self.cls.checkSame, self.fut, vec.fut, pure=True)
+        fut = self.client.map(self.cls.checkSame, self.fut, vec.fut, pure=False)
         res = self.client.gather(fut)
         return all(res)
         
@@ -446,7 +458,8 @@ class DaskVector(DaskObject, Vector.vector):
     def scaleAdd(self, vec2, sc1=1.0, sc2=1.0):
         """Function to scale two vectors and add them to the first one"""
         self.check(vec2)
-        wait(self.client.map(self.cls.scaleAdd, self.fut, vec2.fut, [sc1]*len(self), [sc2]*len(self), pure=False))
+        fut = self.client.map(self.cls.scaleAdd, self.fut, vec2.fut, [sc1]*len(self), [sc2]*len(self), pure=False)
+        wait(fut)
         return self
 
     def dot(self, vec2):

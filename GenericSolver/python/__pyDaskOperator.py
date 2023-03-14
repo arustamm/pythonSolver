@@ -25,15 +25,17 @@ class DaskOperator(DaskObject, Operator.Operator):
         op_args = []
         op_kwargs = []
 
-        dom, ran = self._prepare_spaces_(domain.get_futures(), range.get_futures())
-        for d,r in zip(dom, ran) :
-            param = []
-            param.append(d)
-            param.append(r)
-            for p in list(args):
-                param.append(p)
-            op_args.append(tuple(param))
-            op_kwargs.append(kw)
+        # dom, ran = self._prepare_spaces_(domain.get_futures(), range.get_futures())
+
+        for d in domain.get_futures():
+            for r in range.get_futures():
+                param = []
+                param.append(d)
+                param.append(r)
+                for p in list(args):
+                    param.append(p)
+                op_args.append(tuple(param))
+                op_kwargs.append(kw)
 
         DaskObject.__init__(self, dask_client, objCreator=opCls.from_subspace, 
                             constructor_args=op_args, constructor_kw=op_kwargs, from_object=opCls)
@@ -51,6 +53,7 @@ class DaskOperator(DaskObject, Operator.Operator):
             raise TypeError("Data vector must be a DaskVector!")
         
     def as_matrix(self):
+        # TODO this might be erroneous because a new copy is created
         return np.array(self.fut).reshape(self.range.nchunks, self.domain.nchunks)
 
     def forward(self, add, model, data):
@@ -61,18 +64,19 @@ class DaskOperator(DaskObject, Operator.Operator):
         
         mod = model.get_futures()
         dat = data.get_futures()
-        ops = self.as_matrix()
+        # ops = self.as_matrix()
         # submit all tasks
         res = []
         # loop across model chunks 
         for i, m in enumerate(mod):
-            fut = self.client.map(fwd, ops[:,i], [m]*len(dat), dat, pure=False)
-            res.append(fut)
-        # accumulate 
-        for d in res:
-            dat = self.client.map(data.cls.__add__, dat, d, pure=False)
+            fut = self.client.map(fwd, self.fut, [m]*len(dat), dat, pure=False)
+            res = self.client.map(data.cls.__add__, dat, fut, pure=False)
+        # wait(res)
+        # # accumulate 
+        # for d in res:
+        #     dat = self.client.map(data.cls.__add__, dat, d, pure=False)
         # copy the futures
-        data.set_futures(dat)
+        data.set_futures(res)
 
     def adjoint(self, add, model, data):
 
@@ -82,28 +86,29 @@ class DaskOperator(DaskObject, Operator.Operator):
         
         mod = model.get_futures()
         dat = data.get_futures()
-        ops = self.as_matrix().T
+        # ops = self.as_matrix().T
         # submit all tasks
         res = []
-        for i, d in enumerate(dat):
-            fut = self.client.map(adj, ops[:,i], mod, [d]*len(mod), pure=False)
-            res.append(fut)
+        for i, m in enumerate(mod):
+            fut = self.client.map(adj, self.fut, [m]*len(dat), dat, pure=False)
+            res = self.client.map(model.cls.__add__, mod, fut, pure=False)
+        # wait(res)
         # accumulate 
-        for m in res:
-            mod = self.client.map(model.cls.__add__, mod, m, pure=False)
+        # for m in res:
+        #     mod = self.client.map(model.cls.__add__, mod, m, pure=False)
         # copy the futures
-        model.set_futures(mod)
+        model.set_futures(res)
 
     def set_background(self, model):
+        self.domain.checkSame(model)
         mod = model.get_futures()
-        ops = self.as_matrix()
+        # ops = self.as_matrix()
         # submit all tasks
         res = []
         # loop across model chunks 
         for i, m in enumerate(mod):
-            fut = self.client.map(set_bg, ops[:,i],[m]*ops.shape[0], pure=False)
-            res.append(fut)
-        wait(*res)
+            fut = self.client.map(set_bg, self.fut,[m]*len(self), pure=False)
+            wait(fut)
 
 # Need helper functions because DaskOperator 
 # is potentially a heterogeneous object (contains different types of Operators)
@@ -133,5 +138,5 @@ def adj(op, model, data):
         return m
 
 def set_bg(op, model):
-    op.set_background(model)
-    return True
+    res = op.set_background(model)
+    return res
