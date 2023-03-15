@@ -30,6 +30,7 @@ class vector:
         """Default destructor"""
 
     def __add__(self, other):  # self + other
+        self.checkSame(other)
         res = self.clone()
         if type(other) in [int, float]:
             res.addbias(other)
@@ -41,6 +42,7 @@ class vector:
             raise TypeError('Argument has to be either scalar or vector, got %r instead' % other)
 
     def __iadd__(self, other):  # self + other
+        self.checkSame(other)
         if type(other) in [int, float]:
             self.addbias(other)
             return self
@@ -51,6 +53,7 @@ class vector:
             raise TypeError('Argument has to be either scalar or vector, got %r instead' % other)
 
     def __sub__(self, other):  # self - other
+        self.checkSame(other)
         res = self.__add__(-other)
         return res
 
@@ -59,6 +62,7 @@ class vector:
         return self
 
     def __mul__(self, other):  # self * other
+        self.checkSame(other)
         if type(other) in [int, float]:
             self.scale(other)
             return self
@@ -69,6 +73,7 @@ class vector:
             raise NotImplementedError
 
     def __rmul__(self, other):
+        self.checkSame(other)
         if type(other) in [int, float]:
             self.scale(other)
             return self

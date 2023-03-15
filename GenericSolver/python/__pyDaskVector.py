@@ -37,17 +37,17 @@ class DaskObject:
                     if constructor_kw:
                         if constructor_args:
                             for c_arg, c_kw in zip(constructor_args, constructor_kw):
-                                future = client.submit(objCreator, *c_arg, **c_kw)
+                                future = client.submit(objCreator, *c_arg, **c_kw, pure=False)
                                 # collect all vectors into the pool
                                 self.fut.append(future)
                         else:
                             for c_kw in constructor_kw:
-                                future = client.submit(objCreator, **c_kw)
+                                future = client.submit(objCreator, **c_kw, pure=False)
                                 # collect all vectors into the pool
                                 self.fut.append(future)
                     elif constructor_args:
                         for c_arg in constructor_args:
-                            future = client.submit(objCreator, *c_arg)
+                            future = client.submit(objCreator, *c_arg, pure=False)
                             # collect all vectors into the pool
                             self.fut.append(future)
                     
@@ -71,31 +71,32 @@ class DaskObject:
                         if constructor_args:
                             for c_arg, c_kw in zip(constructor_args, constructor_kw):
                                 if isinstance(obj, type):
-                                    future = client.submit(objCreator, *c_arg, **c_kw)
+                                    future = client.submit(objCreator, *c_arg, **c_kw, pure=False)
                                 else:
-                                    future = client.submit(objCreator, obj_fut, *c_arg, **c_kw)
+                                    future = client.submit(objCreator, obj_fut, *c_arg, **c_kw, pure=False)
                                 # collect all vectors into the pool
                                 self.fut.append(future)
                         else:
                             for c_kw in constructor_kw:
                                 if isinstance(obj, type):
-                                    future = client.submit(objCreator, **c_kw)
+                                    future = client.submit(objCreator, **c_kw, pure=False)
                                 else:
-                                    future = client.submit(objCreator, obj_fut, **c_kw)
+                                    future = client.submit(objCreator, obj_fut, **c_kw, pure=False)
                                 # collect all vectors into the pool
                                 self.fut.append(future)
                     elif constructor_args:
                         for c_arg in constructor_args:
                             if isinstance(obj, type):
-                                future = client.submit(objCreator, *c_arg)
+                                future = client.submit(objCreator, *c_arg, pure=False)
                             else:
-                                future = client.submit(objCreator, obj_fut, *c_arg)
+                                future = client.submit(objCreator, obj_fut, *c_arg, pure=False)
                             # collect all vectors into the pool
                             self.fut.append(future)
             else:
                 raise NotImplementedError("DaskObject can only be created by providing the class name or creator-function!")
         
         wait(self.fut)
+        persist(self.fut)
         
     def get_futures(self):
         return self.fut
@@ -297,11 +298,13 @@ class DaskVector(DaskObject, Vector.vector):
         fut_ib = fut[ib].flatten()
         vals = [val] * len(fut_ib)
         wait(self.client.map(self.cls.__setitem__, fut_ib, iloc, vals, pure=False))
-        
+    
+    def __eq__(self, vec):
+        return vec.clone()
+    
     def getNdArray(self):
         # return array of futures in the shape of block x block
         fut = self.client.map(self.cls.getNdArray, self.fut, pure=False)
-        wait(fut)
         return np.array(fut).reshape(self.chunks)
     
     def getHyper(self):
@@ -458,8 +461,7 @@ class DaskVector(DaskObject, Vector.vector):
     def scaleAdd(self, vec2, sc1=1.0, sc2=1.0):
         """Function to scale two vectors and add them to the first one"""
         self.check(vec2)
-        fut = self.client.map(self.cls.scaleAdd, self.fut, vec2.fut, [sc1]*len(self), [sc2]*len(self), pure=False)
-        wait(fut)
+        wait(self.client.map(self.cls.scaleAdd, self.fut, vec2.fut, [sc1]*len(self), [sc2]*len(self), pure=False))
         return self
 
     def dot(self, vec2):
