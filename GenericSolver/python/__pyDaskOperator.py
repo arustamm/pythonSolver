@@ -24,7 +24,8 @@ class DaskOperator(DaskObject, Operator.Operator):
             raise ValueError("To generate DaskOperator from %s, it should contain from_subspace function!" % opCls)
         op_args = []
         op_kwargs = []
-
+        
+        # client.submit(self.getDomain, self.)
         dom, ran = self._prepare_spaces_(domain.get_futures(), range.get_futures())
         for d,r in zip(dom, ran) :
             param = []
@@ -52,6 +53,22 @@ class DaskOperator(DaskObject, Operator.Operator):
         
     def as_matrix(self):
         return np.array(self.fut).reshape(self.range.nchunks, self.domain.nchunks)
+    
+    # def setDomain(self, domain):
+    #     ops = wait(self.client.map(set_domain, self.fut, domain.fut, pure=False))
+    #     self.set_futures(ops)
+    #     self.domain = domain.cloneSpace()
+    #     return 
+
+    # def setRange(self, range):
+    #     ops = wait(self.client.map(set_range, self.fut, range.fut, pure=False))
+    #     self.set_futures(ops)
+    #     self.range = range.cloneSpace()
+    #     return 
+    
+    # def setDomainRange(self, domain, range):
+    #     self.setDomain(domain)
+    #     self.setRange(range)
 
     def forward(self, add, model, data):
 
@@ -68,12 +85,15 @@ class DaskOperator(DaskObject, Operator.Operator):
         for i, m in enumerate(mod):
             fut = self.client.map(fwd, ops[:,i], [m]*len(dat), dat, pure=False)
             res.append(fut)
-        wait(res)
+        waitable = [f for sublist in res for f in sublist]
+        wait(waitable)
         # accumulate 
         for d in res:
             dat = self.client.map(data.cls.__add__, dat, d, pure=False)
         # copy the futures
-        data.set_futures(dat)
+        dd = self.client.map(data.cls.clone, dat, pure=False)
+        data.set_futures(dd)
+        self.setRange(data)
 
     def adjoint(self, add, model, data):
 
@@ -89,12 +109,15 @@ class DaskOperator(DaskObject, Operator.Operator):
         for i, d in enumerate(dat):
             fut = self.client.map(adj, ops[:,i], mod, [d]*len(mod), pure=False)
             res.append(fut)
-        wait(res)
+        waitable = [f for sublist in res for f in sublist]
+        wait(waitable)
         # accumulate 
         for m in res:
             mod = self.client.map(model.cls.__add__, mod, m, pure=False)
         # copy the futures
-        model.set_futures(mod)
+        mm = self.client.map(model.cls.clone, mod, pure=False)
+        model.set_futures(mm)
+        self.setDomain(model)
 
     def set_background(self, model):
         self.domain.checkSame(model)
@@ -105,7 +128,9 @@ class DaskOperator(DaskObject, Operator.Operator):
         # loop across model chunks 
         for i, m in enumerate(mod):
             fut = self.client.map(set_bg, ops[:,i],[m]*ops.shape[0], pure=False)
-            self.set_futures(fut)
+            res.extend([f for f in fut])
+        self.set_futures(res)
+        self.setDomain(model)
 
 # Need helper functions because DaskOperator 
 # is potentially a heterogeneous object (contains different types of Operators)
@@ -136,4 +161,12 @@ def adj(op, model, data):
 
 def set_bg(op, model):
     op.set_background(model)
+    return op
+
+def set_domain(op, domain):
+    op.setDomain(domain)
+    return op
+
+def set_range(op, range):
+    op.setRange(range)
     return op

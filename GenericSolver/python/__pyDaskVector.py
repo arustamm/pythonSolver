@@ -32,22 +32,23 @@ class DaskObject:
             if isinstance(objCreator, type):
                 self.cls = objCreator
                 if kw.get("futures"):
-                    self.set_futures(kw.get("futures"))
+                    self.fut = kw.get("futures")
+                    self.set_futures(self.fut)
                 else:
                     if constructor_kw:
                         if constructor_args:
                             for c_arg, c_kw in zip(constructor_args, constructor_kw):
-                                future = client.submit(objCreator, *c_arg, **c_kw, pure=False)
+                                future = client.submit(objCreator, *c_arg, **c_kw)
                                 # collect all vectors into the pool
                                 self.fut.append(future)
                         else:
                             for c_kw in constructor_kw:
-                                future = client.submit(objCreator, **c_kw, pure=False)
+                                future = client.submit(objCreator, **c_kw)
                                 # collect all vectors into the pool
                                 self.fut.append(future)
                     elif constructor_args:
                         for c_arg in constructor_args:
-                            future = client.submit(objCreator, *c_arg, pure=False)
+                            future = client.submit(objCreator, *c_arg)
                             # collect all vectors into the pool
                             self.fut.append(future)
                     
@@ -63,7 +64,8 @@ class DaskObject:
                     raise ValueError("Need to pass 'from_object' when using generator function!")
 
                 if kw.get("futures"):
-                    self.set_futures(kw.get("futures"))
+                    self.fut = kw.get("futures")
+                    self.set_futures(self.fut)
                 else:
                     # scatter the object first to avoid repeated work
                     obj_fut = client.scatter(obj, broadcast=True)
@@ -71,31 +73,30 @@ class DaskObject:
                         if constructor_args:
                             for c_arg, c_kw in zip(constructor_args, constructor_kw):
                                 if isinstance(obj, type):
-                                    future = client.submit(objCreator, *c_arg, **c_kw, pure=False)
+                                    future = client.submit(objCreator, *c_arg, **c_kw)
                                 else:
-                                    future = client.submit(objCreator, obj_fut, *c_arg, **c_kw, pure=False)
+                                    future = client.submit(objCreator, obj_fut, *c_arg, **c_kw)
                                 # collect all vectors into the pool
                                 self.fut.append(future)
                         else:
                             for c_kw in constructor_kw:
                                 if isinstance(obj, type):
-                                    future = client.submit(objCreator, **c_kw, pure=False)
+                                    future = client.submit(objCreator, **c_kw)
                                 else:
-                                    future = client.submit(objCreator, obj_fut, **c_kw, pure=False)
+                                    future = client.submit(objCreator, obj_fut, **c_kw)
                                 # collect all vectors into the pool
                                 self.fut.append(future)
                     elif constructor_args:
                         for c_arg in constructor_args:
                             if isinstance(obj, type):
-                                future = client.submit(objCreator, *c_arg, pure=False)
+                                future = client.submit(objCreator, *c_arg)
                             else:
-                                future = client.submit(objCreator, obj_fut, *c_arg, pure=False)
+                                future = client.submit(objCreator, obj_fut, *c_arg)
                             # collect all vectors into the pool
                             self.fut.append(future)
             else:
                 raise NotImplementedError("DaskObject can only be created by providing the class name or creator-function!")
         
-        wait(self.fut)
         persist(self.fut)
         
     def get_futures(self):
@@ -106,8 +107,10 @@ class DaskObject:
     
     def set_futures(self, futures):
         # copy futures
-        wait(futures)
+        if len(self) != len(futures):
+            raise ValueError("Futures are of different length!")
         self.fut = futures
+        persist(self.fut)
 
     def get_workers(self):
         self.workers = [
@@ -298,9 +301,6 @@ class DaskVector(DaskObject, Vector.vector):
         fut_ib = fut[ib].flatten()
         vals = [val] * len(fut_ib)
         wait(self.client.map(self.cls.__setitem__, fut_ib, iloc, vals, pure=False))
-    
-    def __eq__(self, vec):
-        return vec.clone()
     
     def getNdArray(self):
         # return array of futures in the shape of block x block

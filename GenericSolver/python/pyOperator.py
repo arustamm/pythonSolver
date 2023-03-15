@@ -100,11 +100,19 @@ class Operator:
     def getRange(self):
         """Function to return operator range"""
         return self.range
+    
+    def setDomain(self, domain):
+        """Function to set operator domain"""
+        self.domain = domain.cloneSpace()
+
+    def setRange(self, range):
+        """Function to set operator range"""
+        self.range = range.cloneSpace()
 
     def setDomainRange(self, domain, range):
         """Function to set (cloning space) domain and range of the operator"""
-        self.domain = domain.cloneSpace()
-        self.range = range.cloneSpace()
+        self.setDomain(domain)
+        self.setRange(range)
         return
 
     def checkDomainRange(self, x, y):
