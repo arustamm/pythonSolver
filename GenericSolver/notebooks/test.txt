@@ -1,0 +1,255 @@
+##########################################################################################
+Broyden-Fletcher-Goldfarb-Shanno (BFGS) algorithm log file
+Restart folder: /tmp/restart_2023-03-15T20-47-15.844951/
+##########################################################################################
+
+iter = 000, obj = 2.00000e+05, resnorm = 6.32e+02, gradnorm = 2.53e+03, feval = 1, geval = 1
+Appplying inverse Hessian estimate
+Done applying inverse Hessian estimate
+CVSRCH STEPPER BY STEP-LENGTH BRACKETING
+xtol=1.00e-16 ftol=1.00e-04 gtol=9.50e-01 alpha_min=1.00e-20 alpha_max=1.00e+20 maxfev=20 xtrapf=4.00e+00
+	initial-steplength=6.25e-02
+	Current testing point (alpha=6.25e-02): m_current+alpha*dm
+	Objective function value of 2.00000e+05 (feval = 2)
+	Current testing point (alpha=1.52e-02): m_current+alpha*dm
+	Objective function value of 3.39492e+05 (feval = 3)
+	Current testing point (alpha=1.13e-03): m_current+alpha*dm
+	Objective function value of 1.06487e+06 (feval = 4)
+	Current testing point (alpha=1.57e-06): m_current+alpha*dm
+	Objective function value of 6.65997e+05 (feval = 5)
+	Current testing point (alpha=5.62e-12): m_current+alpha*dm
+	Objective function value of 1.33199e+06 (feval = 6)
+	Current testing point (alpha=1.00e-20): m_current+alpha*dm
+	Objective function value of 1.99997e+05 (feval = 7)
+	The sufficient decrease condition and the directional derivative condition hold (i.e., Strong Wolfe conditions met).
+	Stepper successuful for step length valueof 1.00e-20 and objective function of 2.00e+05 (feval = 7)
+First step-length value added to first Hessian inverse estimate!
+
+iter = 001, obj = 1.99997e+05, resnorm = 6.32e+02, gradnorm = 2.53e+03, feval = 7, geval = 7
+Elapsed time: 0 hours, 0 minutes, 4 seconds
+Current date & time: Wed Mar 15 20:47:20 2023
+Appplying inverse Hessian estimate
+Current inverse dot-products of BFGS estimation vectors [1.8698794399078636e+18]
+Done applying inverse Hessian estimate
+CVSRCH STEPPER BY STEP-LENGTH BRACKETING
+xtol=1.00e-16 ftol=1.00e-04 gtol=9.50e-01 alpha_min=1.00e-20 alpha_max=1.00e+20 maxfev=20 xtrapf=4.00e+00
+	initial-steplength=1.00e+00
+	Current testing point (alpha=1.00e+00): m_current+alpha*dm
+	Objective function value of 3.87792e+26 (feval = 9)
+	Current testing point (alpha=4.38e-12): m_current+alpha*dm
+	Objective function value of 3.41246e+05 (feval = 10)
+	The sufficient decrease condition and the directional derivative condition hold (i.e., Strong Wolfe conditions met).
+	Stepper successuful for step length valueof 4.38e-12 and objective function of 3.41e+05 (feval = 10)
+Skipping update to estimated Hessian; not positive at iteration 1
+
+iter = 002, obj = 3.62597e+05, resnorm = 7.69e+02, gradnorm = 7.51e+03, feval = 11, geval = 11
+Elapsed time: 0 hours, 0 minutes, 7 seconds
+Current date & time: Wed Mar 15 20:47:23 2023
+Appplying inverse Hessian estimate
+Current inverse dot-products of BFGS estimation vectors [1.8698794399078636e+18, 0.0]
+Done applying inverse Hessian estimate
+CVSRCH STEPPER BY STEP-LENGTH BRACKETING
+xtol=1.00e-16 ftol=1.00e-04 gtol=9.50e-01 alpha_min=1.00e-20 alpha_max=1.00e+20 maxfev=20 xtrapf=4.00e+00
+	initial-steplength=1.00e+00
+	Current testing point (alpha=1.00e+00): m_current+alpha*dm
+	Objective function value of 3.87792e+26 (feval = 12)
+	Current testing point (alpha=2.92e-12): m_current+alpha*dm
+	Objective function value of 1.16853e+05 (feval = 13)
+	The sufficient decrease condition and the directional derivative condition hold (i.e., Strong Wolfe conditions met).
+	Stepper successuful for step length valueof 2.92e-12 and objective function of 1.17e+05 (feval = 13)
+Skipping update to estimated Hessian; not positive at iteration 2
+
+iter = 003, obj = 3.18526e+05, resnorm = 7.10e+02, gradnorm = 5.74e+03, feval = 14, geval = 14
+Elapsed time: 0 hours, 0 minutes, 9 seconds
+Current date & time: Wed Mar 15 20:47:25 2023
+Appplying inverse Hessian estimate
+Current inverse dot-products of BFGS estimation vectors [1.8698794399078636e+18, 0.0, 0.0]
+Done applying inverse Hessian estimate
+CVSRCH STEPPER BY STEP-LENGTH BRACKETING
+xtol=1.00e-16 ftol=1.00e-04 gtol=9.50e-01 alpha_min=1.00e-20 alpha_max=1.00e+20 maxfev=20 xtrapf=4.00e+00
+	Warning! Current search direction is not a descent one!
+Stepper couldn't find a proper step size, will terminate solver
+##########################################################################################
+Broyden-Fletcher-Goldfarb-Shanno (BFGS) algorithm log file end
+##########################################################################################
+
+##########################################################################################
+Broyden-Fletcher-Goldfarb-Shanno (BFGS) algorithm log file
+Restart folder: /tmp/restart_2023-03-15T20-51-15.603006/
+##########################################################################################
+
+iter = 000, obj = 2.00000e+05, resnorm = 6.32e+02, gradnorm = 2.53e+03, feval = 1, geval = 1
+Appplying inverse Hessian estimate
+Done applying inverse Hessian estimate
+CVSRCH STEPPER BY STEP-LENGTH BRACKETING
+xtol=1.00e-16 ftol=1.00e-04 gtol=9.50e-01 alpha_min=1.00e-20 alpha_max=1.00e+20 maxfev=20 xtrapf=4.00e+00
+	initial-steplength=6.25e-02
+	Current testing point (alpha=6.25e-02): m_current+alpha*dm
+	Objective function value of 1.33200e+05 (feval = 2)
+	The sufficient decrease condition and the directional derivative condition hold (i.e., Strong Wolfe conditions met).
+	Stepper successuful for step length valueof 6.25e-02 and objective function of 1.33e+05 (feval = 2)
+Skipping update to estimated Hessian; not positive at iteration 0
+First step-length value added to first Hessian inverse estimate!
+
+iter = 001, obj = 1.33200e+05, resnorm = 5.16e+02, gradnorm = 4.13e+03, feval = 2, geval = 2
+Elapsed time: 0 hours, 0 minutes, 1 seconds
+Current date & time: Wed Mar 15 20:51:17 2023
+Appplying inverse Hessian estimate
+Current inverse dot-products of BFGS estimation vectors [0.0]
+Done applying inverse Hessian estimate
+CVSRCH STEPPER BY STEP-LENGTH BRACKETING
+xtol=1.00e-16 ftol=1.00e-04 gtol=9.50e-01 alpha_min=1.00e-20 alpha_max=1.00e+20 maxfev=20 xtrapf=4.00e+00
+	initial-steplength=1.00e+00
+	Current testing point (alpha=1.00e+00): m_current+alpha*dm
+	Objective function value of 3.33000e+05 (feval = 3)
+	Current testing point (alpha=3.33e-01): m_current+alpha*dm
+	Objective function value of 6.58600e+05 (feval = 4)
+	Current testing point (alpha=3.39e-02): m_current+alpha*dm
+	Objective function value of 6.12528e+02 (feval = 5)
+	The sufficient decrease condition and the directional derivative condition hold (i.e., Strong Wolfe conditions met).
+	Stepper successuful for step length valueof 3.39e-02 and objective function of 6.13e+02 (feval = 5)
+
+iter = 002, obj = 6.12528e+02, resnorm = 3.50e+01, gradnorm = 4.73e+03, feval = 5, geval = 5
+Elapsed time: 0 hours, 0 minutes, 4 seconds
+Current date & time: Wed Mar 15 20:51:19 2023
+Appplying inverse Hessian estimate
+Current inverse dot-products of BFGS estimation vectors [0.0, 1.3072390603035333e-05]
+Done applying inverse Hessian estimate
+CVSRCH STEPPER BY STEP-LENGTH BRACKETING
+xtol=1.00e-16 ftol=1.00e-04 gtol=9.50e-01 alpha_min=1.00e-20 alpha_max=1.00e+20 maxfev=20 xtrapf=4.00e+00
+	initial-steplength=1.00e+00
+	Current testing point (alpha=1.00e+00): m_current+alpha*dm
+	Objective function value of 9.60159e+03 (feval = 6)
+	Current testing point (alpha=2.61e-01): m_current+alpha*dm
+	Objective function value of 1.08292e+03 (feval = 7)
+	Current testing point (alpha=8.32e-02): m_current+alpha*dm
+	Objective function value of 6.78845e+02 (feval = 8)
+	Current testing point (alpha=2.69e-02): m_current+alpha*dm
+	Objective function value of 1.21164e+03 (feval = 9)
+	Current testing point (alpha=3.98e-03): m_current+alpha*dm
+	Objective function value of 6.12078e+02 (feval = 10)
+	The sufficient decrease condition and the directional derivative condition hold (i.e., Strong Wolfe conditions met).
+	Stepper successuful for step length valueof 3.98e-03 and objective function of 6.12e+02 (feval = 10)
+
+iter = 003, obj = 6.12078e+02, resnorm = 3.50e+01, gradnorm = 1.40e+02, feval = 10, geval = 10
+Elapsed time: 0 hours, 0 minutes, 7 seconds
+Current date & time: Wed Mar 15 20:51:23 2023
+Appplying inverse Hessian estimate
+Current inverse dot-products of BFGS estimation vectors [0.0, 1.3072390603035333e-05, 0.006968676789110585]
+Done applying inverse Hessian estimate
+CVSRCH STEPPER BY STEP-LENGTH BRACKETING
+xtol=1.00e-16 ftol=1.00e-04 gtol=9.50e-01 alpha_min=1.00e-20 alpha_max=1.00e+20 maxfev=20 xtrapf=4.00e+00
+	initial-steplength=1.00e+00
+	Current testing point (alpha=1.00e+00): m_current+alpha*dm
+	Objective function value of 5.83159e+02 (feval = 11)
+	The sufficient decrease condition and the directional derivative condition hold (i.e., Strong Wolfe conditions met).
+	Stepper successuful for step length valueof 1.00e+00 and objective function of 5.83e+02 (feval = 11)
+Skipping update to estimated Hessian; not positive at iteration 3
+
+iter = 004, obj = 5.83159e+02, resnorm = 3.42e+01, gradnorm = 2.76e+02, feval = 11, geval = 11
+Elapsed time: 0 hours, 0 minutes, 8 seconds
+Current date & time: Wed Mar 15 20:51:24 2023
+Appplying inverse Hessian estimate
+Current inverse dot-products of BFGS estimation vectors [0.0, 1.3072390603035333e-05, 0.006968676789110585, 0.0]
+Done applying inverse Hessian estimate
+CVSRCH STEPPER BY STEP-LENGTH BRACKETING
+xtol=1.00e-16 ftol=1.00e-04 gtol=9.50e-01 alpha_min=1.00e-20 alpha_max=1.00e+20 maxfev=20 xtrapf=4.00e+00
+	initial-steplength=1.00e+00
+	Current testing point (alpha=1.00e+00): m_current+alpha*dm
+	Objective function value of 5.83068e+02 (feval = 12)
+	The sufficient decrease condition and the directional derivative condition hold (i.e., Strong Wolfe conditions met).
+	Stepper successuful for step length valueof 1.00e+00 and objective function of 5.83e+02 (feval = 12)
+
+iter = 005, obj = 5.83068e+02, resnorm = 3.41e+01, gradnorm = 1.37e+02, feval = 12, geval = 12
+Elapsed time: 0 hours, 0 minutes, 10 seconds
+Current date & time: Wed Mar 15 20:51:25 2023
+Appplying inverse Hessian estimate
+Current inverse dot-products of BFGS estimation vectors [0.0, 1.3072390603035333e-05, 0.006968676789110585, 0.0, 0.009466250412314692]
+Done applying inverse Hessian estimate
+CVSRCH STEPPER BY STEP-LENGTH BRACKETING
+xtol=1.00e-16 ftol=1.00e-04 gtol=9.50e-01 alpha_min=1.00e-20 alpha_max=1.00e+20 maxfev=20 xtrapf=4.00e+00
+	initial-steplength=1.00e+00
+	Current testing point (alpha=1.00e+00): m_current+alpha*dm
+	Objective function value of 2.32239e+03 (feval = 13)
+	Current testing point (alpha=5.30e-04): m_current+alpha*dm
+	Objective function value of 5.83065e+02 (feval = 14)
+	The sufficient decrease condition and the directional derivative condition hold (i.e., Strong Wolfe conditions met).
+	Stepper successuful for step length valueof 5.30e-04 and objective function of 5.83e+02 (feval = 14)
+
+iter = 006, obj = 5.83065e+02, resnorm = 3.41e+01, gradnorm = 1.37e+02, feval = 14, geval = 14
+Elapsed time: 0 hours, 0 minutes, 11 seconds
+Current date & time: Wed Mar 15 20:51:27 2023
+Appplying inverse Hessian estimate
+Current inverse dot-products of BFGS estimation vectors [0.0, 1.3072390603035333e-05, 0.006968676789110585, 0.0, 0.009466250412314692, 1465263.6841652382]
+Done applying inverse Hessian estimate
+CVSRCH STEPPER BY STEP-LENGTH BRACKETING
+xtol=1.00e-16 ftol=1.00e-04 gtol=9.50e-01 alpha_min=1.00e-20 alpha_max=1.00e+20 maxfev=20 xtrapf=4.00e+00
+	initial-steplength=1.00e+00
+	Current testing point (alpha=1.00e+00): m_current+alpha*dm
+	Objective function value of 9.62730e+02 (feval = 15)
+	Current testing point (alpha=6.01e-03): m_current+alpha*dm
+	Objective function value of 1.63295e+03 (feval = 16)
+	Current testing point (alpha=7.36e-08): m_current+alpha*dm
+	Objective function value of 1.99122e+03 (feval = 17)
+	Current testing point (alpha=8.24e-18): m_current+alpha*dm
+	Objective function value of 1.99122e+03 (feval = 17)
+	Current testing point (alpha=1.00e-20): m_current+alpha*dm
+	Objective function value of 1.99122e+03 (feval = 17)
+	The step-length value is at the lower bound (alpha_min) of 1.00e-20
+Stepper couldn't find a proper step size, will terminate solver
+##########################################################################################
+Broyden-Fletcher-Goldfarb-Shanno (BFGS) algorithm log file end
+##########################################################################################
+
+##########################################################################################
+Broyden-Fletcher-Goldfarb-Shanno (BFGS) algorithm log file
+Restart folder: /tmp/restart_2023-03-15T20-54-05.774494/
+##########################################################################################
+
+iter = 000, obj = 2.00000e+05, resnorm = 6.32e+02, gradnorm = 2.53e+03, feval = 1, geval = 1
+Appplying inverse Hessian estimate
+Done applying inverse Hessian estimate
+CVSRCH STEPPER BY STEP-LENGTH BRACKETING
+xtol=1.00e-16 ftol=1.00e-04 gtol=9.50e-01 alpha_min=1.00e-20 alpha_max=1.00e+20 maxfev=20 xtrapf=4.00e+00
+	initial-steplength=6.25e-02
+	Current testing point (alpha=6.25e-02): m_current+alpha*dm
+	Objective function value of 0.00000e+00 (feval = 2)
+	The sufficient decrease condition and the directional derivative condition hold (i.e., Strong Wolfe conditions met).
+	Stepper successuful for step length valueof 6.25e-02 and objective function of 0.00e+00 (feval = 2)
+First step-length value added to first Hessian inverse estimate!
+
+iter = 001, obj = 0.00000e+00, resnorm = 0.00e+00, gradnorm = 0.00e+00, feval = 2, geval = 2
+Elapsed time: 0 hours, 0 minutes, 1 seconds
+Current date & time: Wed Mar 15 20:54:07 2023
+Terminate: minimum residual tolerance reached 0.0
+
+##########################################################################################
+Broyden-Fletcher-Goldfarb-Shanno (BFGS) algorithm log file end
+##########################################################################################
+
+##########################################################################################
+Broyden-Fletcher-Goldfarb-Shanno (BFGS) algorithm log file
+Restart folder: /tmp/restart_2023-03-15T20-55-14.914325/
+##########################################################################################
+
+iter = 000, obj = 2.00000e+05, resnorm = 6.32e+02, gradnorm = 2.53e+03, feval = 1, geval = 1
+Appplying inverse Hessian estimate
+Done applying inverse Hessian estimate
+CVSRCH STEPPER BY STEP-LENGTH BRACKETING
+xtol=1.00e-16 ftol=1.00e-04 gtol=9.50e-01 alpha_min=1.00e-20 alpha_max=1.00e+20 maxfev=20 xtrapf=4.00e+00
+	initial-steplength=6.25e-02
+	Current testing point (alpha=6.25e-02): m_current+alpha*dm
+	Objective function value of 0.00000e+00 (feval = 2)
+	The sufficient decrease condition and the directional derivative condition hold (i.e., Strong Wolfe conditions met).
+	Stepper successuful for step length valueof 6.25e-02 and objective function of 0.00e+00 (feval = 2)
+First step-length value added to first Hessian inverse estimate!
+
+iter = 001, obj = 0.00000e+00, resnorm = 0.00e+00, gradnorm = 0.00e+00, feval = 2, geval = 2
+Elapsed time: 0 hours, 0 minutes, 1 seconds
+Current date & time: Wed Mar 15 20:55:16 2023
+Terminate: minimum residual tolerance reached 0.0
+
+##########################################################################################
+Broyden-Fletcher-Goldfarb-Shanno (BFGS) algorithm log file end
+##########################################################################################
+

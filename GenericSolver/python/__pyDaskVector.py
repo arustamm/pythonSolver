@@ -97,7 +97,7 @@ class DaskObject:
             else:
                 raise NotImplementedError("DaskObject can only be created by providing the class name or creator-function!")
         
-        persist(self.fut)
+        wait(self.fut)
         
     def get_futures(self):
         return self.fut
@@ -110,7 +110,7 @@ class DaskObject:
         if len(self) != len(futures):
             raise ValueError("Futures are of different length!")
         self.fut = futures
-        persist(self.fut)
+        wait(self.fut)
 
     def get_workers(self):
         self.workers = [
@@ -341,7 +341,8 @@ class DaskVector(DaskObject, Vector.vector):
         return np.power(norm, 1. / N)
 
     def zero(self):
-        wait(self.client.map(self.cls.zero, self.fut, pure=False))
+        fut = self.client.map(self.cls.zero, self.fut, pure=False)
+        self.set_futures(fut)
         return self
 
     def max(self):
@@ -356,12 +357,14 @@ class DaskVector(DaskObject, Vector.vector):
 
     def set(self, val):
         """Function to set all values in the vector"""
-        wait(self.client.map(self.cls.set, self.fut, val=val, pure=False))
+        fut = self.client.map(self.cls.set, self.fut, val=val, pure=False)
+        self.set_futures(fut)
         return self
 
     def scale(self, sc):
         """Function to scale a vector"""
-        wait(self.client.map(self.cls.scale, self.fut, sc=sc, pure=False))
+        fut = self.client.map(self.cls.scale, self.fut, sc=sc, pure=False)
+        self.set_futures(fut)
         return self
 
     def addbias(self, bias):
@@ -371,7 +374,8 @@ class DaskVector(DaskObject, Vector.vector):
 
     def rand(self):
         """Function to randomize a vector"""
-        wait(self.client.map(self.cls.rand, self.fut, pure=False))
+        fut = self.client.map(self.cls.rand, self.fut, pure=False)
+        self.set_futures(fut)
         return self
 
     def abs(self):
@@ -455,13 +459,15 @@ class DaskVector(DaskObject, Vector.vector):
     def copy(self, vec2):
         """Function to copy vector"""
         self.check(vec2)
-        wait(self.client.map(self.cls.copy, self.fut, vec2.fut, pure=False))
+        fut = self.client.map(self.cls.copy, self.fut, vec2.fut, pure=False)
+        self.set_futures(fut)
         return self
 
     def scaleAdd(self, vec2, sc1=1.0, sc2=1.0):
         """Function to scale two vectors and add them to the first one"""
         self.check(vec2)
-        wait(self.client.map(self.cls.scaleAdd, self.fut, vec2.fut, [sc1]*len(self), [sc2]*len(self), pure=False))
+        fut = self.client.map(self.cls.scaleAdd, self.fut, vec2.fut, [sc1]*len(self), [sc2]*len(self), pure=False)
+        self.set_futures(fut)
         return self
 
     def dot(self, vec2):
