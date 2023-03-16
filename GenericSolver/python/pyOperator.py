@@ -15,8 +15,8 @@ class Operator:
     # Default class methods/functions
     def __init__(self, domain, range, *args, **kwargs):
         """Generic class for operator"""
-        self.domain = domain.cloneSpace()
-        self.range = range.cloneSpace()
+        self.domain = domain.clone()
+        self.range = range.clone()
 
     def __del__(self):
         """Default destructor"""
@@ -103,11 +103,11 @@ class Operator:
     
     def setDomain(self, domain):
         """Function to set operator domain"""
-        self.domain = domain.cloneSpace()
+        self.domain = domain.clone()
 
     def setRange(self, range):
         """Function to set operator range"""
-        self.range = range.cloneSpace()
+        self.range = range.clone()
 
     def setDomainRange(self, domain, range):
         """Function to set (cloning space) domain and range of the operator"""

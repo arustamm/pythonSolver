@@ -8,7 +8,8 @@ from dask_util import DaskClient
 from dask.distributed import wait, as_completed
 from dask import delayed
 import dask.array as da
-from __pyDaskVector import DaskObject, DaskVector
+from __pyDaskVector import DaskVector
+from __pyDaskObject import DaskObject
 
 class DaskOperator(DaskObject, Operator.Operator):
     
@@ -25,7 +26,6 @@ class DaskOperator(DaskObject, Operator.Operator):
         op_args = []
         op_kwargs = []
         
-        # client.submit(self.getDomain, self.)
         dom, ran = self._prepare_spaces_(domain.get_futures(), range.get_futures())
         for d,r in zip(dom, ran) :
             param = []
@@ -40,7 +40,6 @@ class DaskOperator(DaskObject, Operator.Operator):
                             constructor_args=op_args, constructor_kw=op_kwargs, from_object=opCls)
         self.setDomainRange(domain, range)
 
-
     def _prepare_spaces_(self, domain, range):
         arr = np.array(np.meshgrid(domain, range)).reshape(2,-1)
         return arr[0,:], arr[1,:]
@@ -53,22 +52,6 @@ class DaskOperator(DaskObject, Operator.Operator):
         
     def as_matrix(self):
         return np.array(self.fut).reshape(self.range.nchunks, self.domain.nchunks)
-    
-    # def setDomain(self, domain):
-    #     ops = wait(self.client.map(set_domain, self.fut, domain.fut, pure=False))
-    #     self.set_futures(ops)
-    #     self.domain = domain.cloneSpace()
-    #     return 
-
-    # def setRange(self, range):
-    #     ops = wait(self.client.map(set_range, self.fut, range.fut, pure=False))
-    #     self.set_futures(ops)
-    #     self.range = range.cloneSpace()
-    #     return 
-    
-    # def setDomainRange(self, domain, range):
-    #     self.setDomain(domain)
-    #     self.setRange(range)
 
     def forward(self, add, model, data):
 
@@ -93,7 +76,7 @@ class DaskOperator(DaskObject, Operator.Operator):
         # copy the futures
         dd = self.client.map(data.cls.clone, dat, pure=False)
         data.set_futures(dd)
-        self.setRange(data)
+        
 
     def adjoint(self, add, model, data):
 
@@ -117,7 +100,6 @@ class DaskOperator(DaskObject, Operator.Operator):
         # copy the futures
         mm = self.client.map(model.cls.clone, mod, pure=False)
         model.set_futures(mm)
-        self.setDomain(model)
 
     def set_background(self, model):
         self.domain.checkSame(model)
@@ -130,7 +112,6 @@ class DaskOperator(DaskObject, Operator.Operator):
             fut = self.client.map(set_bg, ops[:,i],[m]*ops.shape[0], pure=False)
             res.extend([f for f in fut])
         self.set_futures(res)
-        self.setDomain(model)
 
 # Need helper functions because DaskOperator 
 # is potentially a heterogeneous object (contains different types of Operators)

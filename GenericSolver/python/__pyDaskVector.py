@@ -7,123 +7,8 @@ import Hypercube
 from dask_util import DaskClient
 from dask.distributed import wait, as_completed
 from dask import persist
+from __pyDaskObject import DaskObject
 import os
-
-class DaskObject:
-    
-    def __init__(self, dask_client, **kw):
-        """
-        """
-        #  Client to submit tasks
-        if not isinstance(dask_client, DaskClient):
-            raise TypeError("Passed client is not a Dask Client object!")
-        self.dask_client = dask_client
-        self.client = client = self.dask_client.getClient()
-
-        self.fut = []
-        self.client = dask_client.getClient()
-        
-        if kw.get("objCreator"):
-            objCreator = kw.get("objCreator")
-            constructor_kw = kw.get("constructor_kw")
-            constructor_args = kw.get("constructor_args")
-
-            # option 1
-            if isinstance(objCreator, type):
-                self.cls = objCreator
-                if kw.get("futures"):
-                    self.fut = kw.get("futures")
-                    self.set_futures(self.fut)
-                else:
-                    if constructor_kw:
-                        if constructor_args:
-                            for c_arg, c_kw in zip(constructor_args, constructor_kw):
-                                future = client.submit(objCreator, *c_arg, **c_kw)
-                                # collect all vectors into the pool
-                                self.fut.append(future)
-                        else:
-                            for c_kw in constructor_kw:
-                                future = client.submit(objCreator, **c_kw)
-                                # collect all vectors into the pool
-                                self.fut.append(future)
-                    elif constructor_args:
-                        for c_arg in constructor_args:
-                            future = client.submit(objCreator, *c_arg)
-                            # collect all vectors into the pool
-                            self.fut.append(future)
-                    
-            # option 2
-            elif isinstance(objCreator, types.FunctionType) or isinstance(objCreator, types.MethodType):
-                if kw.get("from_object"):
-                    obj = kw.get("from_object")
-                    if isinstance(obj, type):
-                        self.cls = obj
-                    else:
-                        self.cls = type(obj)
-                else:
-                    raise ValueError("Need to pass 'from_object' when using generator function!")
-
-                if kw.get("futures"):
-                    self.fut = kw.get("futures")
-                    self.set_futures(self.fut)
-                else:
-                    # scatter the object first to avoid repeated work
-                    obj_fut = client.scatter(obj, broadcast=True)
-                    if constructor_kw:
-                        if constructor_args:
-                            for c_arg, c_kw in zip(constructor_args, constructor_kw):
-                                if isinstance(obj, type):
-                                    future = client.submit(objCreator, *c_arg, **c_kw)
-                                else:
-                                    future = client.submit(objCreator, obj_fut, *c_arg, **c_kw)
-                                # collect all vectors into the pool
-                                self.fut.append(future)
-                        else:
-                            for c_kw in constructor_kw:
-                                if isinstance(obj, type):
-                                    future = client.submit(objCreator, **c_kw)
-                                else:
-                                    future = client.submit(objCreator, obj_fut, **c_kw)
-                                # collect all vectors into the pool
-                                self.fut.append(future)
-                    elif constructor_args:
-                        for c_arg in constructor_args:
-                            if isinstance(obj, type):
-                                future = client.submit(objCreator, *c_arg)
-                            else:
-                                future = client.submit(objCreator, obj_fut, *c_arg)
-                            # collect all vectors into the pool
-                            self.fut.append(future)
-            else:
-                raise NotImplementedError("DaskObject can only be created by providing the class name or creator-function!")
-        
-        wait(self.fut)
-        
-    def get_futures(self):
-        return self.fut
-
-    def get(self, index):
-        return self.fut[index]
-    
-    def set_futures(self, futures):
-        # copy futures
-        if len(self) != len(futures):
-            raise ValueError("Futures are of different length!")
-        self.fut = futures
-        wait(self.fut)
-
-    def get_workers(self):
-        self.workers = [
-            self.client.who_has()[self.fut[i].key][0] for i in range(len(self))
-            ]
-        return self.workers
-        
-
-    def __len__(self):
-        return len(self.fut)
-
-    def __del__(self):
-        """Default destructor"""
 
 class DaskVector(DaskObject, Vector.vector):
 
@@ -291,7 +176,7 @@ class DaskVector(DaskObject, Vector.vector):
         # get block ibs and corresponding indices in those blocks 
         ib, iloc = self._get_ind_and_block_(it)
         fut_ib = fut[ib].flatten()
-        fut_vals = self.client.map(self.cls.__getitem__, fut_ib, iloc, pure=False)
+        fut_vals = self.client.map(self.cls.__getitem__, fut_ib, iloc)
         return self.client.gather(fut_vals)
 
     def __setitem__(self, it, val):
@@ -300,11 +185,11 @@ class DaskVector(DaskObject, Vector.vector):
         ib, iloc = self._get_ind_and_block_(it)
         fut_ib = fut[ib].flatten()
         vals = [val] * len(fut_ib)
-        wait(self.client.map(self.cls.__setitem__, fut_ib, iloc, vals, pure=False))
+        wait(self.client.map(self.cls.__setitem__, fut_ib, iloc, vals))
     
     def getNdArray(self):
         # return array of futures in the shape of block x block
-        fut = self.client.map(self.cls.getNdArray, self.fut, pure=False)
+        fut = self.client.map(self.cls.getNdArray, self.fut)
         return np.array(fut).reshape(self.chunks)
     
     def getHyper(self):
@@ -312,7 +197,7 @@ class DaskVector(DaskObject, Vector.vector):
 
     def getChunkHyper(self):
         # return array of hypercubes in the shape of block x block
-        fut = self.client.map(self.cls.getHyper, self.fut, pure=False)
+        fut = self.client.map(self.cls.getHyper, self.fut)
         hypers = self.client.gather(fut)
         return np.array(hypers).reshape(self.chunks)
 
@@ -335,7 +220,7 @@ class DaskVector(DaskObject, Vector.vector):
 
     def norm(self, N=2):
         norm = 0.
-        fut = self.client.map(self.cls.norm, self.fut, N=N, pure=False)
+        fut = self.client.map(self.cls.norm, self.fut, N=N)
         for future, result in as_completed(fut, with_results=True):
             norm += np.power(np.float64(result), N)
         return np.power(norm, 1. / N)
@@ -347,12 +232,12 @@ class DaskVector(DaskObject, Vector.vector):
 
     def max(self):
         """Function to obtain maximum value within a vector"""
-        maxs = self.client.gather(self.client.map(self.cls.max, self.fut, pure=False))
+        maxs = self.client.gather(self.client.map(self.cls.max, self.fut))
         return np.array(maxs).max()
 
     def min(self):
         """Function to obtain minimum value within a vector"""
-        mins = self.client.gather(self.client.map(self.cls.min, self.fut, pure=False))
+        mins = self.client.gather(self.client.map(self.cls.min, self.fut))
         return np.array(mins).min()
 
     def set(self, val):
@@ -369,7 +254,8 @@ class DaskVector(DaskObject, Vector.vector):
 
     def addbias(self, bias):
         """Function to add bias to a vector"""
-        wait(self.client.map(self.cls.addbias, self.fut, bias=bias, pure=False))
+        fut = self.client.map(self.cls.addbias, self.fut, bias=bias, pure=False)
+        self.set_futures(fut)
         return self
 
     def rand(self):
@@ -380,37 +266,44 @@ class DaskVector(DaskObject, Vector.vector):
 
     def abs(self):
         """Return a vector containing the absolute values"""
-        wait(self.client.map(self.cls.abs, self.fut, pure=False))
+        fut = self.client.map(self.cls.abs, self.fut, pure=False)
+        self.set_futures(fut)
         return self
 
     def sign(self):
         """Return a vector containing the signs"""
-        wait(self.client.map(self.cls.sign, self.fut, pure=False))
+        fut = self.client.map(self.cls.sign, self.fut, pure=False)
+        self.set_futures(fut)
         return self
 
     def reciprocal(self):
         """Return a vector containing the reciprocals of self"""
-        wait(self.client.map(self.cls.reciprocal, self.fut, pure=False))
+        fut = self.client.map(self.cls.reciprocal, self.fut, pure=False)
+        self.set_futures(fut)
         return self
 
     def conj(self):
         """Compute conjugate transpose of the vector"""
-        wait(self.client.map(self.cls.conj, self.fut, pure=False))
+        fut = self.client.map(self.cls.conj, self.fut, pure=False)
+        self.set_futures(fut)
         return self
 
     def real(self):
         """Return the real part of the vector"""
-        wait(self.client.map(self.cls.real, self.fut, pure=False))
+        fut = self.client.map(self.cls.real, self.fut, pure=False)
+        self.set_futures(fut)
         return self
 
     def imag(self):
         """Return the imaginary part of the vector"""
-        wait(self.client.map(self.cls.imag, self.fut, pure=False))
+        fut = self.client.map(self.cls.imag, self.fut, pure=False)
+        self.set_futures(fut)
         return self
 
     def pow(self, power):
         """Compute element-wise power of the vector"""
-        wait(self.client.map(self.cls.pow, self.fut, power=power, pure=False))
+        fut = self.client.map(self.cls.pow, self.fut, power=power, pure=False)
+        self.set_futures(fut)
         return self
 
     # Methods combinaning different vectors
@@ -446,14 +339,15 @@ class DaskVector(DaskObject, Vector.vector):
     def checkSame(self, vec):
         """Function to check to make sure the vectors exist in the same space"""
         self.check(vec)
-        fut = self.client.map(self.cls.checkSame, self.fut, vec.fut, pure=False)
+        fut = self.client.map(self.cls.checkSame, self.fut, vec.fut)
         res = self.client.gather(fut)
         return all(res)
         
     def maximum(self, vec2):
         """Return a new vector of element-wise maximum of self and vec2"""
         self.check(vec2)
-        wait(self.client.map(self.cls.maximum, self.fut, vec2.fut, pure=False))
+        fut = self.client.map(self.cls.maximum, self.fut, vec2.fut, pure=False)
+        self.set_futures(fut)
         return self
 
     def copy(self, vec2):
@@ -473,7 +367,7 @@ class DaskVector(DaskObject, Vector.vector):
     def dot(self, vec2):
         """Function to compute dot product between two vectors"""
         self.check(vec2)
-        dots = self.client.map(self.cls.dot, self.fut, vec2.fut, pure=False)
+        dots = self.client.map(self.cls.dot, self.fut, vec2.fut)
         # Adding all the results together
         dot = 0.0
         for future, result in as_completed(dots, with_results=True):
@@ -483,13 +377,14 @@ class DaskVector(DaskObject, Vector.vector):
     def multiply(self, vec2):
         """Function to multiply element-wise two vectors"""
         self.check(vec2)
-        wait(self.client.map(self.cls.multiply, self.fut, vec2.fut, pure=False))
+        fut = self.client.map(self.cls.multiply, self.fut, vec2.fut, pure=False)
+        self.set_futures(fut)
         return self
 
     def isDifferent(self, vec2):
         """Function to check if two vectors are identical"""
         self.check(vec2)
-        fut = self.client.map(self.cls.isDifferent, self.fut, vec2.fut, pure=False)
+        fut = self.client.map(self.cls.isDifferent, self.fut, vec2.fut)
         results = self.client.gather(fut)
         return any(results)
 
@@ -497,7 +392,8 @@ class DaskVector(DaskObject, Vector.vector):
         """Function to bound vector values based on input vectors min and max"""
         self.check(low)  # Checking low-bound vector
         self.check(high)  # Checking high-bound vector
-        wait(self.client.map(self.cls.clipVector, self.fut, low, high, pure=False))
+        fut = self.client.map(self.cls.clipVector, self.fut, low, high, pure=False)
+        self.set_futures(fut)
         return self
 
     def writeVec(self, filename, mode='w'):
@@ -505,7 +401,7 @@ class DaskVector(DaskObject, Vector.vector):
         vec_names = [
             os.getcwd() + "/" + "".join(filename.split('.')[:-1]) + "_chunk%s.H" % (
                     ii + 1) for ii in range(len(self.fut))]
-        wait(self.client.map(self.cls.writeVec, self.fut, vec_names, [mode] * len(self.fut), pure=False))
+        wait(self.client.map(self.cls.writeVec, self.fut, vec_names, [mode] * len(self.fut)))
 
 
 
