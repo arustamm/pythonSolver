@@ -390,9 +390,9 @@ class DaskVector(DaskObject, Vector.vector):
 
     def clipVector(self, low, high):
         """Function to bound vector values based on input vectors min and max"""
-        self.check(low)  # Checking low-bound vector
-        self.check(high)  # Checking high-bound vector
-        fut = self.client.map(self.cls.clipVector, self.fut, low, high, pure=False)
+        self.checkSame(low)  # Checking low-bound vector
+        self.checkSame(high)  # Checking high-bound vector
+        fut = self.client.map(self.cls.clipVector, self.fut, low.fut, high.fut, pure=False)
         self.set_futures(fut)
         return self
 
