@@ -10,6 +10,7 @@ from dask import delayed
 import dask.array as da
 from __pyDaskVector import DaskVector
 from __pyDaskObject import DaskObject
+import functools as ft
 
 class DaskOperator(DaskObject, Operator.Operator):
     
@@ -76,7 +77,6 @@ class DaskOperator(DaskObject, Operator.Operator):
         # copy the futures
         dd = self.client.map(data.cls.clone, dat, pure=False)
         data.set_futures(dd)
-        
 
     def adjoint(self, add, model, data):
 
@@ -86,19 +86,21 @@ class DaskOperator(DaskObject, Operator.Operator):
         
         mod = model.get_futures()
         dat = data.get_futures()
-        ops = self.as_matrix().T
+        ops = self.as_matrix()
         # submit all tasks
         res = []
-        for i, d in enumerate(dat):
-            fut = self.client.map(adj, ops[:,i], mod, [d]*len(mod), pure=False)
+        for i, m in enumerate(mod):
+            fut = self.client.map(adj, ops[:,i], [m]*len(dat), dat, pure=False)
             res.append(fut)
         waitable = [f for sublist in res for f in sublist]
         wait(waitable)
         # accumulate 
+        fin = []
         for m in res:
-            mod = self.client.map(model.cls.__add__, mod, m, pure=False)
+            mm = self.client.submit(ft.reduce, lambda m1, m2: m1+m2, m, pure=False)
+            fin.append(mm)
         # copy the futures
-        mm = self.client.map(model.cls.clone, mod, pure=False)
+        mm = self.client.map(model.cls.scaleAdd, fin, mod, pure=False)
         model.set_futures(mm)
 
     def set_background(self, model):
@@ -110,7 +112,7 @@ class DaskOperator(DaskObject, Operator.Operator):
         # loop across model chunks 
         for i, m in enumerate(mod):
             fut = self.client.map(set_bg, ops[:,i],[m]*ops.shape[0], pure=False)
-            res.extend([f for f in fut])
+            res.extend(fut)
         self.set_futures(res)
 
 # Need helper functions because DaskOperator 
