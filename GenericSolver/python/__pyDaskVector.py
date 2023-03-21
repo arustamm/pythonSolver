@@ -19,7 +19,6 @@ class DaskVector(DaskObject, Vector.vector):
         """
         #
         
-        self.chunks = chunks = kw.get("chunks")
         #  Client to submit tasks
         if not isinstance(dask_client, DaskClient):
             raise TypeError("Passed client is not a Dask Client object!")
@@ -39,6 +38,8 @@ class DaskVector(DaskObject, Vector.vector):
             self.ns = ns = [ax.n for ax in axes]
             self.os = os = [ax.o for ax in axes]
             self.ds = ds = [ax.d for ax in axes]
+
+        self.chunks = chunks = kw.get("chunks", (1,)*len(ns))
 
         self.hyper = Hypercube.hypercube(ns=ns, ds=ds, os=os)
         ns_list, ds_list, os_list = self._calculate_chunks_(ns, ds, os, chunks)
@@ -72,46 +73,40 @@ class DaskVector(DaskObject, Vector.vector):
 
 
     def _calculate_chunks_(self, ns, ds, os, chunks):
-        # spread vectors across ray-workers if chunks is present        
-        if chunks: 
-            nchunks = np.prod(np.array(chunks))
-            # size of an individual chunk
-            nns = np.array(ns) // np.array(chunks)
-            ns_list = np.asarray([nns for i in range(nchunks)], dtype=object)
-            ds_list = np.asarray([ds for i in range(nchunks)], dtype=object)
-            os_list = np.asarray([os for i in range(nchunks)], dtype=object)
-            
-            # handle the chunks at the boundaries 
-            every_index = np.flip(np.cumprod(chunks)).astype(int)
-            before = np.ones(len(chunks)).astype(int)
-            before[:-1] = every_index[1:]
+        # spread vectors across dask-workers 
 
-            ntiles = nrep = 1
-            
-            for i in range(len(self.ns)):
-                # calculate origins
-                oos = np.array([os[i] + j*nns[i]*ds[i] for j in range(chunks[i])])
-                # calculate remainder in the last block
-                rem = np.zeros(chunks[i], dtype=int)
-                rem[-1] = int(self.ns[i] % chunks[i])
+        nchunks = np.prod(np.array(chunks))
+        # size of an individual chunk
+        nns = np.array(ns) // np.array(chunks)
+        ns_list = np.asarray([nns for i in range(nchunks)], dtype=object)
+        ds_list = np.asarray([ds for i in range(nchunks)], dtype=object)
+        os_list = np.asarray([os for i in range(nchunks)], dtype=object)
+        
+        # handle the chunks at the boundaries 
+        every_index = np.flip(np.cumprod(chunks)).astype(int)
+        before = np.ones(len(chunks)).astype(int)
+        before[:-1] = every_index[1:]
 
-                oos = np.repeat(oos, nrep)
-                rem = np.repeat(rem, nrep)
-                nrep *= chunks[i]
-                ntiles = max(1, int(nchunks / oos.size))
-                
-                oos = np.tile(oos, ntiles)
-                rem = np.tile(rem, ntiles)
-                
-                # final lists
-                os_list[:,i] = oos[:]
-                ns_list[:,i] += rem[:]
-        # else scatter the vector across workers equally
-        else:
-            nchunks = self.dask_client.getNworkers()
-            ns_list = np.asarray([ns for i in range(nchunks)], dtype=object)
-            ds_list = np.asarray([ds for i in range(nchunks)], dtype=object)
-            os_list = np.asarray([os for i in range(nchunks)], dtype=object)
+        ntiles = nrep = 1
+        
+        for i in range(len(self.ns)):
+            # calculate origins
+            oos = np.array([os[i] + j*nns[i]*ds[i] for j in range(chunks[i])])
+            # calculate remainder in the last block
+            rem = np.zeros(chunks[i], dtype=int)
+            rem[-1] = int(self.ns[i] % chunks[i])
+
+            oos = np.repeat(oos, nrep)
+            rem = np.repeat(rem, nrep)
+            nrep *= chunks[i]
+            ntiles = max(1, int(nchunks / oos.size))
+            
+            oos = np.tile(oos, ntiles)
+            rem = np.tile(rem, ntiles)
+            
+            # final lists
+            os_list[:,i] = oos[:]
+            ns_list[:,i] += rem[:]
 
         self.nchunks = nchunks
         return ns_list, ds_list, os_list
