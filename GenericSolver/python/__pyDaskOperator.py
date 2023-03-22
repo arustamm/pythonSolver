@@ -71,7 +71,7 @@ class DaskOperator(DaskObject, Operator.Operator):
             fut = self.client.map(fwd, ops[:,i], [m]*len(dat), dat, pure=False)
             res.append(fut)
         waitable = [f for sublist in res for f in sublist]
-        wait(waitable)
+        # wait(waitable)
         # accumulate 
         for d in res:
             dat = self.client.map(data.cls.__add__, dat, d, pure=False)
@@ -95,7 +95,7 @@ class DaskOperator(DaskObject, Operator.Operator):
             fut = self.client.map(adj, ops[:,i], [m]*len(dat), dat, pure=False)
             res.append(fut)
         waitable = [f for sublist in res for f in sublist]
-        wait(waitable)
+        # wait(waitable)
         # accumulate 
         fin = []
         for m in res:
@@ -116,7 +116,7 @@ class DaskOperator(DaskObject, Operator.Operator):
         for i, m in enumerate(mod):
             fut = self.client.map(set_bg, ops[:,i],[m]*ops.shape[0], pure=False)
             res.extend(fut)
-        wait(res)
+        self.set_futures(res)
 
 # Need helper functions because DaskOperator 
 # is potentially a heterogeneous object (contains different types of Operators)
@@ -147,7 +147,7 @@ def adj(op, model, data):
 
 def set_bg(op, model):
     op.set_background(model)
-    return 
+    return op
 
 def set_domain(op, domain):
     op.setDomain(domain)
