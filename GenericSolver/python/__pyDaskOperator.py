@@ -116,7 +116,7 @@ class DaskOperator(DaskObject, Operator.Operator):
         for i, m in enumerate(mod):
             fut = self.client.map(set_bg, ops[:,i],[m]*ops.shape[0], pure=False)
             res.extend(fut)
-        self.set_futures(res)
+        wait(res)
 
 # Need helper functions because DaskOperator 
 # is potentially a heterogeneous object (contains different types of Operators)
@@ -147,7 +147,7 @@ def adj(op, model, data):
 
 def set_bg(op, model):
     op.set_background(model)
-    return op
+    return 
 
 def set_domain(op, domain):
     op.setDomain(domain)

@@ -37,8 +37,8 @@ def _betaPRP(grad, grad0, dir, logger):
     tmp1 = grad.clone()
     # g-g0
     tmp1.scaleAdd(grad0, 1.0, -1.0)
-    dot_num = tmp1.dot(grad)
-    dot_grad0 = grad0.dot(grad0)
+    dot_num = np.real(tmp1.dot(grad))
+    dot_grad0 = np.real(grad0.dot(grad0))
     if dot_grad0 == 0.:  # Avoid division by zero
         beta = 0.
         if logger:
@@ -54,8 +54,8 @@ def _betaHS(grad, grad0, dir, logger):
     tmp1 = grad.clone()
     # g-g0
     tmp1.scaleAdd(grad0, 1.0, -1.0)
-    dot_num = tmp1.dot(grad)
-    dot_denom = tmp1.dot(dir)
+    dot_num = np.real(tmp1.dot(grad))
+    dot_denom = np.real(tmp1.dot(dir))
     if dot_denom == 0.:  # Avoid division by zero
         beta = 0.
         if logger:
@@ -68,8 +68,8 @@ def _betaHS(grad, grad0, dir, logger):
 def _betaCD(grad, grad0, dir, logger):
     """Conjugate Descent"""
     # betaCD = -sum(dprod(g,g))/sum(dprod(d,g0))
-    dot_num = grad.dot(grad)
-    dot_denom = -grad0.dot(dir)
+    dot_num = np.real(grad.dot(grad))
+    dot_denom = np.real(-grad0.dot(dir))
     if dot_denom == 0.:  # Avoid division by zero
         beta = 0.
         if logger:
@@ -85,8 +85,8 @@ def _betaLS(grad, grad0, dir, logger):
     tmp1 = grad.clone()
     # g-g0
     tmp1.scaleAdd(grad0, 1.0, -1.0)
-    dot_num = tmp1.dot(grad)
-    dot_denom = -grad0.dot(dir)
+    dot_num = np.real(tmp1.dot(grad))
+    dot_denom = np.real(-grad0.dot(dir))
     if dot_denom == 0.:  # Avoid division by zero
         beta = 0.
         if logger:
@@ -102,8 +102,8 @@ def _betaDY(grad, grad0, dir, logger):
     tmp1 = grad.clone()
     # g-g0
     tmp1.scaleAdd(grad0, 1.0, -1.0)
-    dot_num = grad.dot(grad)
-    dot_denom = tmp1.dot(dir)
+    dot_num = np.real(grad.dot(grad))
+    dot_denom = np.real(tmp1.dot(dir))
     if dot_denom == 0.:  # Avoid division by zero
         beta = 0.
         if logger:
@@ -119,8 +119,8 @@ def _betaBAN(grad, grad0, dir, logger):
     tmp1 = grad.clone()
     # g-g0
     tmp1.scaleAdd(grad0, 1.0, -1.0)
-    dot_num = tmp1.dot(grad)
-    dot_denom = tmp1.dot(grad0)
+    dot_num = np.real(tmp1.dot(grad))
+    dot_denom = np.real(tmp1.dot(grad0))
     if dot_denom == 0.:  # Avoid division by zero
         beta = 0.
         if logger:
@@ -137,9 +137,9 @@ def _betaHZ(grad, grad0, dir, logger):
     # g-g0
     tmp1.scaleAdd(grad0, 1.0, -1.0)
     # sum(dprod(g-g0,g-g0))
-    dot_diff_g_g0 = tmp1.dot(tmp1)
+    dot_diff_g_g0 = np.real(tmp1.dot(tmp1))
     # sum(dprod(d,g-g0))
-    dot_dir_diff_g_g0 = tmp1.dot(dir)
+    dot_dir_diff_g_g0 = np.real(tmp1.dot(dir))
     if dot_dir_diff_g_g0 == 0.:  # Avoid division by zero
         beta = 0.
         if logger:
@@ -148,7 +148,7 @@ def _betaHZ(grad, grad0, dir, logger):
         # g-g0-2*sum(dprod(g-g0,g-g0))*d/sum(dprod(d,g-g0))
         tmp1.scaleAdd(dir, 1.0, -2.0 * dot_diff_g_g0 / dot_dir_diff_g_g0)
         # sum(dprod(g-g0-2*sum(dprod(g-g0,g-g0))*d/sum(dprod(d,g-g0)),g))
-        dot_num = grad.dot(tmp1)
+        dot_num = np.real(grad.dot(tmp1))
         # dot_num/sum(dprod(d,g-g0))
         beta = dot_num / dot_dir_diff_g_g0
     return beta
