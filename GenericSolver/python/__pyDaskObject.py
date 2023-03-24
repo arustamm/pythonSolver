@@ -37,17 +37,17 @@ class DaskObject:
                     if constructor_kw:
                         if constructor_args:
                             for c_arg, c_kw in zip(constructor_args, constructor_kw):
-                                future = client.submit(objCreator, *c_arg, **c_kw)
+                                future = client.submit(objCreator, *c_arg, **c_kw, pure=False)
                                 # collect all vectors into the pool
                                 self.fut.append(future)
                         else:
                             for c_kw in constructor_kw:
-                                future = client.submit(objCreator, **c_kw)
+                                future = client.submit(objCreator, **c_kw, pure=False)
                                 # collect all vectors into the pool
                                 self.fut.append(future)
                     elif constructor_args:
                         for c_arg in constructor_args:
-                            future = client.submit(objCreator, *c_arg)
+                            future = client.submit(objCreator, *c_arg, pure=False)
                             # collect all vectors into the pool
                             self.fut.append(future)
                     
@@ -72,25 +72,25 @@ class DaskObject:
                         if constructor_args:
                             for c_arg, c_kw in zip(constructor_args, constructor_kw):
                                 if isinstance(obj, type):
-                                    future = client.submit(objCreator, *c_arg, **c_kw)
+                                    future = client.submit(objCreator, *c_arg, **c_kw, pure=False)
                                 else:
-                                    future = client.submit(objCreator, obj_fut, *c_arg, **c_kw)
+                                    future = client.submit(objCreator, obj_fut, *c_arg, **c_kw, pure=False)
                                 # collect all vectors into the pool
                                 self.fut.append(future)
                         else:
                             for c_kw in constructor_kw:
                                 if isinstance(obj, type):
-                                    future = client.submit(objCreator, **c_kw)
+                                    future = client.submit(objCreator, **c_kw, pure=False)
                                 else:
-                                    future = client.submit(objCreator, obj_fut, **c_kw)
+                                    future = client.submit(objCreator, obj_fut, **c_kw, pure=False)
                                 # collect all vectors into the pool
                                 self.fut.append(future)
                     elif constructor_args:
                         for c_arg in constructor_args:
                             if isinstance(obj, type):
-                                future = client.submit(objCreator, *c_arg)
+                                future = client.submit(objCreator, *c_arg, pure=False)
                             else:
-                                future = client.submit(objCreator, obj_fut, *c_arg)
+                                future = client.submit(objCreator, obj_fut, *c_arg, pure=False)
                             # collect all vectors into the pool
                             self.fut.append(future)
             else:

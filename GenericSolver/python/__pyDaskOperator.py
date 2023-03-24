@@ -71,13 +71,13 @@ class DaskOperator(DaskObject, Operator.Operator):
             fut = self.client.map(fwd, ops[:,i], [m]*len(dat), dat, pure=False)
             res.append(fut)
         waitable = [f for sublist in res for f in sublist]
-        # wait(waitable)
+        wait(waitable)
         # accumulate 
         for d in res:
             dat = self.client.map(data.cls.__add__, dat, d, pure=False)
         # copy the futures
-        dd = self.client.map(data.cls.clone, dat, pure=False)
-        data.set_futures(dd)
+        # dd = self.client.map(data.cls.clone, dat, pure=False)
+        data.set_futures(dat)
 
     def adjoint(self, add, model, data):
 
@@ -95,7 +95,7 @@ class DaskOperator(DaskObject, Operator.Operator):
             fut = self.client.map(adj, ops[:,i], [m]*len(dat), dat, pure=False)
             res.append(fut)
         waitable = [f for sublist in res for f in sublist]
-        # wait(waitable)
+        wait(waitable)
         # accumulate 
         fin = []
         for m in res:
