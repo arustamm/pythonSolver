@@ -96,7 +96,7 @@ class DaskObject:
             else:
                 raise NotImplementedError("DaskObject can only be created by providing the class name or creator-function!")
         
-        wait(self.fut)
+        self.set_futures(self.fut)
         
     def get_futures(self):
         return self.fut
@@ -109,7 +109,7 @@ class DaskObject:
         if len(self) != len(futures):
             raise ValueError("Futures are of different length!")
         self.fut = futures
-        wait(self.fut)
+        persist(self.fut)
 
     def get_workers(self):
         self.workers = [
