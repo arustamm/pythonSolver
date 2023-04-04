@@ -46,7 +46,7 @@ class AugLagrangianSolver:
             while True:
                 problem.setDefaults()
                 # temporary solution for resetting the stepper
-                problem.stepper = pyStepper.CvSrchStep()
+                problem.stepper = pyStepper.ParabolicStep()
 
                 if verbose:
                     msg = 90 * "*" + "\n"
@@ -63,12 +63,11 @@ class AugLagrangianSolver:
                 inner_count += 1
 
                 # c_ratio = ||mod_res_final||/||max(mod_res)||
-                max = np.amax(self.p_solver.obj_terms[start_iter:,1])
+                max = np.amax(self.p_solver.obj_terms[:,1])
                 if max > 0:
                     c_ratio = self.p_solver.obj_terms[-1,1] / max
                 else:
                     c_ratio = 0
-                start_iter = self.p_solver.obj_terms[:,1].size 
                 
                 if verbose:
                         msg = "\t\t\tCurrent decrease in the constraint-residual norm: %.5f\n" % c_ratio
