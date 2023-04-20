@@ -414,9 +414,20 @@ class superVector(vector):
 
         self.n = len(self.vecs)
 
+    def window(self, kwargs: list):
+        nv = []
+        if len(kwargs) != len(self.vecs):
+            raise ValueError("Window parameters need to be provided as a list for each sub-vector!")
+        for v, kw in zip(self.vecs, kwargs):
+            nv.append(v.window(**kw))
+        return superVector(nv)
+
     def __del__(self):
         """superVector destructor"""
         del self.vecs, self.n
+    
+    def __getitem__(self, it):
+        return self.vecs[it]
 
     def getNdArray(self):
         """Function to return Ndarray of the vector"""
@@ -457,7 +468,7 @@ class superVector(vector):
 
     def scale(self, sc):
         """Function to scale a vector"""
-        if type(sc) is not list:
+        if not isinstance(sc, list):
             sc = [sc] * self.n
         for idx in range(self.n):
             self.vecs[idx].scale(sc[idx])
@@ -465,7 +476,7 @@ class superVector(vector):
 
     def addbias(self, bias):
         """Add a constant to the vector"""
-        if type(bias) is not list:
+        if not isinstance(bias, list):
             bias = [bias] * self.n
         for idx in range(self.n):
             self.vecs[idx].addbias(bias[idx])
@@ -501,7 +512,7 @@ class superVector(vector):
     def copy(self, vecs_in):
         """Function to copy vector from input vector"""
         # Checking type
-        if type(vecs_in) is not superVector:
+        if not isinstance(vecs_in,superVector):
             raise TypeError("Input variable is not a superVector")
         # Checking dimensionality
         if not self.checkSame(vecs_in):
@@ -513,7 +524,7 @@ class superVector(vector):
     def scaleAdd(self, vecs_in, sc1=1.0, sc2=1.0):
         """Function to scale input vectors and add them to the original ones"""
         # Checking type
-        if type(vecs_in) is not superVector:
+        if not isinstance(vecs_in, superVector):
             raise TypeError("Input variable is not a superVector")
         # Checking dimensionality
         if not self.checkSame(vecs_in):
@@ -525,7 +536,7 @@ class superVector(vector):
     def dot(self, vecs_in):
         """Function to compute dot product between two vectors"""
         # Checking type
-        if type(vecs_in) is not superVector:
+        if not isinstance(vecs_in, superVector):
             raise TypeError("Input variable is not a superVector")
         # Checking dimensionality
         if not self.checkSame(vecs_in):
@@ -535,7 +546,7 @@ class superVector(vector):
     def multiply(self, vecs_in):
         """Function to multiply element-wise two vectors"""
         # Checking type
-        if type(vecs_in) is not superVector:
+        if not isinstance(vecs_in, superVector):
             raise TypeError("Input variable is not a superVector")
         # Checking dimensionality
         if not self.checkSame(vecs_in):
@@ -547,7 +558,7 @@ class superVector(vector):
     def isDifferent(self, vecs_in):
         """Function to check if two vectors are identical"""
         # Checking type
-        if type(vecs_in) is not superVector:
+        if not isinstance(vecs_in, superVector):
             raise TypeError("Input variable is not a superVector")
         return any([self.vecs[idx].isDifferent(vecs_in.vecs[idx]) for idx in range(self.n)])
 
@@ -576,7 +587,7 @@ class superVector(vector):
             for idx in range(self.n):
                 self.vecs[idx].maximum(other)
             return self
-        elif type(other) is not superVector:
+        elif not isinstance(other, superVector):
             raise TypeError("Input variable is not a superVector")
         if other.n != self.n:
             raise ValueError('Input must have the same length of self')

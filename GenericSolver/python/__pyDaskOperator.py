@@ -10,15 +10,16 @@ from dask import delayed
 import dask.array as da
 from __pyDaskVector import DaskVector
 from __pyDaskObject import DaskObject
+from pyVector import superVector
 import functools as ft
 
 class DaskOperator(DaskObject, Operator.Operator):
     
     def __init__(self, dask_client, operator_cls, domain, range, *args, **kw):
-        if not isinstance(domain, DaskVector):
-            raise TypeError("Domain vector must be a DaskVector!")
-        if not isinstance(range, DaskVector):
-            raise TypeError("Range vector must be a DaskVector!")
+        if not isinstance(domain, DaskVector) and not isinstance(domain, superVector):
+            raise TypeError("Domain vector must be a DaskVector or superVector!")
+        if not isinstance(range, DaskVector) and not isinstance(range, superVector):
+            raise TypeError("Range vector must be a DaskVector or superVector!")
         
         client = dask_client.getClient()
         opCls = operator_cls
@@ -46,10 +47,10 @@ class DaskOperator(DaskObject, Operator.Operator):
         return arr[0,:], arr[1,:]
 
     def check(self, model, data):
-        if not isinstance(model, DaskVector):
-            raise TypeError("Model vector must be a DaskVector!")
-        if not isinstance(data, DaskVector):
-            raise TypeError("Data vector must be a DaskVector!")
+        if not isinstance(model, DaskVector) and not isinstance(model, superVector):
+            raise TypeError("Model vector must be a DaskVector or superVector!")
+        if not isinstance(data, DaskVector) and not isinstance(data, superVector):
+            raise TypeError("Data vector must be a DaskVector or superVector!")
         
     def as_matrix(self):
         return np.array(self.fut).reshape(self.range.nchunks, self.domain.nchunks)
@@ -102,7 +103,7 @@ class DaskOperator(DaskObject, Operator.Operator):
             mm = self.client.submit(ft.reduce, lambda m1, m2: m1+m2, m, pure=False)
             fin.append(mm)
         # copy the futures
-        mm = self.client.map(model.cls.scaleAdd, fin, mod, pure=False)
+        mm = self.client.map(model.cls.scaleAdd, mod, fin, pure=False)
         model.set_futures(mm)
 
     def set_background(self, model):

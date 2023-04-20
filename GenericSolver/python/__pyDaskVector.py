@@ -18,17 +18,16 @@ class DaskVector(DaskObject, Vector.vector):
             chunks -- List corresponding to number of chunks along each dimension
         """
         #
-        
-        #  Client to submit tasks
         if not isinstance(dask_client, DaskClient):
             raise TypeError("Passed client is not a Dask Client object!")
         self.dask_client = dask_client
+        self.client = client = self.dask_client.getClient()
 
         # option 1
         if kw.get("vecCls"):
             self.ns = ns = kw.get("ns")
             self.os = os = kw.get("os")
-            self.ds = ds = kw.get("ds")    
+            self.ds = ds = kw.get("ds")
             vecCls = kw.get("vecCls")
             
         # option 2
@@ -44,16 +43,16 @@ class DaskVector(DaskObject, Vector.vector):
         self.hyper = Hypercube.hypercube(ns=ns, ds=ds, os=os)
         ns_list, ds_list, os_list = self._calculate_chunks_(ns, ds, os, chunks)
         self.ns_list = ns_list
-        # list of hypercubes for each inividual Vector 
-        hypers = [Hypercube.hypercube(ns=ns.tolist(), os=os.tolist(), ds=ds.tolist())
-                                for (ns, os, ds) in zip(ns_list, os_list, ds_list)]
+
         # option 1
         if kw.get("vecCls"):
+            # list of hypercubes for each inividual Vector 
+            hypers = [Hypercube.hypercube(ns=ns.tolist(), os=os.tolist(), ds=ds.tolist())
+                                for (ns, os, ds) in zip(ns_list, os_list, ds_list)]
             constructor_pars = [{"fromHyper" : hyper} for hyper in hypers]
             DaskObject.__init__(self, dask_client, objCreator=vecCls, constructor_kw=constructor_pars, futures=kw.get("futures"))
         # option 2
         elif kw.get("from_vector"):
-            # TODO add the case when just scatter the vector
             vecCls = type(vec)
             # we need window function to generate new vectors
             if not "window" in dir(vecCls):
@@ -400,10 +399,29 @@ class DaskVector(DaskObject, Vector.vector):
 
 
 
+class DaskSuperVector(Vector.superVector):
+    def __init__(self, *vecs):
+        # DaskObject.__init__(self, dask_client, objCreator=Vector.superVector, constructor_args=[vecs])
+        Vector.superVector.__init__(self, *vecs)
+        self.nchunks = 1
+        self.cls = Vector.superVector
+    
+    def clone(self):
+        vecs = [v.clone() for v in self.vecs]
+        return DaskSuperVector(vecs)
+    
+    def get_futures(self):
+        return [self]
+    
+    def set_futures(self, fut):
+        vec = fut[0].result()
+        self.vecs = [v.clone() for v in vec]
+
 def readDaskVector(vector, chunks=None) -> "DaskVector":
     """
        Vector is read in chunks in parallel by different Dask workers
        (uses windowed read from genericIO)
     """
+
 
 

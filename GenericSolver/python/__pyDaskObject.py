@@ -122,10 +122,10 @@ class DaskObject:
         return len(self.fut)
 
     def __getstate__(self):
-        state = self.__dict__
-        if 'client' in state: del state['client']
+        state = self.__dict__.copy()
+        del state['client']
         return state
 
     def __setstate__(self, state):
-        self.__dict__ = state
+        self.__dict__ = state.copy()
         self.client = state['dask_client'].getClient()
