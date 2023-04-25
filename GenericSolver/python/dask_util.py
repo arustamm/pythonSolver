@@ -248,4 +248,3 @@ def load(file):
     with open(file, 'rb') as f:
         client = pickle.load(f)
     return client
-
