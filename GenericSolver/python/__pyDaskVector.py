@@ -414,6 +414,7 @@ class DaskSuperVector(Vector.superVector):
         return [self]
     
     def set_futures(self, fut):
+        del self.vecs
         vec = fut[0].result()
         self.vecs = [v.clone() for v in vec]
 

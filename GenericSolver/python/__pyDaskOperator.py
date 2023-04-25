@@ -79,6 +79,7 @@ class DaskOperator(DaskObject, Operator.Operator):
         # copy the futures
         # dd = self.client.map(data.cls.clone, dat, pure=False)
         data.set_futures(dat)
+        del mod
 
     def adjoint(self, add, model, data):
 
@@ -105,6 +106,7 @@ class DaskOperator(DaskObject, Operator.Operator):
         # copy the futures
         mm = self.client.map(model.cls.scaleAdd, mod, fin, pure=False)
         model.set_futures(mm)
+        del mod
 
     def set_background(self, model):
         self.domain.checkSame(model)
