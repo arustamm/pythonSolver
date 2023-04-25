@@ -62,7 +62,7 @@ class DaskOperator(DaskObject, Operator.Operator):
         if not add: data.zero()
         
         mod = model.get_futures()
-        self.client.replicate(mod)
+        # self.client.replicate(mod)
         dat = data.get_futures()
         ops = self.as_matrix()
         # submit all tasks
@@ -87,7 +87,7 @@ class DaskOperator(DaskObject, Operator.Operator):
         if not add: model.zero()
         
         mod = model.get_futures()
-        self.client.replicate(mod)
+        # self.client.replicate(mod)
         dat = data.get_futures()
         ops = self.as_matrix()
         # submit all tasks
@@ -109,7 +109,7 @@ class DaskOperator(DaskObject, Operator.Operator):
     def set_background(self, model):
         self.domain.checkSame(model)
         mod = model.get_futures()
-        self.client.replicate(mod)
+        # self.client.replicate(mod)
         ops = self.as_matrix()
         # submit all tasks
         res = []
