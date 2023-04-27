@@ -109,7 +109,7 @@ class DaskObject:
         if len(self) != len(futures):
             raise ValueError("Futures are of different length!")
         self.fut = futures
-        wait(self.fut)
+        persist(self.fut)
 
     def get_workers(self):
         self.workers = [
