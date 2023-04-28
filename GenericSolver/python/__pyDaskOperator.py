@@ -78,7 +78,7 @@ class DaskOperator(DaskObject, Operator.Operator):
         fin = []
         fin.append(dat)
         for i, d in enumerate(res):
-            dd = self.client.map(data.cls.__add__, fin[i], d, pure=False)
+            dd = self.client.map(data.cls.scaleAdd, fin[i], d, pure=False)
             fin.append(dd)
         # copy the futures
         # dd = self.client.map(data.cls.clone, dat, pure=False)
