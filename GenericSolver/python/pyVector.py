@@ -36,7 +36,7 @@ class vector:
             res.addbias(other)
             return res
         elif isinstance(other, vector):
-            res.scaleAdd(other)
+            res = res.scaleAdd(other)
             return res
         else:
             raise TypeError('Argument has to be either scalar or vector, got %r instead' % other)
