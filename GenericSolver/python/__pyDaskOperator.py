@@ -62,11 +62,14 @@ class DaskOperator(DaskObject, Operator.Operator):
         if not add: data.zero()
         
         mod = model.get_futures()
-        self.client.replicate(mod)
+        if isinstance(model, DaskVector):
+            self.client.replicate(mod)
+        else:
+            mod = self.client.scatter(mod, broadcast=True)
         dat = data.get_futures()
         ops = self.as_matrix()
         # submit all tasks
-        res = []
+        res = [dat]
         # loop across model chunks 
         for i, m in enumerate(mod):
             fut = self.client.map(fwd, ops[:,i], [m]*len(dat), dat, pure=False)
@@ -76,9 +79,9 @@ class DaskOperator(DaskObject, Operator.Operator):
         # accumulate 
         fin = ft.reduce(lambda d1, d2: self.client.map(data.cls.__add__, d1, d2, pure=False), res)
         # copy the futures
-        dd = self.client.map(data.cls.scaleAdd, dat, fin, pure=False)
-        # data.set_futures(dd)
-        # del res, fin
+        # dd = self.client.map(data.cls.scaleAdd, dat, fin, pure=False)
+        data.set_futures(fin)
+        del res, fin
 
     def adjoint(self, add, model, data):
 
@@ -87,7 +90,10 @@ class DaskOperator(DaskObject, Operator.Operator):
         if not add: model.zero()
         
         mod = model.get_futures()
-        self.client.replicate(mod)
+        if isinstance(model, DaskVector):
+            self.client.replicate(mod)
+        else:
+            mod = self.client.scatter(mod, broadcast=True)
         dat = data.get_futures()
         ops = self.as_matrix()
         # submit all tasks
