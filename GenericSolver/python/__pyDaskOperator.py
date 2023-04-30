@@ -116,7 +116,10 @@ class DaskOperator(DaskObject, Operator.Operator):
     def set_background(self, model):
         self.domain.checkSame(model)
         mod = model.get_futures()
-        self.client.replicate(mod)
+        if isinstance(model, DaskVector):
+            self.client.replicate(mod)
+        else:
+            mod = self.client.scatter(mod, broadcast=True)
         ops = self.as_matrix()
         # submit all tasks
         res = []
