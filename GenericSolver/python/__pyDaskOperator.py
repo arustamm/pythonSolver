@@ -72,16 +72,16 @@ class DaskOperator(DaskObject, Operator.Operator):
         res = [dat]
         # loop across model chunks 
         for i, m in enumerate(mod):
-            fut = self.client.map(fwd, ops[:,i], [m]*len(dat), dat, pure=False)
+            fut = self.client.map(fwd, ops[:,i], [m]*len(dat), dat)
             res.append(fut)
-        waitable = [f for sublist in res for f in sublist]
-        wait(waitable)
+        # waitable = [f for sublist in res for f in sublist]
+        # wait(waitable)
         # accumulate 
-        fin = ft.reduce(lambda d1, d2: self.client.map(data.cls.__add__, d1, d2, pure=False), res)
+        fin = ft.reduce(lambda d1, d2: self.client.map(data.cls.__add__, d1, d2), res)
         # copy the futures
         # dd = self.client.map(data.cls.scaleAdd, dat, fin, pure=False)
         data.set_futures(fin)
-        del res, fin
+        # del res, fin
 
     def adjoint(self, add, model, data):
 
@@ -99,19 +99,19 @@ class DaskOperator(DaskObject, Operator.Operator):
         # submit all tasks
         res = []
         for i, m in enumerate(mod):
-            fut = self.client.map(adj, ops[:,i], [m]*len(dat), dat, pure=False)
+            fut = self.client.map(adj, ops[:,i], [m]*len(dat), dat)
             res.append(fut)
-        waitable = [f for sublist in res for f in sublist]
-        wait(waitable)
+        # waitable = [f for sublist in res for f in sublist]
+        # wait(waitable) 
         # accumulate 
         fin = []
         for m in res:
-            mm = self.client.submit(ft.reduce, lambda m1, m2: m1+m2, m, pure=False)
+            mm = self.client.submit(ft.reduce, lambda m1, m2: m1+m2, m)
             fin.append(mm)
         # copy the futures
-        mm = self.client.map(model.cls.scaleAdd, mod, fin, pure=False)
+        mm = self.client.map(model.cls.scaleAdd, mod, fin)
         model.set_futures(mm)
-        del res, fin
+        # del res, fin
 
     def set_background(self, model):
         self.domain.checkSame(model)
