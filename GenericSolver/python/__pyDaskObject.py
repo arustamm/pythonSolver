@@ -108,8 +108,8 @@ class DaskObject:
         # copy futures
         if len(self) != len(futures):
             raise ValueError("Futures are of different length!")
-        self.fut = futures.copy()
-        wait(self.fut)
+        self.fut = futures
+        persist(self.fut)
 
     def get_workers(self):
         self.workers = [
