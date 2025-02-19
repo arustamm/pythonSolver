@@ -43,20 +43,22 @@ def create_hostnames(machine_names, Nworkers):
     return hostnames
 
 
-def client_startup(cluster, n_jobs, total_workers):
+def client_startup(cluster, n_jobs, **kw):
     """
     Function to start a client
     """
     if n_jobs <= 0:
         raise ValueError("n_jobs must equal or greater than 1!")
-    if isinstance(cluster, daskD.LocalCluster):
+    if kw.get('min_jobs', None) is not None:
+        cluster.adapt(minimum=kw.get("min_jobs"), maximum=n_jobs, interval=kw.get("interval"), wait_count=kw.get('wait_count'))
+    elif isinstance(cluster, daskD.LocalCluster):
         cluster.scale(n_jobs)
     else:
         cluster.scale(jobs=n_jobs)
     # Creating dask Client
     client = daskD.Client(cluster)
-    workers = 0
-    t0 = time.time()
+    # workers = 0
+    # t0 = time.time()
     # while workers < total_workers:
     #     workers = len(client.get_worker_logs().keys())
     #     # If the number of workers is not reached in 5 minutes raise exception
@@ -200,7 +202,8 @@ class DaskClient:
                     # forcing nanny to be true (otherwise, dask-worker command will fail)
                     cluster_params.update({"nanny": True})
             self.cluster = ClusterInit(**cluster_params)
-            self.client = client_startup(self.cluster, n_jobs, n_jobs*workers_per_job)
+            min_jobs = kwargs.get("min_jobs", None)
+            self.client = client_startup(self.cluster, n_jobs, min_jobs=min_jobs)
         else:
             raise ValueError("Either hostnames or local_params or pbs_params or lsf_params or slurm_params must be "
                              "provided!")

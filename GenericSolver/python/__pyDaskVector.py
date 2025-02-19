@@ -50,7 +50,9 @@ class DaskVector(DaskObject, Vector.vector):
             hypers = [Hypercube.hypercube(ns=ns.tolist(), os=os.tolist(), ds=ds.tolist())
                                 for (ns, os, ds) in zip(ns_list, os_list, ds_list)]
             constructor_pars = [{"fromHyper" : hyper} for hyper in hypers]
-            DaskObject.__init__(self, dask_client, objCreator=vecCls, constructor_kw=constructor_pars, futures=kw.get("futures"))
+            DaskObject.__init__(self, dask_client, 
+                                objCreator=vecCls, constructor_kw=constructor_pars, futures=kw.get("futures"),
+                                asynchronous=kw.get("asynchronous", False))
         # option 2
         elif kw.get("from_vector"):
             vecCls = type(vec)
@@ -68,7 +70,9 @@ class DaskVector(DaskObject, Vector.vector):
                 # print(wpars)
                 constructor_pars.append(wpars)
             # generate using windowing function provided by the vecCls class
-            DaskObject.__init__(self, dask_client, objCreator=vecCls.window, constructor_kw=constructor_pars, from_object=vec, futures=kw.get("futures"))
+            DaskObject.__init__(self, dask_client, 
+                                objCreator=vecCls.window, constructor_kw=constructor_pars, from_object=vec, futures=kw.get("futures"),
+                                asynchronous=kw.get("asynchronous", False))
 
 
     def _calculate_chunks_(self, ns, ds, os, chunks):
@@ -306,7 +310,7 @@ class DaskVector(DaskObject, Vector.vector):
         if len(futures) != len(self):
             raise ValueError("Futures are of a wrong size!")
         return DaskVector(self.dask_client, vecCls=self.cls, ns=self.ns, os=self.os, ds=self.ds, 
-                            chunks=self.chunks, futures=futures)
+                            chunks=self.chunks, futures=futures, asynchronous=self._async)
 
     def clone(self):
         """Function to clone (deep copy) a vector from a vector or a Space"""
@@ -315,7 +319,6 @@ class DaskVector(DaskObject, Vector.vector):
 
     def cloneSpace(self):
         """Function to clone vector space"""
-        # TODO cloneSpace is seg-faulting in SepVector
         fut = self.client.map(self.cls.clone, self.fut, pure=False)
         v = self.clone_from_futures(fut)
         v.zero()
@@ -399,23 +402,28 @@ class DaskVector(DaskObject, Vector.vector):
 
 
 
-class DaskSuperVector(Vector.superVector):
-    def __init__(self, *vecs):
-        # DaskObject.__init__(self, dask_client, objCreator=Vector.superVector, constructor_args=[vecs])
-        Vector.superVector.__init__(self, *vecs)
-        self.nchunks = 1
-        self.cls = Vector.superVector
+class DaskSuperVector(DaskObject, Vector.superVector):
+    def __init__(self, dask_client, *vecs):
+        # DaskObject.__init__(self, dask_client, objCreator=Vector.superVector, constructor_args=vecs)
+        # vecs = [DaskVector(dask_client, from_vector=vec, ) for vec in vecs]
+        Vector.superVector.__init__(self, [vecs])
+        # self.nchunks = 1
+        # self.cls = Vector.superVector
     
-    def clone(self):
-        vecs = [v.clone() for v in self.vecs]
-        return DaskSuperVector(vecs)
+    # def clone(self):
+    #     vecs = [v.clone() for v in self.vecs]
+    #     return DaskSuperVector(vecs)
     
     def get_futures(self):
-        return [self]
+        return [v.get_futures() for v in self.vecs]
     
     def set_futures(self, fut):
-        vec = fut[0].result()
-        self.vecs = [v.clone() for v in vec]
+        if len(fut) != len(self.vecs):
+            raise RuntimeError("Inconsistent number of futures and vectors!")
+        # vec = fut[0].result()
+        # self.vecs = [v.clone() for v in vec]
+        for i, v in enumerate(self.vecs):
+            v.set_futures(fut[i])
 
 def readDaskVector(vector, chunks=None) -> "DaskVector":
     """

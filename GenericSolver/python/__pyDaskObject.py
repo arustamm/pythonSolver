@@ -19,6 +19,7 @@ class DaskObject:
             raise TypeError("Passed client is not a Dask Client object!")
         self.dask_client = dask_client
         self.client = client = self.dask_client.getClient()
+        self._async = kw.get("asynchronous", False)
 
         self.fut = []
         
@@ -108,8 +109,12 @@ class DaskObject:
         # copy futures
         if len(self) != len(futures):
             raise ValueError("Futures are of different length!")
+        del self.fut
         self.fut = futures
-        persist(self.fut)
+        if not self._async:
+            wait(self.fut)
+        # else:
+        #     wait(self.fut, return_when='FIRST_COMPLETED')
 
     def get_workers(self):
         self.workers = [

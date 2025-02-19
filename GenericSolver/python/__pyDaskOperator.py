@@ -57,15 +57,14 @@ class DaskOperator(DaskObject, Operator.Operator):
 
     def forward(self, add, model, data):
 
-        self.check(model, data)
-        self.checkDomainRange(model, data)
+        # self.check(model, data)
+        # self.checkDomainRange(model, data)
         if not add: data.zero()
-        
         mod = model.get_futures()
-        if isinstance(model, DaskVector):
-            self.client.replicate(mod)
-        else:
-            mod = self.client.scatter(mod, broadcast=True)
+        # if isinstance(model, DaskVector):
+        #     self.client.replicate(mod)
+        # else:
+        # mod = self.client.scatter(mod, broadcast=True)
         dat = data.get_futures()
         ops = self.as_matrix()
         # submit all tasks
@@ -74,26 +73,26 @@ class DaskOperator(DaskObject, Operator.Operator):
         for i, m in enumerate(mod):
             fut = self.client.map(fwd, ops[:,i], [m]*len(dat), dat, pure=False)
             res.append(fut)
-        waitable = [f for sublist in res for f in sublist]
-        wait(waitable)
+        # waitable = [f for sublist in res for f in sublist]
+        # wait(waitable)
         # accumulate 
         fin = ft.reduce(lambda d1, d2: self.client.map(data.cls.__add__, d1, d2, pure=False), res)
         # copy the futures
         # dd = self.client.map(data.cls.scaleAdd, dat, fin, pure=False)
         data.set_futures(fin)
-        del res, fin
+        # del dat, res, waitable, fut
 
     def adjoint(self, add, model, data):
 
-        self.check(model, data)
-        self.checkDomainRange(model, data)
+        # self.check(model, data)
+        # self.checkDomainRange(model, data)
         if not add: model.zero()
         
         mod = model.get_futures()
-        if isinstance(model, DaskVector):
-            self.client.replicate(mod)
-        else:
-            mod = self.client.scatter(mod, broadcast=True)
+        # if isinstance(model, DaskVector):
+        #     self.client.replicate(mod)
+        # else:
+        # mod = self.client.scatter(mod, broadcast=True)
         dat = data.get_futures()
         ops = self.as_matrix()
         # submit all tasks
@@ -102,8 +101,8 @@ class DaskOperator(DaskObject, Operator.Operator):
             fut = self.client.map(adj, ops[:,i], [m]*len(dat), dat, pure=False)
             res.append(fut)
         waitable = [f for sublist in res for f in sublist]
-        wait(waitable)
-        # accumulate 
+        # wait(waitable)
+        #accumulate 
         fin = []
         for m in res:
             mm = self.client.submit(ft.reduce, lambda m1, m2: m1+m2, m, pure=False)
@@ -111,7 +110,7 @@ class DaskOperator(DaskObject, Operator.Operator):
         # copy the futures
         mm = self.client.map(model.cls.scaleAdd, mod, fin, pure=False)
         model.set_futures(mm)
-        del res, fin
+        # del mod, res, waitable, fin, fut
 
     def set_background(self, model):
         self.domain.checkSame(model)
