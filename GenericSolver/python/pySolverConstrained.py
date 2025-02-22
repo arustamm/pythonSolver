@@ -97,7 +97,6 @@ class AugLagrangianSolver:
                     self.rho *= self.p_rho
                     break
                 
-                
 
             
             

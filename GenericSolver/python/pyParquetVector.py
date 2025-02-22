@@ -360,9 +360,10 @@ class ParquetVector(pyVector.vector):
 
     # # Combination of different vectors
 
-    # def copy(self, vec2):
-    #     """Function to copy vector"""
-    #     raise NotImplementedError("copy must be overwritten")
+    def copy(self, vec2):
+        """Function to copy vector"""
+        self = vec2.clone()
+        return self
 
     def scaleAdd(self, vec2, sc1=1.0, sc2=1.0):
         """Function to scale two vectors and add them to the first one"""

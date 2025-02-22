@@ -164,231 +164,291 @@ class NLCGsolver(pySolver.Solver):
     """Non-Linear Conjugate Gradient and Steepest-Descent Solver object"""
 
     # Default class methods/functions
-    def __init__(self, stoppr, stepper=None, beta_type="FR", logger=None):
+    def __init__(self, stopper, stepper=None, beta_type="FR", logger=None):
         """Constructor for NLCG Solver"""
         # Calling parent construction
-        super(NLCGsolver, self).__init__()
-        # Defining stopper object
-        self.stoppr = stoppr
+        super().__init__(stopper, stepper, logger=logger)
         # Defining stepper object
         self.stepper = stepper if stepper is not None else ParabolicStep()
         # Beta function to use during the inversion
         self.beta_type = beta_type
-        # Logger object to write on log file
-        self.logger = logger
-        # Overwriting logger of the Stopper object
-        self.stoppr.logger = self.logger
-        # print formatting
-        self.iter_msg = "iter = %s, obj = %.5e, resnorm = %.2e, gradnorm = %.2e, feval = %d, geval = %d"
         return
 
     def __del__(self):
         """Default destructor"""
         return
 
-    def beta_func(self, grad, grad0, dir):
+    def beta_func(self, grad):
         """Beta function interface"""
         beta_type = self.beta_type
         if beta_type == "FR":
-            beta = _betaFR(grad, grad0, dir, self.logger)
+            beta = _betaFR(grad, self.grad0, self.dmodl, self.logger)
         elif beta_type == "PRP":
-            beta = _betaPRP(grad, grad0, dir, self.logger)
+            beta = _betaPRP(grad, self.grad0, self.dmodl, self.logger)
         elif beta_type == "HS":
-            beta = _betaHS(grad, grad0, dir, self.logger)
+            beta = _betaHS(grad, self.grad0, self.dmodl, self.logger)
         elif beta_type == "CD":
-            beta = _betaCD(grad, grad0, dir, self.logger)
+            beta = _betaCD(grad, self.grad0, self.dmodl, self.logger)
         elif beta_type == "LS":
-            beta = _betaLS(grad, grad0, dir, self.logger)
+            beta = _betaLS(grad, self.grad0, self.dmodl, self.logger)
         elif beta_type == "DY":
-            beta = _betaDY(grad, grad0, dir, self.logger)
+            beta = _betaDY(grad, self.grad0, self.dmodl, self.logger)
         elif beta_type == "BAN":
-            beta = _betaBAN(grad, grad0, dir, self.logger)
+            beta = _betaBAN(grad, self.grad0, self.dmodl, self.logger)
         elif beta_type == "HZ":
-            beta = _betaHZ(grad, grad0, dir, self.logger)
+            beta = _betaHZ(grad, self.grad0, self.dmodl, self.logger)
         elif beta_type == "SD":
-            beta = _betaSD(grad, grad0, dir, self.logger)
+            beta = _betaSD(grad, self.grad0, self.dmodl, self.logger)
         else:
             raise ValueError("ERROR! Requested Beta function type not existing")
+        
+        if beta < 0.:
+            self.log_message("Beta negative setting to zero: beta value=%s!!!" % beta)
+            beta = 0.
+        if self.iter == 0:
+            beta = 0.
+
+        if self.beta_type != "SD":
+            self.log_message("beta coefficient: %s" % beta)
+
         return beta
+    
+    def get_initial_message(self):
+        solver_type = "STEEPEST-DESCENT" if self.beta_type == "SD" else "CONJUGATE GRADIENT"
+        msg = f"{90*'#'}\n"
+        msg += f"\t\t\tNON-LINEAR {solver_type} SOLVER log file\n"
+        msg += f"\tRestart folder: {self.restart.restart_folder}\n"
+        if self.beta_type != "SD":
+            msg += f"\tConjugate method used: {self.beta_type}\n"
+        msg += f"{90*'#'}\n"
+        return msg
+    
+    def get_final_message(self):
+        msg = 90 * "#" + "\n"
+        msg += "\t\t\tNON-LINEAR %s SOLVER log file end\n" % (
+            "STEEPEST-DESCENT" if self.beta_type == "SD" else "CONJUGATE GRADIENT")
+        msg += 90 * "#" + "\n"
 
-    def run(self, problem, verbose=False, restart=False):
-        """Running NLCG or steppest-descent solver"""
+        return msg
+        
 
-        self.create_msg = verbose or self.logger
+    # def run(self, problem, verbose=False, restart=False):
+    #     """Running NLCG or steppest-descent solver"""
 
-        # Resetting stopper before running the inversion
-        self.stoppr.reset()
+    #     self.create_msg = verbose or self.logger
 
-        if not restart:
-            if self.create_msg:
-                msg = 90 * "#" + "\n"
-                msg += "\t\t\tNON-LINEAR %s SOLVER log file\n" % (
-                    "STEEPEST-DESCENT" if self.beta_type == "SD" else "CONJUGATE GRADIENT")
-                msg += "\tRestart folder: %s\n" % self.restart.restart_folder
-                if self.beta_type != "SD":
-                    msg += "\tConjugate method used: %s\n" % self.beta_type
-                msg += 90 * "#" + "\n"
-                if verbose:
-                    print(msg.replace("log file", ""))
-                if self.logger:
-                    self.logger.addToLog(msg)
+    #     # Resetting stopper before running the inversion
+    #     self.stoppr.reset()
 
-            # Setting internal vectors (model, search direction, and previous gradient vectors)
-            prblm_mdl = problem.get_model()
-            cg_mdl = prblm_mdl.clone()
-            cg_dmodl = prblm_mdl.clone()
-            cg_dmodl.zero()
-            cg_grad0 = cg_dmodl.clone()
+    #     if not restart:
+    #         if self.create_msg:
+    #             msg = 90 * "#" + "\n"
+    #             msg += "\t\t\tNON-LINEAR %s SOLVER log file\n" % (
+    #                 "STEEPEST-DESCENT" if self.beta_type == "SD" else "CONJUGATE GRADIENT")
+    #             msg += "\tRestart folder: %s\n" % self.restart.restart_folder
+    #             if self.beta_type != "SD":
+    #                 msg += "\tConjugate method used: %s\n" % self.beta_type
+    #             msg += 90 * "#" + "\n"
+    #             if verbose:
+    #                 print(msg.replace("log file", ""))
+    #             if self.logger:
+    #                 self.logger.addToLog(msg)
 
-            # Other internal variables
-            beta = 0.0
-            iiter = 0
-        else:
-            # Retrieving parameters and vectors to restart the solver
-            if self.create_msg:
-                msg = "Restarting previous solver run from: %s" % self.restart.restart_folder
-                if verbose:
-                    print(msg)
-                if self.logger:
-                    self.logger.addToLog(msg)
-            self.restart.read_restart()
-            iiter = self.restart.retrieve_parameter("iter")
-            self.stepper.alpha = self.restart.retrieve_parameter("alpha")
-            initial_obj_value = self.restart.retrieve_parameter(
-                "obj_initial")  # Retrieving initial objective function value
-            cg_mdl = self.restart.retrieve_vector("cg_mdl")
-            cg_dmodl = self.restart.retrieve_vector("cg_dmodl")
-            cg_grad0 = self.restart.retrieve_vector("cg_grad0")
-            # Setting the model and residuals to avoid residual twice computation
-            problem.set_model(cg_mdl)
-            prblm_mdl = problem.get_model()
-            # Setting residual vector to avoid its unnecessary computation
-            problem.set_residual(self.restart.retrieve_vector("prblm_res"))
+    #         # Setting internal vectors (model, search direction, and previous gradient vectors)
+    #         prblm_mdl = problem.get_model()
+    #         cg_mdl = prblm_mdl.clone()
+    #         cg_dmodl = prblm_mdl.clone()
+    #         cg_dmodl.zero()
+    #         cg_grad0 = cg_dmodl.clone()
 
-        # Common variables unrelated to restart
-        prev_mdl = prblm_mdl.clone().zero()
+    #         # Other internal variables
+    #         beta = 0.0
+    #         iiter = 0
+    #     else:
+    #         # Retrieving parameters and vectors to restart the solver
+    #         if self.create_msg:
+    #             msg = "Restarting previous solver run from: %s" % self.restart.restart_folder
+    #             if verbose:
+    #                 print(msg)
+    #             if self.logger:
+    #                 self.logger.addToLog(msg)
+    #         self.restart.read_restart()
+    #         iiter = self.restart.retrieve_parameter("iter")
+    #         self.stepper.alpha = self.restart.retrieve_parameter("alpha")
+    #         initial_obj_value = self.restart.retrieve_parameter(
+    #             "obj_initial")  # Retrieving initial objective function value
+    #         cg_mdl = self.restart.retrieve_vector("cg_mdl")
+    #         cg_dmodl = self.restart.retrieve_vector("cg_dmodl")
+    #         cg_grad0 = self.restart.retrieve_vector("cg_grad0")
+    #         # Setting the model and residuals to avoid residual twice computation
+    #         problem.set_model(cg_mdl)
+    #         prblm_mdl = problem.get_model()
+    #         # Setting residual vector to avoid its unnecessary computation
+    #         problem.set_residual(self.restart.retrieve_vector("prblm_res"))
 
-        while True:
-            # Computing objective function
-            obj0 = problem.get_obj(cg_mdl)  # Compute objective function value
-            prblm_res = problem.get_res(cg_mdl)  # Compute residuals
-            prblm_grad = problem.get_grad(cg_mdl)  # Compute the gradient
-            if iiter == 0:
-                initial_obj_value = obj0  # For relative objective function value
-                # Saving objective function value
-                self.restart.save_parameter("obj_initial", initial_obj_value)
-                # iteration info
-                if self.create_msg:
-                    msg = self.iter_msg % (str(iiter).zfill(self.stoppr.zfill),
-                                           obj0,
-                                           problem.get_rnorm(cg_mdl),
-                                           problem.get_gnorm(cg_mdl),
-                                           problem.get_fevals(),
-                                           problem.get_gevals())
-                    # Writing on log file
-                    if verbose:
-                        print(msg)
-                    if self.logger:
-                        self.logger.addToLog(msg)
-                # Check if either objective function value or gradient norm is NaN
-                if isnan(obj0) or isnan(prblm_grad.norm()):
-                    raise ValueError("ERROR! Either gradient norm or objective function value NaN!")
-            if prblm_grad.norm() == 0.:
-                print("Gradient vanishes identically")
-                break
+    #     # Common variables unrelated to restart
+    #     prev_mdl = prblm_mdl.clone().zero()
 
-            # Saving results
-            self.save_results(iiter, problem, force_save=False)
-            # Keeping current inverted model
-            prev_mdl.copy(prblm_mdl)
+    #     while True:
+    #         # Computing objective function
+    #         obj0 = problem.get_obj(cg_mdl)  # Compute objective function value
+    #         prblm_res = problem.get_res(cg_mdl)  # Compute residuals
+    #         prblm_grad = problem.get_grad(cg_mdl)  # Compute the gradient
+    #         if iiter == 0:
+    #             initial_obj_value = obj0  # For relative objective function value
+    #             # Saving objective function value
+    #             self.restart.save_parameter("obj_initial", initial_obj_value)
+    #             # iteration info
+    #             if self.create_msg:
+    #                 msg = self.iter_msg % (str(iiter).zfill(self.stoppr.zfill),
+    #                                        obj0,
+    #                                        problem.get_rnorm(cg_mdl),
+    #                                        problem.get_gnorm(cg_mdl),
+    #                                        problem.get_fevals(),
+    #                                        problem.get_gevals())
+    #                 # Writing on log file
+    #                 if verbose:
+    #                     print(msg)
+    #                 if self.logger:
+    #                     self.logger.addToLog(msg)
+    #             # Check if either objective function value or gradient norm is NaN
+    #             if isnan(obj0) or isnan(prblm_grad.norm()):
+    #                 raise ValueError("ERROR! Either gradient norm or objective function value NaN!")
+    #         if prblm_grad.norm() == 0.:
+    #             print("Gradient vanishes identically")
+    #             break
 
-            if iiter >= 1:
-                beta = self.beta_func(prblm_grad, cg_grad0, cg_dmodl)
-                if beta < 0.:
-                    if self.logger:
-                        self.logger.addToLog("Beta negative setting to zero: beta value=%s!!!" % beta)
-                    beta = 0.
-            if self.beta_type != "SD":
-                if self.logger:
-                    self.logger.addToLog("beta coefficient: %s" % beta)
+    #         # Saving results
+    #         self.save_results(iiter, problem, force_save=False)
+    #         # Keeping current inverted model
+    #         prev_mdl.copy(prblm_mdl)
 
-            # dmodl = beta*dmodl - grad
-            cg_dmodl.scaleAdd(prblm_grad, beta, -1.0)
-            # grad0 = grad
-            cg_grad0.copy(prblm_grad)
-            # Calling line search
-            alpha, success = self.stepper.run(problem, cg_mdl, cg_dmodl, self.logger)
-            if not success:
-                if self.create_msg:
-                    msg = "Stepper couldn't find a proper step size, will terminate solver"
-                    if verbose:
-                        print(msg)
-                    # Writing on log file
-                    if self.logger:
-                        self.logger.addToLog(msg)
-                problem.set_model(prev_mdl)
-                break
+    #         if iiter >= 1:
+    #             beta = self.beta_func(prblm_grad, cg_grad0, cg_dmodl)
+    #             if beta < 0.:
+    #                 if self.logger:
+    #                     self.logger.addToLog("Beta negative setting to zero: beta value=%s!!!" % beta)
+    #                 beta = 0.
+    #         if self.beta_type != "SD":
+    #             if self.logger:
+    #                 self.logger.addToLog("beta coefficient: %s" % beta)
 
-            # Increasing iteration counter
-            iiter = iiter + 1
-            obj1 = problem.get_obj(cg_mdl)  # Compute objective function value
-            # Redundant test on verifying convergence
-            if obj0 <= obj1:
-                if self.create_msg:
-                    msg = "Objective function at new point greater or equal than previous one:\n\t" \
-                          "obj_new = %.5e\tobj_cur = %.5e\n" \
-                          "Potential issue in the stepper or in revaluation of objective function! Solver will stop!" \
-                          % (obj1, obj0)
-                    if verbose:
-                        print(msg)
-                    if self.logger:
-                        self.logger.addToLog(msg)
-                problem.set_model(prev_mdl)
-                break
+    #         # dmodl = beta*dmodl - grad
+    #         cg_dmodl.scaleAdd(prblm_grad, beta, -1.0)
+    #         # grad0 = grad
+    #         cg_grad0.copy(prblm_grad)
+    #         # Calling line search
+    #         alpha, success = self.stepper.run(problem, cg_mdl, cg_dmodl, self.logger)
+    #         if not success:
+    #             if self.create_msg:
+    #                 msg = "Stepper couldn't find a proper step size, will terminate solver"
+    #                 if verbose:
+    #                     print(msg)
+    #                 # Writing on log file
+    #                 if self.logger:
+    #                     self.logger.addToLog(msg)
+    #             problem.set_model(prev_mdl)
+    #             break
 
-            # Saving current model and previous search direction in case of restart
-            self.restart.save_parameter("iter", iiter)
-            self.restart.save_parameter("alpha", alpha)
-            self.restart.save_vector("cg_mdl", cg_mdl)
-            self.restart.save_vector("cg_dmodl", cg_dmodl)
-            self.restart.save_vector("cg_grad0", cg_grad0)
-            # Saving data space vectors
-            self.restart.save_vector("prblm_res", prblm_res)
-            # iteration info
-            if self.create_msg:
-                msg = self.iter_msg % (str(iiter).zfill(self.stoppr.zfill),
-                                       obj1,
-                                       problem.get_rnorm(cg_mdl),
-                                       problem.get_gnorm(cg_mdl),
-                                       problem.get_fevals(),
-                                       problem.get_gevals())
-                if verbose:
-                    print(msg)
-                if self.logger:
-                    self.logger.addToLog("\n" + msg)
+    #         # Increasing iteration counter
+    #         iiter = iiter + 1
+    #         obj1 = problem.get_obj(cg_mdl)  # Compute objective function value
+    #         # Redundant test on verifying convergence
+    #         if obj0 <= obj1:
+    #             if self.create_msg:
+    #                 msg = "Objective function at new point greater or equal than previous one:\n\t" \
+    #                       "obj_new = %.5e\tobj_cur = %.5e\n" \
+    #                       "Potential issue in the stepper or in revaluation of objective function! Solver will stop!" \
+    #                       % (obj1, obj0)
+    #                 if verbose:
+    #                     print(msg)
+    #                 if self.logger:
+    #                     self.logger.addToLog(msg)
+    #             problem.set_model(prev_mdl)
+    #             break
 
-            # Check if either objective function value or gradient norm is NaN
-            if isnan(obj1) or isnan(prblm_grad.norm()):
-                raise ValueError("ERROR! Either gradient norm or objective function value NaN!")
-            if self.stoppr.run(problem, iiter, initial_obj_value, verbose):
-                break
+    #         # Saving current model and previous search direction in case of restart
+    #         self.restart.save_parameter("iter", iiter)
+    #         self.restart.save_parameter("alpha", alpha)
+    #         self.restart.save_vector("cg_mdl", cg_mdl)
+    #         self.restart.save_vector("cg_dmodl", cg_dmodl)
+    #         self.restart.save_vector("cg_grad0", cg_grad0)
+    #         # Saving data space vectors
+    #         self.restart.save_vector("prblm_res", prblm_res)
+    #         # iteration info
+    #         if self.create_msg:
+    #             msg = self.iter_msg % (str(iiter).zfill(self.stoppr.zfill),
+    #                                    obj1,
+    #                                    problem.get_rnorm(cg_mdl),
+    #                                    problem.get_gnorm(cg_mdl),
+    #                                    problem.get_fevals(),
+    #                                    problem.get_gevals())
+    #             if verbose:
+    #                 print(msg)
+    #             if self.logger:
+    #                 self.logger.addToLog("\n" + msg)
 
-        # Writing last inverted model
-        self.save_results(iiter, problem, force_save=True, force_write=True)
-        if self.create_msg:
-            msg = 90 * "#" + "\n"
-            msg += "\t\t\tNON-LINEAR %s SOLVER log file end\n" % (
-                "STEEPEST-DESCENT" if self.beta_type == "SD" else "CONJUGATE GRADIENT")
-            msg += 90 * "#" + "\n"
-            if verbose:
-                print(msg.replace(" log file", ""))
-            if self.logger:
-                self.logger.addToLog(msg)
+    #         # Check if either objective function value or gradient norm is NaN
+    #         if isnan(obj1) or isnan(prblm_grad.norm()):
+    #             raise ValueError("ERROR! Either gradient norm or objective function value NaN!")
+    #         if self.stoppr.run(problem, iiter, initial_obj_value, verbose):
+    #             break
 
-        # Clear restart object
-        self.restart.clear_restart()
+    #     # Writing last inverted model
+    #     self.save_results(iiter, problem, force_save=True, force_write=True)
+    #     if self.create_msg:
+    #         msg = 90 * "#" + "\n"
+    #         msg += "\t\t\tNON-LINEAR %s SOLVER log file end\n" % (
+    #             "STEEPEST-DESCENT" if self.beta_type == "SD" else "CONJUGATE GRADIENT")
+    #         msg += 90 * "#" + "\n"
+    #         if verbose:
+    #             print(msg.replace(" log file", ""))
+    #         if self.logger:
+    #             self.logger.addToLog(msg)
 
-        return
+    #     # Clear restart object
+    #     self.restart.clear_restart()
+
+    #     return
+    
+    def perform_iteration(self, problem, verbose) -> bool:
+        self.obj = problem.get_obj(self.inv_model)
+        prblm_res = problem.get_res(self.inv_model)
+        prblm_grad = problem.get_grad(self.inv_model)
+
+        self.log_iteration_info(problem, verbose)
+        success = self.check_values(self.obj, prblm_grad, verbose)
+        if not success:
+            return False
+        
+        if self.iter == 0:
+            self.init_obj = self.obj
+            self.restart.save_parameter("obj_initial", self.init_obj)
+
+        self.save_results(problem, force_save=False)
+        self.prev_model.copy(problem.get_model())
+
+        beta = self.beta_func(prblm_grad)
+
+        self.dmodl.scaleAdd(prblm_grad, beta, -1.0)
+        self.grad0.copy(prblm_grad)
+
+        alpha, success = self.stepper.run(problem, self.inv_model, self.dmodl, self.logger)
+        if not success:
+            msg = "Stepper couldn't find a proper step size, will terminate solver"
+            self.log_message(msg, verbose)
+            problem.set_model(self.prev_model)
+            return False
+        
+        self.iter += 1
+        self.save_restart_info(alpha, prblm_res)
+
+        stop = self.stopper.run(problem, self.iter, self.init_obj, verbose)
+        
+        if stop:
+            return False
+        
+        return True
 
 
 class LBFGSBsolver(pySolver.Solver):
@@ -991,15 +1051,9 @@ class LBFGSsolver(pySolver.Solver):
 		:param save_est   : bool, save inverse Hessian estimate vectors (self.prefix must not be None) [False]
 		"""
         # Calling parent construction
-        super(LBFGSsolver, self).__init__()
-        # Defining stopper object
-        self.stopper = stopper
+        super().__init__(stopper, stepper, logger=logger)
         # Defining stepper object
         self.stepper = stepper if stepper is not None else CvSrchStep()
-        # Logger object to write on log file
-        self.logger = logger
-        # Overwriting logger of the Stopper object
-        self.stopper.logger = self.logger
         # LBFGS-specific parameters
         self.save_alpha = save_alpha
         self.H0 = H0
@@ -1007,9 +1061,38 @@ class LBFGSsolver(pySolver.Solver):
         self.save_est = save_est
         self.tmp_vector = None  # A copy of the model vector will be create when the function run is invoked
         self.iistep = 0 # necessary to re-used the estimated hessian inverse from previous runs
-        # print formatting
-        self.iter_msg = "iter = %s, obj = %.5e, resnorm = %.2e, gradnorm = %.2e, feval = %d, geval = %d"
 
+    def get_initial_message(self):
+        msg = f"{90*'#'}\n"
+        if self.m_steps is not None:
+            msg += "Limited-memory Broyden-Fletcher-Goldfarb-Shanno (L-BFGS) algorithm log file\n"
+            msg += f"Maximum number of steps to be used for Hessian inverse estimation: {self.m_steps}\n"
+        else:
+            msg += "Broyden-Fletcher-Goldfarb-Shanno (BFGS) algorithm log file\n"
+        msg += f"Restart folder: {self.restart.restart_folder}\n"
+        msg += f"{90*'#'}\n"
+        return msg
+    
+    def get_final_message(self):
+        msg = 90 * "#" + "\n"
+        if self.m_steps is not None:
+            msg += "Limited-memory Broyden-Fletcher-Goldfarb-Shanno (L-BFGS) algorithm log file end\n"
+        else:
+            msg += "Broyden-Fletcher-Goldfarb-Shanno (BFGS) algorithm log file end\n"
+        msg += 90 * "#" + "\n"
+        return msg
+    
+    def get_bfgs_message(self):
+        # Applying approximated Hessian inverse
+        msg = "Appplying inverse Hessian estimate"
+        if self.m_steps is not None:
+            msg += "\nCurrent inverse dot-products of BFGS estimation vectors %s" \
+                    % (self.rho[0:min(self.m_steps, self.iistep)])
+        else:
+            if len(self.rho) > 0:
+                msg += "\nCurrent inverse dot-products of BFGS estimation vectors %s" % self.rho
+        return msg
+    
     def save_hessian_estimate(self, index, iiter):
         """Function to save current vector of estimated Hessian inverse"""
         # index of the step to save
@@ -1097,254 +1180,387 @@ class LBFGSsolver(pySolver.Solver):
                 beta = self.rho[ii] * np.real(self.grad_diff_vectors[ii].dot(dmodl))
                 dmodl.scaleAdd(self.step_vectors[ii], 1.0, alpha[ii] - beta)
         return
-
-    def run(self, problem, verbose=False, keep_hessian=False, restart=False):
-        """
-        Running LBFGS solver
-        :param problem: problem to be minimized
-        :param verbose: verbosity flag [False]
-        :param keep_hessian: use hessian inverse estimate build from previous runs [False]
-        :param restart: restart previously crashed inversion [False]
-        """
-        # Resetting stopper before running the inversion
-        self.stopper.reset()
-        # Preliminary variables for Hessian inverse estimation
+    
+    def initialize_solver(self, problem, verbose=False, restart_path=None, keep_hessian=False):
+        super().initialize_solver(problem, verbose, restart_path)
+        
         if not keep_hessian or "rho" not in dir(self):
-            if self.m_steps is not None:
-                self.step_vectors = [None] * self.m_steps  # s_i vectors
-                self.grad_diff_vectors = [None] * self.m_steps  # y_i vectors
-                self.rho = [None] * self.m_steps  # Scalar term necessary for Hessian inverse estimation
-            else:
-                self.step_vectors = []  # s_i vectors
-                self.grad_diff_vectors = []  # y_i vectors
-                self.rho = []  # Scalar term necessary for Hessian inverse estimation
-            self.iistep = 0
+            self.initialize_hessian_variables()
 
-        if not restart:
-            msg = 90 * "#" + "\n"
-            if self.m_steps is not None:
-                msg += "Limited-memory Broyden-Fletcher-Goldfarb-Shanno (L-BFGS) algorithm log file\n"
-                msg += "Maximum number of steps to be used for Hessian inverse estimation: %s \n" % self.m_steps
-            else:
-                msg += "Broyden-Fletcher-Goldfarb-Shanno (BFGS) algorithm log file\n"
-            # Printing restart folder
-            msg += "Restart folder: %s\n" % self.restart.restart_folder
-            msg += 90 * "#" + "\n"
-            if verbose:
-                print(msg.replace("log file", ""))
-            if self.logger:
-                self.logger.addToLog(msg)
+        if restart_path:
+            self.retrieve_hessian_estimate()
 
-            # Setting internal vectors (model, search direction, and previous gradient vectors)
-            prblm_mdl = problem.get_model()
-            bfgs_mdl = prblm_mdl.clone()
-            bfgs_dmodl = prblm_mdl.clone()
-            bfgs_dmodl.zero()
-            bfgs_grad0 = bfgs_dmodl.clone()
+        self.tmp_vector = self.dmodl.clone().zero()
+        return
 
-            # Other internal variables
-            iiter = 0
-        else:
-            # Retrieving parameters and vectors to restart the solver
-            msg = "Restarting previous solver run from: %s" % self.restart.restart_folder
-            if verbose:
-                print(msg)
-            if self.logger:
-                self.logger.addToLog(msg)
-            self.restart.read_restart()
-            iiter = self.restart.retrieve_parameter("iter")
-            self.stepper.alpha = self.restart.retrieve_parameter("alpha")
-            initial_obj_value = self.restart.retrieve_parameter("obj_initial")
-            bfgs_mdl = self.restart.retrieve_vector("bfgs_mdl")
-            bfgs_dmodl = self.restart.retrieve_vector("bfgs_dmodl")
-            bfgs_grad0 = self.restart.retrieve_vector("bfgs_grad0")
-            # Setting the model and residuals to avoid residual twice computation
-            problem.set_model(bfgs_mdl)
-            prblm_mdl = problem.get_model()
-            # Setting residual vector to avoid its unnecessary computation
-            problem.set_residual(self.restart.retrieve_vector("prblm_res"))
-            # Retrieving Hessian inverse estimate
-            self.rho = self.restart.retrieve_parameter("rho")
-            self.iistep = self.restart.retrieve_parameter("iistep")
-            for istep in range(min(iiter, self.iistep)):
-                if self.m_steps is not None:
-                    if istep < self.m_steps:
-                        self.grad_diff_files[istep] = self.restart.retrieve_vector("grad_diff_vectors%s" % istep)
-                        self.step_files[istep] = self.restart.retrieve_vector("step_vectors%s.H" % istep)
-                else:
-                    self.grad_diff_files.append(self.restart.retrieve_vector("grad_diff_vectors%s" % istep))
-                    self.step_files.append(self.restart.retrieve_vector("step_vectors%s" % istep))
-
-        # Common variables unrelated to restart
-        self.tmp_vector = bfgs_dmodl.clone()
-        self.tmp_vector.zero()
-        prev_mdl = prblm_mdl.clone().zero()
-
-        # Inversion loop
-        while True:
-            # Computing objective function
-            obj0 = problem.get_obj(bfgs_mdl)  # Compute objective function value
-            prblm_res = problem.get_res(bfgs_mdl)  # Compute residuals
-            prblm_grad = problem.get_grad(bfgs_mdl)  # Compute the gradient
-            if iiter == 0:
-                initial_obj_value = obj0  # For relative objective function value
-                # Saving objective function value
-                self.restart.save_parameter("obj_initial", initial_obj_value)
-                msg = self.iter_msg % (str(iiter).zfill(self.stopper.zfill),
-                                       obj0,
-                                       problem.get_rnorm(bfgs_mdl),
-                                       problem.get_gnorm(bfgs_mdl),
-                                       problem.get_fevals(),
-                                       problem.get_gevals())
-                if verbose:
-                    print(msg)
-                # Writing on log file
-                if self.logger:
-                    self.logger.addToLog(msg)
-                # Check if either objective function value or gradient norm is NaN
-                if isnan(obj0) or isnan(prblm_grad.norm()):
-                    raise ValueError("Either gradient norm or objective function value NaN!")
-            if prblm_grad.norm() == 0.:
-                print("Gradient vanishes identically")
-                break
-
-            # Saving results
-            self.save_results(iiter, problem, force_save=False)
-            # Saving current inverted model
-            prev_mdl.copy(prblm_mdl)
-
-            # Applying approximated Hessian inverse
-            msg = "Appplying inverse Hessian estimate"
-            if self.m_steps is not None:
-                msg += "\nCurrent inverse dot-products of BFGS estimation vectors %s" \
-                       % (self.rho[0:min(self.m_steps, self.iistep)])
-            else:
-                if len(self.rho) > 0:
-                    msg += "\nCurrent inverse dot-products of BFGS estimation vectors %s" % self.rho
-            if self.logger:
-                self.logger.addToLog(msg)
-            self.BFGSMultiply(bfgs_dmodl, prblm_grad, self.iistep)
-            msg = "Done applying inverse Hessian estimate"
-            if self.logger:
-                self.logger.addToLog(msg)
-
-            # grad0 = grad
-            bfgs_grad0.copy(prblm_grad)
-            # Calling line search
-            alpha, success = self.stepper.run(problem, bfgs_mdl, bfgs_dmodl, self.logger)
-            if not success:
-                msg = "Stepper couldn't find a proper step size, will terminate solver"
-                if verbose:
-                    print(msg)
-                # Writing on log file
-                if self.logger:
-                    self.logger.addToLog(msg)
-                problem.set_model(prev_mdl)
-                break
-
-            obj1 = problem.get_obj(bfgs_mdl)  # Compute objective function value
-            # Redundant test on verifying convergence
-            if obj0 <= obj1:
-                msg = "Objective function at new point greater or equal than previous one: obj_fun_old=%s obj_fun_new=%s\n" \
-                      "Potential issue in the stepper or in revaluation of objective function!" % (obj0, obj1)
-                if self.logger:
-                    self.logger.addToLog(msg)
-                problem.set_model(prev_mdl)
-                raise ValueError(msg)
-
-            # Compute new gradient
-            prblm_grad = problem.get_grad(bfgs_mdl)
-            # Compute updates for estimated Hessian inverse
-            if self.m_steps is not None:
-                # LBFGS
-                step_index = self.iistep % self.m_steps  # Modulo to handle limited memory
-                # yn+1=gn+1-gn
-                self.grad_diff_vectors[step_index] = bfgs_grad0.clone()
-                self.grad_diff_vectors[step_index].scaleAdd(prblm_grad, -1.0, 1.0)
-                # sn+1=xn+1-xn = alpha * dmodl
-                self.step_vectors[step_index] = bfgs_dmodl.clone()
-                self.step_vectors[step_index].scale(alpha)
-            else:
-                # BFGS
-                step_index = self.iistep
-                # yn+1=gn+1-gn
-                self.grad_diff_vectors.append(bfgs_grad0.clone())
-                self.grad_diff_vectors[step_index].scaleAdd(prblm_grad, -1.0, 1.0)
-                # sn+1=xn+1-xn = alpha * dmodl
-                self.step_vectors.append(bfgs_dmodl.clone())
-                self.step_vectors[step_index].scale(alpha)
-            # rhon+1=1/yn+1'sn+1
-            denom_dot = self.grad_diff_vectors[step_index].dot(self.step_vectors[step_index])
-            # Checking rho
-            self.check_rho(denom_dot, step_index, self.iistep)
-
-            # Making first step-length value Hessian guess if not provided by user
-            if iiter == 0 and alpha != 1.0:
-                self.restart.save_parameter("fist_alpha", alpha)
-                self.H0 = pyOp.scalingOp(bfgs_dmodl, alpha) if self.H0 is None else self.H0 * pyOp.scalingOp(bfgs_dmodl,
-                                                                                                             alpha)
-                if self.logger:
-                    self.logger.addToLog("First step-length value added to first Hessian inverse estimate!")
-                self.stepper.alpha = 1.0
-
-            # Increasing iteration counter
-            iiter = iiter + 1
-            self.iistep += 1
-
-            # Using alpha = 1.0 after first iteration
-            if iiter != 0 and not self.save_alpha:
-                self.stepper.alpha = 1.0
-
-            # Saving current model and previous search direction in case of restart
-            self.restart.save_parameter("iter", iiter)
-            self.restart.save_parameter("alpha", alpha)
-            self.restart.save_vector("bfgs_mdl", bfgs_mdl)
-            self.restart.save_vector("bfgs_dmodl", bfgs_dmodl)
-            self.restart.save_vector("bfgs_grad0", bfgs_grad0)
-            # Saving Inverse Hessian estimate for restart
-            self.restart.save_parameter("rho", self.rho)
-            self.restart.save_parameter("iistep", self.iistep)
-            self.restart.save_vector("grad_diff_vectors%s" % step_index, self.grad_diff_vectors[step_index])
-            self.restart.save_vector("step_vectors%s" % step_index, self.step_vectors[step_index])
-            # Saving data space vectors
-            self.restart.save_vector("prblm_res", prblm_res)
-
-            # iteration info
-            msg = self.iter_msg % (str(iiter).zfill(self.stopper.zfill),
-                                   obj1,
-                                   problem.get_rnorm(bfgs_mdl),
-                                   problem.get_gnorm(bfgs_mdl),
-                                   problem.get_fevals(),
-                                   problem.get_gevals())
-            if verbose:
-                print(msg)
-            # Writing on log file
-            if self.logger:
-                self.logger.addToLog("\n" + msg)
-            # Check if either objective function value or gradient norm is NaN
-            if isnan(obj1) or isnan(prblm_grad.norm()):
-                raise ValueError("Either gradient norm or objective function value NaN!")
-            if self.stopper.run(problem, iiter, initial_obj_value, verbose):
-                break
-
-        # Writing last inverted model
-        self.save_results(iiter, problem, force_save=True, force_write=True)
-        msg = 90 * "#" + "\n"
+    def initialize_hessian_variables(self):
         if self.m_steps is not None:
-            msg += "Limited-memory Broyden-Fletcher-Goldfarb-Shanno (L-BFGS) algorithm log file end\n"
+            self.step_vectors = [None] * self.m_steps
+            self.grad_diff_vectors = [None] * self.m_steps
+            self.rho = [None] * self.m_steps
         else:
-            msg += "Broyden-Fletcher-Goldfarb-Shanno (BFGS) algorithm log file end\n"
-        msg += 90 * "#" + "\n"
-        if verbose:
-            print(msg.replace("log file ", ""))
-        if self.logger:
-            self.logger.addToLog(msg)
+            self.step_vectors = []
+            self.grad_diff_vectors = []
+            self.rho = []
+        self.iistep = 0
+
+    def retrieve_hessian_estimate(self):
+        self.rho = self.restart.retrieve_parameter("rho")
+        self.iistep = self.restart.retrieve_parameter("iistep")
+        for istep in range(min(self.iter, self.iistep)):
+            if self.m_steps is not None and istep < self.m_steps:
+                self.grad_diff_vectors[istep] = self.restart.retrieve_vector(f"grad_diff_vectors{istep}")
+                self.step_vectors[istep] = self.restart.retrieve_vector(f"step_vectors{istep}.H")
+            elif self.m_steps is None:
+                self.grad_diff_vectors.append(self.restart.retrieve_vector(f"grad_diff_vectors{istep}"))
+                self.step_vectors.append(self.restart.retrieve_vector(f"step_vectors{istep}"))
+
+    def perform_iteration(self, problem, verbose):
+        self.obj = problem.get_obj(self.inv_model)
+        prblm_res = problem.get_res(self.inv_model)
+        prblm_grad = problem.get_grad(self.inv_model)
+
+        self.log_iteration_info(problem, verbose)
+        success = self.check_values(self.obj, prblm_grad, verbose)
+        if not success:
+            return False
+
+        if self.iter == 0:
+            self.init_obj = self.obj
+            self.restart.save_parameter("obj_initial", self.init_obj)
+
+        self.save_results(problem, force_save=False)
+        self.prev_model.copy(problem.get_model())
+
+        # applying inverse Hessian estimate
+        self.log_message(self.get_bfgs_message(), verbose)
+        self.BFGSMultiply(self.dmodl, prblm_grad, self.iistep)
+        self.log_message("Done applying inverse Hessian estimate", verbose)
+        self.grad0.copy(prblm_grad)
+
+        alpha, success = self.stepper.run(problem, self.inv_model, self.dmodl, self.logger)
+        self.alpha = alpha
+        if not success:
+            msg = "Stepper couldn't find a proper step size, will terminate solver"
+            self.log_message(msg, verbose)
+            problem.set_model(self.prev_model)
+            return False
+        
+        # TODO can we avoid recomputing gradient?
+        prblm_grad = problem.get_grad(self.inv_model)
+        self.update_hessian_estimate(prblm_grad, alpha)
+        
+        # Making first step-length value Hessian guess if not provided by user
+        if self.iter == 0 and alpha != 1.0:
+            self.restart.save_parameter("fist_alpha", alpha)
+            self.H0 = pyOp.scalingOp(self.dmodl, alpha) if self.H0 is None else self.H0 * pyOp.scalingOp(self.dmodl, alpha)
+            self.log_message("First step-length value added to first Hessian inverse estimate!", verbose)
+            self.stepper.alpha = 1.0
+
+        self.iter += 1
+        self.iistep += 1
+
+        if self.iter != 0 and not self.save_alpha:
+            self.stepper.alpha = 1.0
+
+        self.save_restart_info(alpha, prblm_res)
+        
+        stop = self.stopper.run(problem, self.iter, self.init_obj, verbose)
+        if stop:
+            return False
+        
+        return True
+
+    def update_hessian_estimate(self, grad, alpha):
+        # Compute updates for estimated Hessian inverse
+        if self.m_steps is not None:
+            # LBFGS
+            step_index = self.iistep % self.m_steps  # Modulo to handle limited memory
+            # yn+1=gn+1-gn
+            self.grad_diff_vectors[step_index] = self.grad0.clone()
+            self.grad_diff_vectors[step_index].scaleAdd(grad, -1.0, 1.0)
+            # sn+1=xn+1-xn = alpha * dmodl
+            self.step_vectors[step_index] = self.dmodl.clone()
+            self.step_vectors[step_index].scale(alpha)
+        else:
+            # BFGS
+            step_index = self.iistep
+            # yn+1=gn+1-gn
+            self.grad_diff_vectors.append(self.grad0.clone())
+            self.grad_diff_vectors[step_index].scaleAdd(grad, -1.0, 1.0)
+            # sn+1=xn+1-xn = alpha * dmodl
+            self.step_vectors.append(self.dmodl.clone())
+            self.step_vectors[step_index].scale(alpha)
+        # rhon+1=1/yn+1'sn+1
+        denom_dot = self.grad_diff_vectors[step_index].dot(self.step_vectors[step_index])
+        # Checking rho
+        self.check_rho(denom_dot, step_index, self.iistep)
+
+    def run(self, problem, verbose=False, keep_hessian=False, restart_path=None):
+        self.initialize_solver(problem, verbose, restart_path, keep_hessian=keep_hessian)
+
+        success = True
+
+        while success:
+            success = self.perform_iteration(problem, verbose)
+        
+        self.save_results(problem, force_save=True, force_write=True)  
+        self.log_message(self.get_final_message(), verbose)
         self.restart.clear_restart()
+
         # Resetting inverse Hessian matrix
         if not keep_hessian:
             self.H0 = None
         del self.tmp_vector
         self.tmp_vector = None
+
+    # def run(self, problem, verbose=False, keep_hessian=False, restart=False):
+    #     """
+    #     Running LBFGS solver
+    #     :param problem: problem to be minimized
+    #     :param verbose: verbosity flag [False]
+    #     :param keep_hessian: use hessian inverse estimate build from previous runs [False]
+    #     :param restart: restart previously crashed inversion [False]
+    #     """
+    #     # Resetting stopper before running the inversion
+    #     self.stopper.reset()
+    #     # Preliminary variables for Hessian inverse estimation
+    #     if not keep_hessian or "rho" not in dir(self):
+    #         if self.m_steps is not None:
+    #             self.step_vectors = [None] * self.m_steps  # s_i vectors
+    #             self.grad_diff_vectors = [None] * self.m_steps  # y_i vectors
+    #             self.rho = [None] * self.m_steps  # Scalar term necessary for Hessian inverse estimation
+    #         else:
+    #             self.step_vectors = []  # s_i vectors
+    #             self.grad_diff_vectors = []  # y_i vectors
+    #             self.rho = []  # Scalar term necessary for Hessian inverse estimation
+    #         self.iistep = 0
+
+    #     if not restart:
+    #         msg = 90 * "#" + "\n"
+    #         if self.m_steps is not None:
+    #             msg += "Limited-memory Broyden-Fletcher-Goldfarb-Shanno (L-BFGS) algorithm log file\n"
+    #             msg += "Maximum number of steps to be used for Hessian inverse estimation: %s \n" % self.m_steps
+    #         else:
+    #             msg += "Broyden-Fletcher-Goldfarb-Shanno (BFGS) algorithm log file\n"
+    #         # Printing restart folder
+    #         msg += "Restart folder: %s\n" % self.restart.restart_folder
+    #         msg += 90 * "#" + "\n"
+    #         if verbose:
+    #             print(msg.replace("log file", ""))
+    #         if self.logger:
+    #             self.logger.addToLog(msg)
+
+    #         # Setting internal vectors (model, search direction, and previous gradient vectors)
+    #         prblm_mdl = problem.get_model()
+    #         bfgs_mdl = prblm_mdl.clone()
+    #         bfgs_dmodl = prblm_mdl.clone()
+    #         bfgs_dmodl.zero()
+    #         bfgs_grad0 = bfgs_dmodl.clone()
+
+    #         # Other internal variables
+    #         iiter = 0
+    #     else:
+    #         # Retrieving parameters and vectors to restart the solver
+    #         msg = "Restarting previous solver run from: %s" % self.restart.restart_folder
+    #         if verbose:
+    #             print(msg)
+    #         if self.logger:
+    #             self.logger.addToLog(msg)
+    #         self.restart.read_restart()
+    #         iiter = self.restart.retrieve_parameter("iter")
+    #         self.stepper.alpha = self.restart.retrieve_parameter("alpha")
+    #         initial_obj_value = self.restart.retrieve_parameter("obj_initial")
+    #         bfgs_mdl = self.restart.retrieve_vector("bfgs_mdl")
+    #         bfgs_dmodl = self.restart.retrieve_vector("bfgs_dmodl")
+    #         bfgs_grad0 = self.restart.retrieve_vector("bfgs_grad0")
+    #         # Setting the model and residuals to avoid residual twice computation
+    #         problem.set_model(bfgs_mdl)
+    #         prblm_mdl = problem.get_model()
+    #         # Setting residual vector to avoid its unnecessary computation
+    #         problem.set_residual(self.restart.retrieve_vector("prblm_res"))
+    #         # Retrieving Hessian inverse estimate
+    #         self.rho = self.restart.retrieve_parameter("rho")
+    #         self.iistep = self.restart.retrieve_parameter("iistep")
+    #         for istep in range(min(iiter, self.iistep)):
+    #             if self.m_steps is not None:
+    #                 if istep < self.m_steps:
+    #                     self.grad_diff_files[istep] = self.restart.retrieve_vector("grad_diff_vectors%s" % istep)
+    #                     self.step_files[istep] = self.restart.retrieve_vector("step_vectors%s.H" % istep)
+    #             else:
+    #                 self.grad_diff_files.append(self.restart.retrieve_vector("grad_diff_vectors%s" % istep))
+    #                 self.step_files.append(self.restart.retrieve_vector("step_vectors%s" % istep))
+
+    #     # Common variables unrelated to restart
+    #     self.tmp_vector = bfgs_dmodl.clone()
+    #     self.tmp_vector.zero()
+    #     prev_mdl = prblm_mdl.clone().zero()
+
+    #     # Inversion loop
+    #     while True:
+    #         # Computing objective function
+    #         obj0 = problem.get_obj(bfgs_mdl)  # Compute objective function value
+    #         prblm_res = problem.get_res(bfgs_mdl)  # Compute residuals
+    #         prblm_grad = problem.get_grad(bfgs_mdl)  # Compute the gradient
+    #         if iiter == 0:
+    #             initial_obj_value = obj0  # For relative objective function value
+    #             # Saving objective function value
+    #             self.restart.save_parameter("obj_initial", initial_obj_value)
+    #             msg = self.iter_msg % (str(iiter).zfill(self.stopper.zfill),
+    #                                    obj0,
+    #                                    problem.get_rnorm(bfgs_mdl),
+    #                                    problem.get_gnorm(bfgs_mdl),
+    #                                    problem.get_fevals(),
+    #                                    problem.get_gevals())
+    #             if verbose:
+    #                 print(msg)
+    #             # Writing on log file
+    #             if self.logger:
+    #                 self.logger.addToLog(msg)
+    #             # Check if either objective function value or gradient norm is NaN
+    #             if isnan(obj0) or isnan(prblm_grad.norm()):
+    #                 raise ValueError("Either gradient norm or objective function value NaN!")
+    #         if prblm_grad.norm() == 0.:
+    #             print("Gradient vanishes identically")
+    #             break
+
+    #         # Saving results
+    #         self.save_results(iiter, problem, force_save=False)
+    #         # Saving current inverted model
+    #         prev_mdl.copy(prblm_mdl)
+
+    #         # Applying approximated Hessian inverse
+    #         msg = "Appplying inverse Hessian estimate"
+    #         if self.m_steps is not None:
+    #             msg += "\nCurrent inverse dot-products of BFGS estimation vectors %s" \
+    #                    % (self.rho[0:min(self.m_steps, self.iistep)])
+    #         else:
+    #             if len(self.rho) > 0:
+    #                 msg += "\nCurrent inverse dot-products of BFGS estimation vectors %s" % self.rho
+    #         if self.logger:
+    #             self.logger.addToLog(msg)
+    #         self.BFGSMultiply(bfgs_dmodl, prblm_grad, self.iistep)
+    #         msg = "Done applying inverse Hessian estimate"
+    #         if self.logger:
+    #             self.logger.addToLog(msg)
+
+    #         # grad0 = grad
+    #         bfgs_grad0.copy(prblm_grad)
+    #         # Calling line search
+    #         alpha, success = self.stepper.run(problem, bfgs_mdl, bfgs_dmodl, self.logger)
+    #         if not success:
+    #             msg = "Stepper couldn't find a proper step size, will terminate solver"
+    #             if verbose:
+    #                 print(msg)
+    #             # Writing on log file
+    #             if self.logger:
+    #                 self.logger.addToLog(msg)
+    #             problem.set_model(prev_mdl)
+    #             break
+
+    #         obj1 = problem.get_obj(bfgs_mdl)  # Compute objective function value
+    #         # Redundant test on verifying convergence
+    #         if obj0 <= obj1:
+    #             msg = "Objective function at new point greater or equal than previous one: obj_fun_old=%s obj_fun_new=%s\n" \
+    #                   "Potential issue in the stepper or in revaluation of objective function!" % (obj0, obj1)
+    #             if self.logger:
+    #                 self.logger.addToLog(msg)
+    #             problem.set_model(prev_mdl)
+    #             raise ValueError(msg)
+
+    #         # Compute new gradient
+    #         prblm_grad = problem.get_grad(bfgs_mdl)
+    #         # Compute updates for estimated Hessian inverse
+    #         if self.m_steps is not None:
+    #             # LBFGS
+    #             step_index = self.iistep % self.m_steps  # Modulo to handle limited memory
+    #             # yn+1=gn+1-gn
+    #             self.grad_diff_vectors[step_index] = bfgs_grad0.clone()
+    #             self.grad_diff_vectors[step_index].scaleAdd(prblm_grad, -1.0, 1.0)
+    #             # sn+1=xn+1-xn = alpha * dmodl
+    #             self.step_vectors[step_index] = bfgs_dmodl.clone()
+    #             self.step_vectors[step_index].scale(alpha)
+    #         else:
+    #             # BFGS
+    #             step_index = self.iistep
+    #             # yn+1=gn+1-gn
+    #             self.grad_diff_vectors.append(bfgs_grad0.clone())
+    #             self.grad_diff_vectors[step_index].scaleAdd(prblm_grad, -1.0, 1.0)
+    #             # sn+1=xn+1-xn = alpha * dmodl
+    #             self.step_vectors.append(bfgs_dmodl.clone())
+    #             self.step_vectors[step_index].scale(alpha)
+    #         # rhon+1=1/yn+1'sn+1
+    #         denom_dot = self.grad_diff_vectors[step_index].dot(self.step_vectors[step_index])
+    #         # Checking rho
+    #         self.check_rho(denom_dot, step_index, self.iistep)
+
+    #         # Making first step-length value Hessian guess if not provided by user
+    #         if iiter == 0 and alpha != 1.0:
+    #             self.restart.save_parameter("fist_alpha", alpha)
+    #             self.H0 = pyOp.scalingOp(bfgs_dmodl, alpha) if self.H0 is None else self.H0 * pyOp.scalingOp(bfgs_dmodl,
+    #                                                                                                          alpha)
+    #             if self.logger:
+    #                 self.logger.addToLog("First step-length value added to first Hessian inverse estimate!")
+    #             self.stepper.alpha = 1.0
+
+    #         # Increasing iteration counter
+    #         iiter = iiter + 1
+    #         self.iistep += 1
+
+    #         # Using alpha = 1.0 after first iteration
+    #         if iiter != 0 and not self.save_alpha:
+    #             self.stepper.alpha = 1.0
+
+    #         # Saving current model and previous search direction in case of restart
+    #         self.restart.save_parameter("iter", iiter)
+    #         self.restart.save_parameter("alpha", alpha)
+    #         self.restart.save_vector("bfgs_mdl", bfgs_mdl)
+    #         self.restart.save_vector("bfgs_dmodl", bfgs_dmodl)
+    #         self.restart.save_vector("bfgs_grad0", bfgs_grad0)
+    #         # Saving Inverse Hessian estimate for restart
+    #         self.restart.save_parameter("rho", self.rho)
+    #         self.restart.save_parameter("iistep", self.iistep)
+    #         self.restart.save_vector("grad_diff_vectors%s" % step_index, self.grad_diff_vectors[step_index])
+    #         self.restart.save_vector("step_vectors%s" % step_index, self.step_vectors[step_index])
+    #         # Saving data space vectors
+    #         self.restart.save_vector("prblm_res", prblm_res)
+
+    #         # iteration info
+    #         msg = self.iter_msg % (str(iiter).zfill(self.stopper.zfill),
+    #                                obj1,
+    #                                problem.get_rnorm(bfgs_mdl),
+    #                                problem.get_gnorm(bfgs_mdl),
+    #                                problem.get_fevals(),
+    #                                problem.get_gevals())
+    #         if verbose:
+    #             print(msg)
+    #         # Writing on log file
+    #         if self.logger:
+    #             self.logger.addToLog("\n" + msg)
+    #         # Check if either objective function value or gradient norm is NaN
+    #         if isnan(obj1) or isnan(prblm_grad.norm()):
+    #             raise ValueError("Either gradient norm or objective function value NaN!")
+    #         if self.stopper.run(problem, iiter, initial_obj_value, verbose):
+    #             break
+
+    #     # Writing last inverted model
+    #     self.save_results(iiter, problem, force_save=True, force_write=True)
+    #     msg = 90 * "#" + "\n"
+    #     if self.m_steps is not None:
+    #         msg += "Limited-memory Broyden-Fletcher-Goldfarb-Shanno (L-BFGS) algorithm log file end\n"
+    #     else:
+    #         msg += "Broyden-Fletcher-Goldfarb-Shanno (BFGS) algorithm log file end\n"
+    #     msg += 90 * "#" + "\n"
+    #     if verbose:
+    #         print(msg.replace("log file ", ""))
+    #     if self.logger:
+    #         self.logger.addToLog(msg)
+    #     self.restart.clear_restart()
+    #     # Resetting inverse Hessian matrix
+    #     if not keep_hessian:
+    #         self.H0 = None
+    #     del self.tmp_vector
+    #     self.tmp_vector = None
 
 
 class MCMCsolver(pySolver.Solver):

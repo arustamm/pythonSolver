@@ -10,6 +10,7 @@ import os
 import pickle
 import re
 import numpy as np
+from math import isnan
 
 import sep_util as sepu
 from sys_util import mkdir
@@ -23,7 +24,7 @@ class Solver:
     """Solver parent object"""
 
     # Default class methods/functions
-    def __init__(self):
+    def __init__(self, stopper, stepper, logger=None):
         """Default class constructor for Solver"""
         # Parameter for saving results
         self.save_obj = False
@@ -37,6 +38,7 @@ class Solver:
         # Iteration axis-sampling parameters
         self.iter_buffer_size = None
         self.iter_sampling = 1
+        self.iter = 0
 
         # Lists of the results (list and vector Sets)
         self.obj = list()
@@ -54,7 +56,97 @@ class Solver:
         # Set Restart object
         self.restart = Restart()
         self.create_msg = False
+        
+        self.stopper = stopper
+        self.stepper = stepper
+        self.logger = logger
+        self.stopper.logger = self.logger
+        self.iter_msg = "iter = %s, obj = %.5e, gradnorm = %.2e, feval = %d, geval = %d"
         return
+    
+    def log_message(self, msg, verbose=False):
+        if verbose:
+            print(msg)
+        if self.logger:
+            self.logger.addToLog(msg)
+
+    def initialize_solver(self, problem, verbose=False, restart_path: str=None):
+        self.stopper.reset()
+        
+        if not restart_path:
+            msg = self.get_initial_message()
+            self.log_message(msg, verbose)
+            # Setting internal vectors (model, search direction, and previous gradient vectors)
+            prblm_mdl = problem.get_model()
+            self.inv_model = prblm_mdl.clone()
+            self.dmodl = prblm_mdl.clone().zero()
+            self.grad0 = self.dmodl.clone()
+            self.init_obj = None
+        else:
+            msg = f"Restarting previous solver run from: {restart_path}"
+            self.log_message(msg, verbose)
+
+            restart = Restart(restart_path)
+            
+            restart.read_restart()
+            self.iter = restart.retrieve_parameter("iter")
+            self.stepper.alpha = restart.retrieve_parameter("alpha")
+            self.init_obj = restart.retrieve_parameter("obj_initial")
+            self.inv_model = restart.retrieve_vector("solver_mdl")
+            self.dmodl = restart.retrieve_vector("solver_dmodl")
+            self.grad0 = restart.retrieve_vector("solver_grad0")
+            problem.set_model(self.inv_model)
+            problem.set_residual(restart.retrieve_vector("prblm_res"))
+
+        self.prev_model = problem.get_model().clone().zero()
+
+    def log_iteration_info(self, problem, verbose):
+        msg = self.iter_msg % (
+            str(self.iter).zfill(self.stopper.zfill),
+            self.obj,
+            problem.get_gnorm(self.inv_model),
+            problem.get_fevals(),
+            problem.get_gevals()
+        )
+        self.log_message(msg, verbose)
+
+    def check_values(self, obj, grad, verbose):
+        if isnan(obj) or isnan(grad.norm()):
+            self.log_message("Either gradient norm or objective function value NaN!", verbose)
+            return False
+        if grad.norm() == 0:
+            self.log_message("Gradient vanishes identically", verbose)
+            return False
+        return True
+
+    def save_restart_info(self, alpha, prblm_res):
+        self.restart.save_parameter("iter", self.iter)
+        self.restart.save_parameter("alpha", alpha)
+        self.restart.save_vector("solver_mdl", self.inv_model)
+        self.restart.save_vector("solver_dmodl", self.dmodl)
+        self.restart.save_vector("solver_grad0", self.grad0)
+        self.restart.save_vector("prblm_res", prblm_res)
+
+    def run(self, problem, verbose=False, restart_path=None):
+        self.initialize_solver(problem, verbose, restart_path)
+
+        success = True
+
+        while success:
+            success = self.perform_iteration(problem, verbose)
+        
+        self.save_results(problem, force_save=True, force_write=True)  
+        self.log_message(self.get_final_message(), verbose)
+        self.restart.clear_restart()
+
+    def log_final_message(self, verbose):
+        raise NotImplementedError("Subclasses must implement log_final_message")
+    
+    def get_initial_message(self):
+        raise NotImplementedError("Subclasses must implement get_initial_message")
+
+    def perform_iteration(self, problem, verbose):
+        raise NotImplementedError("Subclasses must implement perform_iteration")
 
     def __del__(self):
         """Default destructor"""
@@ -108,6 +200,7 @@ class Solver:
         self.resSet = Vec.vectorSet()       # Set for residual vectors
         self.gradSet = Vec.vectorSet()      # Set for gradient vectors
         self.inv_model = None               # Temporary saved inverted model
+        self.prev_model = None              # Previously inverted model
         self.overwrite = True               # Flag to overwrite results if first time writing on disk
 
     def flush_results(self):
@@ -145,7 +238,7 @@ class Solver:
             print("WARNING! No restart folder's path was found in %s" % log_file)
         return
 
-    def save_results(self, iiter, problem, **kwargs):
+    def save_results(self, problem, **kwargs):
         """
         Method to save results
         :param iiter        : Iteration index
@@ -178,7 +271,7 @@ class Solver:
                     self.obj_terms = np.append(self.obj_terms,
                                                np.expand_dims(np.array(deepcopy(obj_terms)), axis=0),
                                                axis=0)
-        if iiter % self.iter_sampling == 0 or force_save:
+        if self.iter % self.iter_sampling == 0 or force_save:
             if self.save_model:
                 self.modelSet.append(mod_save)
                 # Storing model vector into a temporary vector
@@ -237,22 +330,21 @@ class Solver:
                 res_file = self.prefix + "_residual.H"  # File name in which the residual vector is saved
                 self.resSet.writeSet(res_file, mode=mode)
 
-    def run(self, prblm):
-        """Dummy Solver running method"""
-        raise NotImplementedError("Implement run Solver in the derived class.")
-
 
 class Restart:
     """Class for restarting a solver run"""
 
-    def __init__(self):
+    def __init__(self, path: str=None):
         """Restart constructor"""
         self.par_dict = dict()
         self.vec_dict = dict()
-        # Restart folder in case it is necessary to write restart
-        now = datetime.datetime.now()
-        restart_folder = sepu.datapath + "restart_" + now.isoformat() + "/"
-        restart_folder = restart_folder.replace(":", "-")
+        if path:
+            restart_folder = path
+        else:
+            # Restart folder in case it is necessary to write restart
+            now = datetime.datetime.now()
+            restart_folder = sepu.datapath + "restart_" + now.isoformat() + "/"
+            restart_folder = restart_folder.replace(":", "-")
         self.restart_folder = restart_folder
         # Calling write_restart when python session dies
         atexit.register(self.write_restart)
