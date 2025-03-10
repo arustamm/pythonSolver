@@ -58,8 +58,9 @@ class vector:
         return res
 
     def __neg__(self):  # -self
-        self.scale(-1)
-        return self
+        res = self.clone()
+        res.scale(-1)
+        return res
 
     def __mul__(self, other):  # self * other
         self.checkSame(other)

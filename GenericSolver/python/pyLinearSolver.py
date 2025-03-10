@@ -5,13 +5,13 @@ import numpy as np
 zero = 10 ** (np.floor(np.log10(np.abs(float(np.finfo(np.float64).tiny)))) + 2)  # Check for avoid Overflow or Underflow
 import pySolver
 from pyProblem import ProblemLinearSymmetric
-
+from pyStepper import Stepper
 
 class LCGsolver(pySolver.Solver):
     """Linear-Conjugate Gradient and Steepest-Descent Solver parent object"""
 
     # Default class methods/functions
-    def __init__(self, stopper, steepest=False, logger=None):
+    def __init__(self, stopper, steepest=False, logger=None, proxOp=None):
         """
         Constructor for LCG/SD Solver:
         :param stopper: Stopper, object to terminate inversion
@@ -19,7 +19,7 @@ class LCGsolver(pySolver.Solver):
         :param logger: Logger, object to write inversion log file [None]
         """
         # Calling parent construction
-        super(LCGsolver, self).__init__()
+        super().__init__(stopper, Stepper(proxOp=proxOp))
         # Defining stopper object
         self.stopper = stopper
         # Whether to run steepest descent or not
@@ -126,7 +126,7 @@ class LCGsolver(pySolver.Solver):
                 break
 
             # Saving results
-            self.save_results(iiter, problem, force_save=False)
+            self.save_results(problem, force_save=False)
             prev_mdl.copy(prblm_mdl)  # Keeping the previous model
 
             # Computing alpha and beta coefficients
@@ -230,7 +230,8 @@ class LCGsolver(pySolver.Solver):
                 # dmodl = alpha * grad + beta * dmodl
                 cg_dmodl.scaleAdd(prblm_grad, beta, alpha)  # update search direction
                 # modl = modl + dmodl
-                cg_mdl.scaleAdd(cg_dmodl)  # Update model
+                # cg_mdl.scaleAdd(cg_dmodl)  # Update model
+                self.stepper.apply_step(cg_mdl, cg_dmodl, 1.)
 
             # Increasing iteration counter
             iiter += 1
@@ -315,7 +316,7 @@ class LCGsolver(pySolver.Solver):
                 break
 
         # Writing last inverted model
-        self.save_results(iiter, problem, force_save=True, force_write=True)
+        self.save_results(problem, force_save=True, force_write=True)
         if self.create_msg:
             msg = 90 * "#" + "\n"
             msg += "\t\t\t\tPRECONDITIONED " if precond else "\t\t\t\t"

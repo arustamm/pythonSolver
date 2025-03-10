@@ -7,8 +7,9 @@ class Stepper:
     """Stepper parent object"""
 
     # Default class methods/functions
-    def __init__(self):
+    def __init__(self, proxOp=None):
         """Default class constructor for Stepper"""
+        self.proxOp = proxOp
         return
 
     def __del__(self):
@@ -44,6 +45,11 @@ class Stepper:
             # alpha = -phi'(0)/phi''(0)
             alpha_guess = np.real(-dres_res / dres_dres)
         return alpha_guess
+    
+    def apply_step(self, model, dmodl, step):
+        model.scaleAdd(dmodl, sc2=step)
+        if self.proxOp:
+            self.proxOp.prox(model, model, step)
 
 
 class CvSrchStep(Stepper):
@@ -84,7 +90,7 @@ class CvSrchStep(Stepper):
     """
 
     def __init__(self, alpha=0.0, xtol=1.0e-16, ftol=1.0e-4, gtol=0.95, alpha_min=1.0e-20, alpha_max=1.e20, maxfev=20,
-                 xtrapf=4., delta=0.66):
+                 xtrapf=4., delta=0.66, proxOp=None):
         """
            CvSrch constructor:
            alpha 		 = [0.] - float; Initial step-length guess
@@ -97,6 +103,7 @@ class CvSrchStep(Stepper):
            xtrapf  	     = [4.0] - float; Scaling factor to find right limit of uncertainty interval
            delta  	     = [0.66] - float; Value to force sufficient decrease of interval size on successive iterations. Should be a positive value less than 1.
         """
+        super().__init__(proxOp=proxOp)
         self.alpha = alpha  # Initial step length guess
         self.xtol = xtol
         self.ftol = ftol
@@ -524,7 +531,7 @@ class ParabolicStep(Stepper):
     """Parabolic Stepper class with three-point interpolation"""
 
     def __init__(self, c1=1.0, c2=2.0, ntry=10, alpha=0., alpha_scale_min=1.0e-10, alpha_scale_max=2000.00, shrink=0.25,
-                 eval_parab=True):
+                 eval_parab=True, proxOp=None):
         """
            Constructor for parabolic stepper with three-point interpolation:
            c1  		   	   = [1.0] - float; Scaling factor of first search point (i.e., m1 = c1*alpha*dm + m_current)
@@ -536,6 +543,7 @@ class ParabolicStep(Stepper):
            shrink 		   = [0.25] - float; Shrinking factor if step length is not found at a given trial
            eval_parab 	   = [True] - boolean; Force parabola minimum to be computed. If False, the best point will be chosen from c1 or c2 and the parabola minimum is computed if necessary
         """
+        super().__init__(proxOp)
         self.c1 = c1  # Scaling for first tested point
         self.c2 = c2  # Scaling for second tested point
         self.ntry = ntry  # Number of total trials before re-estimating initial alpha value
@@ -592,7 +600,8 @@ class ParabolicStep(Stepper):
             if logger:
                 logger.addToLog("\tTesting point (c1=%.2e): m_current+c1*alpha*dm" % self.c1)
             model_step.copy(modl)
-            model_step.scaleAdd(dmodl, sc2=self.c1 * alpha)
+            # model_step.scaleAdd(dmodl, sc2=self.c1 * alpha)
+            self.apply_step(model_step, dmodl, self.c1 * alpha)
             # Checking if model parameters hit the bounds
             problem.set_model(model_step)
             # Projecting model onto the bounds (if any)
@@ -631,7 +640,8 @@ class ParabolicStep(Stepper):
             if logger:
                 logger.addToLog(msg)
             model_step.copy(modl)
-            model_step.scaleAdd(dmodl, sc2=self.c2 * alpha)
+            # model_step.scaleAdd(dmodl, sc2=self.c2 * alpha)
+            self.apply_step(model_step, dmodl, self.c2 * alpha)
             # Checking if model parameters hit the bounds
             problem.set_model(model_step)
             # Projecting model onto the bounds (if any)
@@ -718,7 +728,7 @@ class ParabolicStep(Stepper):
                 # Testing parabolic scale
                 # Compute new objective function at the minimum of the parabolic approximation
                 model_step.copy(modl)
-                model_step.scaleAdd(dmodl, sc2=step_scale * alpha)
+                self.apply_step(model_step, dmodl, step_scale * alpha)
                 # Checking if model parameters hit the bounds
                 problem.set_model(model_step)
                 # Projecting model onto the bounds (if any)
@@ -1011,7 +1021,7 @@ class StrongWolfe(Stepper):
        Implementation based on the ones in the GitHub repo: https://github.com/bgranzow/L-BFGS-B.git
        """
 
-    def __init__(self, c1=1.e-4, c2=0.9 , ntry=20, alpha=1., alpha_scale=0.8, alpha_max=2.5, keepAlpha=False):
+    def __init__(self, c1=1.e-4, c2=0.9 , ntry=20, alpha=1., alpha_scale=0.8, alpha_max=2.5, keepAlpha=False, proxOp=None):
         """
            Constructor for parabolic stepper assuming constant local curvature:
            c1              = [1.e-4] - float; c1 value to tests first Wolfe condition (should be between 0 and 1)
@@ -1022,6 +1032,7 @@ class StrongWolfe(Stepper):
            alpha_max       = [2.5] - float; Maximum step-length value allowed
            keepAlpha       = [False] - boolean; Whether to keep or forget previously found step-length value
         """
+        super().__init__(proxOp=proxOp)
         self.c1 = c1
         self.c2 = c2
         self.ntry = ntry  # Number of total trials before re-estimating initial alpha value
