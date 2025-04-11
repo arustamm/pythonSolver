@@ -149,6 +149,21 @@ class Problem:
                 self.fevals += 1
             self.grad_updated = True
         return self.grad
+    
+    def get_obj_grad(self, model):
+        """Accessor for objective function and gradient vector"""
+        self.set_model(model)
+        if not self.obj_updated:
+            if hasattr(self, 'objgradf'):
+                self.obj, self.grad = self.objgradf(model, self.data)
+                self.fevals += 1
+                self.gevals += 1
+                self.obj_updated = True
+                self.grad_updated = True
+            else:
+                self.obj = self.get_obj(model)
+                self.grad = self.get_grad(model)
+        return self.obj, self.grad
 
     def get_dres(self, model, dmodel):
         """Accessor for dresidual vector (i.e., application of the Jacobian to Dmodel vector)"""

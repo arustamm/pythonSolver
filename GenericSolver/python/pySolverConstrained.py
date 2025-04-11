@@ -117,7 +117,9 @@ class ADMMsolver(pySolver.Solver):
         where u is the scaled dual variable
     """
 
-    def __init__(self, proxf, proxg, outer, rho=1, mu=10, tdecr=2, tincr=2, logger=None, save_dual=False, model=None):
+    def __init__(self, proxf, proxg, outer, rho=1, 
+                 min_rho=1e-6, max_rho=1e6, rho_adjust_ratio=10, rho_decr=2, rho_incr=2, tol_prim=1.0e-32, tol_dual=1.0e-32,
+                 logger=None, save_second=False, save_dual=False, model=None):
         self.proxf = proxf
         self.proxg = proxg
         if model is None:
@@ -126,9 +128,6 @@ class ADMMsolver(pySolver.Solver):
         self.logger = logger
         # tau is equivalent to inverse of rho in Augmented Lagrangian
         self.rho = rho
-        self.mu = mu
-        self.tdecr = tdecr
-        self.tincr = tincr
         # force the same logger for inner solvers
         if hasattr(proxf, 'solver'):
             self.proxf.solver.logger = self.logger
@@ -136,39 +135,86 @@ class ADMMsolver(pySolver.Solver):
             self.proxg.solver.logger = self.logger
         self.outer = outer
         self.save_dual = save_dual
+        self.save_second = save_second
         
         self.x = model.clone().zero()
         self.z = model.clone().zero()
         self.u = model.clone().zero()
+        self.x.zero()
+        # self.z.zero()
+        self.u.zero()
+
+        # for rho adjustment
+        self.primal_res = 0
+        self.dual_res = 0
+        self.min_rho = min_rho
+        self.max_rho = max_rho
+        self.rho_adjust_ratio = rho_adjust_ratio
+        if rho_decr > 1:
+            raise ValueError("rho_decr must be less than 1")
+        if rho_incr < 1:
+            raise ValueError("rho_incr must be greater than 1")
+        self.rho_decr = rho_decr
+        self.rho_incr = rho_incr
+        self.tol_prim = tol_prim
+        self.tol_dual = tol_dual
+
 
     def get_initial_message(self):
-        msg = f"\t\t\tADMM SOLVER log file\n"
+        msg = f"\t\t\t\t\tADMM SOLVER log file\n"
         return msg
     
     def get_final_message(self):
         msg = 90 * "#" + "\n"
-        msg += "\t\t\tADMM%s SOLVER log file end\n"
+        msg += f'\t\t\t\t\tADMM%s SOLVER log file end\n'
         msg += 90 * "#" + "\n"
         return msg
     
     def get_iteration_message(self, it):
         msg = 90 * "#" + "\n"
-        msg += "\t\t\tADMM iteration %d\n" % it
+        msg += f'ADMM iter = {it}, rho = {self.rho}, prim_res = {self.primal_res:.6e}, dual_res = {self.dual_res:.6e}\n'
         msg += 90 * "#" + "\n"
-        return msg
-    
+        return msg   
         
     def run(self, verbose=False):
         self.log_message(self.get_initial_message(), verbose)
+        z_prev = self.z.clone()
         for it in range(self.outer):
             self.log_message(self.get_iteration_message(it), verbose)
+            # store previous z
+            z_prev.copy(self.z)
             # x_k+1 = proxf(z_k - u_k)
             self.proxf.prox(self.z - self.u, self.x, 1/self.rho)
             # z_k+1 = proxf(x_k+1 + u_k)
             self.proxg.prox(self.x + self.u, self.z, 1/self.rho)
+            if self.save_second and self.proxf.solver.prefix is not None:
+                second_file = self.proxf.solver.prefix + "_second.H"  
+                self.z.writeVec(second_file, mode="a")
             # u_k+1 = u_k + x_k+1 - z_k+1
             self.u.scaleAdd(self.x - self.z, 1, 1)
+            if self.save_dual and self.proxf.solver.prefix is not None:
+                dual_file = self.proxf.solver.prefix + "_dual.H"  
+                self.u.writeVec(dual_file, mode="a")
             # adjust rho
+            self.primal_res = (self.x - self.z).norm()
+            self.dual_res = self.rho * (self.z - z_prev).norm()
+            # Adjust rho based on the balance of primal and dual residuals
+            if self.primal_res > self.rho_adjust_ratio * self.dual_res:
+                # Primal residual is much larger than dual residual
+                self.rho *= self.rho_incr  # Increase rho
+                self.rho = np.clip(self.rho, self.min_rho, self.max_rho)
+                # Scale dual variables to maintain u = u / rho_incr
+                self.u.scale(1 / self.rho_incr)
+            elif self.dual_res > self.rho_adjust_ratio * self.primal_res:
+                # Dual residual is much larger than primal residual
+                self.rho /= self.rho_decr  # Decrease rho
+                self.rho = np.clip(self.rho, self.min_rho, self.max_rho)
+                # Scale dual variables to maintain u = u * tdecr
+                self.u.scale(self.rho_decr)
+
+            if self.primal_res < self.tol_prim and self.dual_res < self.tol_dual:
+                 break # Exit loop if converged
+            
         self.log_message(self.get_final_message(), verbose)
 
 

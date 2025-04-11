@@ -24,7 +24,7 @@ class Solver:
     """Solver parent object"""
 
     # Default class methods/functions
-    def __init__(self, stopper, stepper, logger=None):
+    def __init__(self, stopper, stepper, proxOp=None, logger=None):
         """Default class constructor for Solver"""
         # Parameter for saving results
         self.save_obj = False
@@ -42,6 +42,7 @@ class Solver:
 
         # Lists of the results (list and vector Sets)
         self.obj = list()
+        self.last_obj_value = None
         self.obj_terms = list()
         self.model = list()
         self.res = list()
@@ -59,6 +60,7 @@ class Solver:
         
         self.stopper = stopper
         self.stepper = stepper
+        self.stepper.proxOp = proxOp
         self.logger = logger
         self.stopper.logger = self.logger
         self.iter_msg = "iter = %s, obj = %.5e, gradnorm = %.2e, feval = %d, geval = %d"
@@ -72,6 +74,8 @@ class Solver:
 
     def initialize_solver(self, problem, verbose=False, restart_path: str=None):
         self.stopper.reset()
+        if hasattr(problem, 'objgradf') and self.save_res:
+            self.log_message("WARNING: using objgradf. Residuals are not cached! Saving will call a forward operator!", verbose)
         
         if not restart_path:
             msg = self.get_initial_message()
@@ -82,6 +86,7 @@ class Solver:
             self.dmodl = prblm_mdl.clone().zero()
             self.grad0 = self.dmodl.clone()
             self.init_obj = None
+            self.iter = 0
         else:
             msg = f"Restarting previous solver run from: {restart_path}"
             self.log_message(msg, verbose)
@@ -96,14 +101,15 @@ class Solver:
             self.dmodl = restart.retrieve_vector("solver_dmodl")
             self.grad0 = restart.retrieve_vector("solver_grad0")
             problem.set_model(self.inv_model)
-            problem.set_residual(restart.retrieve_vector("prblm_res"))
+            if not hasattr(self, 'objgradf'):
+                problem.set_residual(problem.get_res(problem.get_model()))
 
         self.prev_model = problem.get_model().clone().zero()
 
     def log_iteration_info(self, problem, verbose):
         msg = self.iter_msg % (
             str(self.iter).zfill(self.stopper.zfill),
-            self.obj,
+            self.last_obj_value,
             problem.get_gnorm(self.inv_model),
             problem.get_fevals(),
             problem.get_gevals()
@@ -119,13 +125,13 @@ class Solver:
             return False
         return True
 
-    def save_restart_info(self, alpha, prblm_res):
+    def save_restart_info(self, alpha):
         self.restart.save_parameter("iter", self.iter)
         self.restart.save_parameter("alpha", alpha)
         self.restart.save_vector("solver_mdl", self.inv_model)
         self.restart.save_vector("solver_dmodl", self.dmodl)
         self.restart.save_vector("solver_grad0", self.grad0)
-        self.restart.save_vector("prblm_res", prblm_res)
+        # self.restart.save_vector("prblm_res", prblm_res)
 
     def run(self, problem, verbose=False, restart_path=None):
         self.initialize_solver(problem, verbose, restart_path)

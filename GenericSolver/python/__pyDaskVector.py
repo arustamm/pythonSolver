@@ -402,28 +402,24 @@ class DaskVector(DaskObject, Vector.vector):
 
 
 
-class DaskSuperVector(DaskObject, Vector.superVector):
-    def __init__(self, dask_client, *vecs):
-        # DaskObject.__init__(self, dask_client, objCreator=Vector.superVector, constructor_args=vecs)
-        # vecs = [DaskVector(dask_client, from_vector=vec, ) for vec in vecs]
-        Vector.superVector.__init__(self, [vecs])
-        # self.nchunks = 1
-        # self.cls = Vector.superVector
+class DaskSuperVector(Vector.superVector):
+    def __init__(self, *vecs):
+        # DaskObject.__init__(self, dask_client, objCreator=Vector.superVector, constructor_args=[vecs])
+        Vector.superVector.__init__(self, *vecs)
+        self.nchunks = 1
+        self.cls = Vector.superVector
     
-    # def clone(self):
-    #     vecs = [v.clone() for v in self.vecs]
-    #     return DaskSuperVector(vecs)
+    def clone(self):
+        vecs = [v.clone() for v in self.vecs]
+        return DaskSuperVector(vecs)
     
     def get_futures(self):
-        return [v.get_futures() for v in self.vecs]
+        return [self]
     
     def set_futures(self, fut):
-        if len(fut) != len(self.vecs):
-            raise RuntimeError("Inconsistent number of futures and vectors!")
-        # vec = fut[0].result()
-        # self.vecs = [v.clone() for v in vec]
-        for i, v in enumerate(self.vecs):
-            v.set_futures(fut[i])
+        vec = fut[0].result()
+        self.vecs = [v.clone() for v in vec]
+
 
 def readDaskVector(vector, chunks=None) -> "DaskVector":
     """

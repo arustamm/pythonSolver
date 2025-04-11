@@ -164,12 +164,12 @@ class NLCGsolver(pySolver.Solver):
     """Non-Linear Conjugate Gradient and Steepest-Descent Solver object"""
 
     # Default class methods/functions
-    def __init__(self, stopper, stepper=None, beta_type="FR", logger=None):
+    def __init__(self, stopper, stepper=None, proxOp=None, beta_type="FR", logger=None):
         """Constructor for NLCG Solver"""
         # Calling parent construction
-        super().__init__(stopper, stepper, logger=logger)
         # Defining stepper object
         self.stepper = stepper if stepper is not None else ParabolicStep()
+        super().__init__(stopper, self.stepper, proxOp=proxOp, logger=logger)
         # Beta function to use during the inversion
         self.beta_type = beta_type
         return
@@ -412,17 +412,15 @@ class NLCGsolver(pySolver.Solver):
     #     return
     
     def perform_iteration(self, problem, verbose) -> bool:
-        self.obj = problem.get_obj(self.inv_model)
-        prblm_res = problem.get_res(self.inv_model)
-        prblm_grad = problem.get_grad(self.inv_model)
+        self.last_obj_value, prblm_grad = problem.get_obj_grad(self.inv_model)
 
         self.log_iteration_info(problem, verbose)
-        success = self.check_values(self.obj, prblm_grad, verbose)
+        success = self.check_values(self.last_obj_value, prblm_grad, verbose)
         if not success:
             return False
         
         if self.iter == 0:
-            self.init_obj = self.obj
+            self.init_obj = self.last_obj_value
             self.restart.save_parameter("obj_initial", self.init_obj)
 
         self.save_results(problem, force_save=False)
@@ -441,7 +439,7 @@ class NLCGsolver(pySolver.Solver):
             return False
         
         self.iter += 1
-        self.save_restart_info(alpha, prblm_res)
+        self.save_restart_info(alpha)
 
         stop = self.stopper.run(problem, self.iter, self.init_obj, verbose)
         
@@ -1039,7 +1037,7 @@ class TNewtonsolver(pySolver.Solver):
 class LBFGSsolver(pySolver.Solver):
     """L-BFGS (Limited-memory Broyden-Fletcher-Goldfarb-Shanno) Solver object"""
 
-    def __init__(self, stopper, stepper=None, save_alpha=False, m_steps=None, H0=None, logger=None, save_est=False):
+    def __init__(self, stopper, stepper=None, proxOp=None, save_alpha=False, m_steps=None, H0=None, logger=None, save_est=False):
         """
 		Constructor for LBFGS Solver:
 		:param stopper    : Stopper, object to terminate the solver
@@ -1051,9 +1049,9 @@ class LBFGSsolver(pySolver.Solver):
 		:param save_est   : bool, save inverse Hessian estimate vectors (self.prefix must not be None) [False]
 		"""
         # Calling parent construction
-        super().__init__(stopper, stepper, logger=logger)
         # Defining stepper object
         self.stepper = stepper if stepper is not None else CvSrchStep()
+        super().__init__(stopper, self.stepper, proxOp=proxOp, logger=logger)
         # LBFGS-specific parameters
         self.save_alpha = save_alpha
         self.H0 = H0
@@ -1216,17 +1214,17 @@ class LBFGSsolver(pySolver.Solver):
                 self.step_vectors.append(self.restart.retrieve_vector(f"step_vectors{istep}"))
 
     def perform_iteration(self, problem, verbose):
-        self.obj = problem.get_obj(self.inv_model)
+        self.last_obj_value = problem.get_obj(self.inv_model)
         prblm_res = problem.get_res(self.inv_model)
         prblm_grad = problem.get_grad(self.inv_model)
 
         self.log_iteration_info(problem, verbose)
-        success = self.check_values(self.obj, prblm_grad, verbose)
+        success = self.check_values(self.last_obj_value, prblm_grad, verbose)
         if not success:
             return False
 
         if self.iter == 0:
-            self.init_obj = self.obj
+            self.init_obj = self.last_obj_value
             self.restart.save_parameter("obj_initial", self.init_obj)
 
         self.save_results(problem, force_save=False)
@@ -1263,7 +1261,7 @@ class LBFGSsolver(pySolver.Solver):
         if self.iter != 0 and not self.save_alpha:
             self.stepper.alpha = 1.0
 
-        self.save_restart_info(alpha, prblm_res)
+        self.save_restart_info(alpha)
         
         stop = self.stopper.run(problem, self.iter, self.init_obj, verbose)
         if stop:

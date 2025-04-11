@@ -16,8 +16,42 @@ class ProxOperator:
     def __init__(self):
         raise NotImplementedError("This is an abstract class")
 
-    def prox(self, vector: vector, tau):
+    def prox(self, input: vector, output:vector, tau):
         raise NotImplementedError("This is an abstract class")
+    
+class ProxOperatorNull(ProxOperator):
+    """ 
+        Null proximal operator -- operator that does nothing
+    """
+
+    def __init__(self):
+        pass
+
+    def prox(self, input: vector, output:vector, tau):
+        pass
+    
+class ProxDstack(ProxOperator):
+    """ 
+        Proximal operator acting on superVector objects
+        y1 = | A  0 |  x1
+        y2   | 0  B |  x2
+    """
+
+    def __init__(self, prox_ops: list):
+        self.ops = []
+        if isinstance(prox_ops, list):
+            for op in prox_ops:
+                if op is None:
+                    self.ops.append(ProxOperatorNull())
+                elif isinstance(op, ProxOperator):
+                    self.ops.append(op)
+        else:
+            raise TypeError('Argument must be either ProxOperator or list of ProxOperators')
+
+
+    def prox(self, input: superVector, output: superVector, tau):
+        for i, op in enumerate(self.ops):
+            op.prox(input.vecs[i], output.vecs[i], tau)
 
 class ProxOperatorExplicit(ProxOperator):
     """ 
@@ -47,7 +81,7 @@ class ProxOperatorImplicit(ProxOperator):
         b is the data and epsilon is a regularization parameter
     """
 
-    def __init__(self, model, data, op, solver, epsilon, warm=True):
+    def __init__(self, model, data, op, solver, epsilon=1, warm=True):
         self.epsilon = epsilon
         if isinstance(op, Op.NonLinearOperator):
             self.problem = Problem.ProblemL2NonLinearReg(model, data, op, self.epsilon, prior_model=None)
@@ -69,7 +103,24 @@ class ProxOperatorImplicit(ProxOperator):
         # set the prior in ||x - u||^2 regularization term
         self.problem.prior_model = input.clone()
         self.solver.run(self.problem, verbose=True)
-        output.copy(self.problem.model)
+        output.copy(self.solver.inv_model)
 
 
-    
+class ProxOperatorFastDiffusion(ProxOperator):
+    """ 
+        Proximal operator based on the fast explicit diffusion 
+        by Sergey Fomel 
+    """
+
+    def __init__(self, op, nsteps, epsilon=1):
+        self.op = Op.ChainOperator(op, op.H)
+        self.epsilon = epsilon
+        self.nsteps = nsteps
+
+    def prox(self, input: vector, output:vector, tau):
+        output.copy(input)
+        t = output.clone()
+        for k in range(self.nsteps, 0, -1):
+            self.op.forward(False, output, t)
+            tk = 1/(4*np.sin(np.pi*k/(self.nsteps+1))**2)
+            output.scaleAdd(t, 1., -tk*self.eps)

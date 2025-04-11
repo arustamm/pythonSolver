@@ -416,7 +416,8 @@ class CvSrchStep(Stepper):
             if logger:
                 logger.addToLog("\tCurrent testing point (alpha=%.2e): m_current+alpha*dm" % alpha)
             model_step.copy(modl)
-            model_step.scaleAdd(dmodl, sc2=alpha)
+            # model_step.scaleAdd(dmodl, sc2=alpha)
+            self.apply_step(model_step, dmodl, alpha)
             # Checking if model parameters hit the bounds
             problem.set_model(model_step)
             # Projecting model onto the bounds (if any)
@@ -781,7 +782,8 @@ class ParabolicStep(Stepper):
             # Line search has finished, update model
             self.alpha = deepcopy(alpha)
             model_step.copy(modl)  # model_step = m_current
-            model_step.scaleAdd(dmodl, sc2=self.alpha)
+            # model_step.scaleAdd(dmodl, sc2=self.alpha)
+            self.apply_step(model_step, dmodl, self.alpha)
             # Checking if model parameters hit the bounds
             modl.copy(model_step)
             # Projecting model onto the bounds (if any)
