@@ -12,6 +12,7 @@ The prerequisites packages are the following:
 5. Dask (https://dask.org/)
 6. Dask Distributed (https://distributed.dask.org/en/latest/)
 7. Dask Jobqueue (https://jobqueue.dask.org/en/latest/)
+8. PyProximal (https://pyproximal.readthedocs.io/en/stable/)
 
 The first four packages can be easily installed by running:
 ```
