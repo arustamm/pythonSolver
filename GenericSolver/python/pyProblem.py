@@ -82,6 +82,13 @@ class Problem:
         self.gevals = 0
         self.counter = 0
         return
+    
+    def reset(self):
+        self.setDefaults()
+        self.dmodel.zero()
+        self.grad.zero()
+        self.res.zero()
+        self.dres.zero()
 
     def set_model(self, model):
         """Setting internal model vector"""
@@ -380,7 +387,7 @@ class ProblemL2LinearReg(Problem):
         # Setting the bounds (if any)
         super(ProblemL2LinearReg, self).__init__(minBound, maxBound, boundProj)
         # Setting internal vector
-        self.model = model
+        self.model = model.clone()
         self.dmodel = model.clone()
         self.dmodel.zero()
         # Gradient vector
@@ -856,7 +863,7 @@ class ProblemL2NonLinearReg(Problem):
         # Setting the bounds (if any)
         super(ProblemL2NonLinearReg, self).__init__(minBound, maxBound, boundProj)
         # Setting internal vector
-        self.model = model
+        self.model = model.clone()
         self.dmodel = model.clone()
         self.dmodel.zero()
         # Gradient vector

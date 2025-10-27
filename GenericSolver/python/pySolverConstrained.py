@@ -118,7 +118,7 @@ class ADMMsolver(pySolver.Solver):
     """
 
     def __init__(self, proxf, proxg, outer, rho=1, 
-                 min_rho=1e-6, max_rho=1e6, rho_adjust_ratio=10, rho_decr=2, rho_incr=2, tol_prim=1.0e-32, tol_dual=1.0e-32,
+                 min_rho=1e-6, max_rho=1e6, rho_adjust_ratio=10, rho_decr=2, rho_incr=2, tol_prim=1.0e-4, tol_dual=1.0e-4,
                  logger=None, save_second=False, save_dual=False, model=None):
         self.proxf = proxf
         self.proxg = proxg
@@ -137,11 +137,10 @@ class ADMMsolver(pySolver.Solver):
         self.save_dual = save_dual
         self.save_second = save_second
         
-        self.x = model.clone().zero()
-        self.z = model.clone().zero()
-        self.u = model.clone().zero()
-        self.x.zero()
-        # self.z.zero()
+        self.x = model.clone()
+        self.z = model.clone()
+        self.u = model.clone()
+
         self.u.zero()
 
         # for rho adjustment
@@ -150,8 +149,8 @@ class ADMMsolver(pySolver.Solver):
         self.min_rho = min_rho
         self.max_rho = max_rho
         self.rho_adjust_ratio = rho_adjust_ratio
-        if rho_decr > 1:
-            raise ValueError("rho_decr must be less than 1")
+        if rho_decr < 1:
+            raise ValueError("rho_decr must be greater than 1")
         if rho_incr < 1:
             raise ValueError("rho_incr must be greater than 1")
         self.rho_decr = rho_decr

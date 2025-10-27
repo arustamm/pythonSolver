@@ -4,7 +4,6 @@ from typing import List, Tuple
 import types
 import numpy as np
 import Hypercube
-from dask_util import DaskClient
 from dask.distributed import wait, as_completed
 from dask import persist
 from __pyDaskObject import DaskObject
@@ -18,8 +17,6 @@ class DaskVector(DaskObject, Vector.vector):
             chunks -- List corresponding to number of chunks along each dimension
         """
         #
-        if not isinstance(dask_client, DaskClient):
-            raise TypeError("Passed client is not a Dask Client object!")
         self.dask_client = dask_client
         self.client = client = self.dask_client.getClient()
 
@@ -218,89 +215,89 @@ class DaskVector(DaskObject, Vector.vector):
 
     def norm(self, N=2):
         norm = 0.
-        fut = self.client.map(self.cls.norm, self.fut, N=N)
+        fut = self.client.map(self.cls.norm, self.fut, N=N, retries=3)
         for future, result in as_completed(fut, with_results=True):
             norm += np.power(np.float64(result), N)
         return np.power(norm, 1. / N)
 
     def zero(self):
-        fut = self.client.map(self.cls.zero, self.fut, pure=False)
+        fut = self.client.map(self.cls.zero, self.fut, pure=False, retries=3)
         self.set_futures(fut)
         return self
 
     def max(self):
         """Function to obtain maximum value within a vector"""
-        maxs = self.client.gather(self.client.map(self.cls.max, self.fut))
+        maxs = self.client.gather(self.client.map(self.cls.max, self.fut), retries=3)
         return np.array(maxs).max()
 
     def min(self):
         """Function to obtain minimum value within a vector"""
-        mins = self.client.gather(self.client.map(self.cls.min, self.fut))
+        mins = self.client.gather(self.client.map(self.cls.min, self.fut), retries=3)
         return np.array(mins).min()
 
     def set(self, val):
         """Function to set all values in the vector"""
-        fut = self.client.map(self.cls.set, self.fut, val=val, pure=False)
+        fut = self.client.map(self.cls.set, self.fut, val=val, pure=False, retries=3)
         self.set_futures(fut)
         return self
 
     def scale(self, sc):
         """Function to scale a vector"""
-        fut = self.client.map(self.cls.scale, self.fut, sc=sc, pure=False)
+        fut = self.client.map(self.cls.scale, self.fut, sc=sc, pure=False, retries=3)
         self.set_futures(fut)
         return self
 
     def addbias(self, bias):
         """Function to add bias to a vector"""
-        fut = self.client.map(self.cls.addbias, self.fut, bias=bias, pure=False)
+        fut = self.client.map(self.cls.addbias, self.fut, bias=bias, pure=False, retries=3)
         self.set_futures(fut)
         return self
 
     def rand(self):
         """Function to randomize a vector"""
-        fut = self.client.map(self.cls.rand, self.fut, pure=False)
+        fut = self.client.map(self.cls.rand, self.fut, pure=False, retries=3)
         self.set_futures(fut)
         return self
 
     def abs(self):
         """Return a vector containing the absolute values"""
-        fut = self.client.map(self.cls.abs, self.fut, pure=False)
+        fut = self.client.map(self.cls.abs, self.fut, pure=False, retries=3)
         self.set_futures(fut)
         return self
 
     def sign(self):
         """Return a vector containing the signs"""
-        fut = self.client.map(self.cls.sign, self.fut, pure=False)
+        fut = self.client.map(self.cls.sign, self.fut, pure=False, retries=3)
         self.set_futures(fut)
         return self
 
     def reciprocal(self):
         """Return a vector containing the reciprocals of self"""
-        fut = self.client.map(self.cls.reciprocal, self.fut, pure=False)
+        fut = self.client.map(self.cls.reciprocal, self.fut, pure=False, retries=3)
         self.set_futures(fut)
         return self
 
     def conj(self):
         """Compute conjugate transpose of the vector"""
-        fut = self.client.map(self.cls.conj, self.fut, pure=False)
+        fut = self.client.map(self.cls.conj, self.fut, pure=False, retries=3)
         self.set_futures(fut)
         return self
 
     def real(self):
         """Return the real part of the vector"""
-        fut = self.client.map(self.cls.real, self.fut, pure=False)
+        fut = self.client.map(self.cls.real, self.fut, pure=False, retries=3)
         self.set_futures(fut)
         return self
 
     def imag(self):
         """Return the imaginary part of the vector"""
-        fut = self.client.map(self.cls.imag, self.fut, pure=False)
+        fut = self.client.map(self.cls.imag, self.fut, pure=False, retries=3)
         self.set_futures(fut)
         return self
 
     def pow(self, power):
         """Compute element-wise power of the vector"""
-        fut = self.client.map(self.cls.pow, self.fut, power=power, pure=False)
+        fut = self.client.map(self.cls.pow, self.fut, power=power, pure=False, retries=3)
         self.set_futures(fut)
         return self
 
@@ -314,12 +311,12 @@ class DaskVector(DaskObject, Vector.vector):
 
     def clone(self):
         """Function to clone (deep copy) a vector from a vector or a Space"""
-        fut = self.client.map(self.cls.clone, self.fut, pure=False)
+        fut = self.client.map(self.cls.clone, self.fut, pure=False, retries=3)
         return self.clone_from_futures(fut)
 
     def cloneSpace(self):
         """Function to clone vector space"""
-        fut = self.client.map(self.cls.clone, self.fut, pure=False)
+        fut = self.client.map(self.cls.clone, self.fut, pure=False, retries=3)
         v = self.clone_from_futures(fut)
         v.zero()
         return v
@@ -336,35 +333,35 @@ class DaskVector(DaskObject, Vector.vector):
     def checkSame(self, vec):
         """Function to check to make sure the vectors exist in the same space"""
         self.check(vec)
-        fut = self.client.map(self.cls.checkSame, self.fut, vec.fut)
+        fut = self.client.map(self.cls.checkSame, self.fut, vec.fut, retries=3)
         res = self.client.gather(fut)
         return all(res)
         
     def maximum(self, vec2):
         """Return a new vector of element-wise maximum of self and vec2"""
         self.check(vec2)
-        fut = self.client.map(self.cls.maximum, self.fut, vec2.fut, pure=False)
+        fut = self.client.map(self.cls.maximum, self.fut, vec2.fut, pure=False, retries=3)
         self.set_futures(fut)
         return self
 
     def copy(self, vec2):
         """Function to copy vector"""
         self.check(vec2)
-        fut = self.client.map(self.cls.copy, self.fut, vec2.fut, pure=False)
+        fut = self.client.map(self.cls.copy, self.fut, vec2.fut, pure=False, retries=3)
         self.set_futures(fut)
         return self
 
     def scaleAdd(self, vec2, sc1=1.0, sc2=1.0):
         """Function to scale two vectors and add them to the first one"""
         self.check(vec2)
-        fut = self.client.map(self.cls.scaleAdd, self.fut, vec2.fut, [sc1]*len(self), [sc2]*len(self), pure=False)
+        fut = self.client.map(self.cls.scaleAdd, self.fut, vec2.fut, [sc1]*len(self), [sc2]*len(self), pure=False, retries=3)
         self.set_futures(fut)
         return self
 
     def dot(self, vec2):
         """Function to compute dot product between two vectors"""
         self.check(vec2)
-        dots = self.client.map(self.cls.dot, self.fut, vec2.fut)
+        dots = self.client.map(self.cls.dot, self.fut, vec2.fut, retries=3)
         # Adding all the results together
         dot = 0.0
         for future, result in as_completed(dots, with_results=True):
@@ -374,14 +371,14 @@ class DaskVector(DaskObject, Vector.vector):
     def multiply(self, vec2):
         """Function to multiply element-wise two vectors"""
         self.check(vec2)
-        fut = self.client.map(self.cls.multiply, self.fut, vec2.fut, pure=False)
+        fut = self.client.map(self.cls.multiply, self.fut, vec2.fut, pure=False, retries=3)
         self.set_futures(fut)
         return self
 
     def isDifferent(self, vec2):
         """Function to check if two vectors are identical"""
         self.check(vec2)
-        fut = self.client.map(self.cls.isDifferent, self.fut, vec2.fut)
+        fut = self.client.map(self.cls.isDifferent, self.fut, vec2.fut, retries=3)
         results = self.client.gather(fut)
         return any(results)
 
@@ -389,7 +386,7 @@ class DaskVector(DaskObject, Vector.vector):
         """Function to bound vector values based on input vectors min and max"""
         self.checkSame(low)  # Checking low-bound vector
         self.checkSame(high)  # Checking high-bound vector
-        fut = self.client.map(self.cls.clipVector, self.fut, low.fut, high.fut, pure=False)
+        fut = self.client.map(self.cls.clipVector, self.fut, low.fut, high.fut, pure=False, retries=3)
         self.set_futures(fut)
         return self
 
@@ -398,7 +395,7 @@ class DaskVector(DaskObject, Vector.vector):
         vec_names = [
             os.getcwd() + "/" + "".join(filename.split('.')[:-1]) + "_chunk%s.H" % (
                     ii + 1) for ii in range(len(self.fut))]
-        wait(self.client.map(self.cls.writeVec, self.fut, vec_names, [mode] * len(self.fut)))
+        wait(self.client.map(self.cls.writeVec, self.fut, vec_names, [mode] * len(self.fut), retries=3))
 
 
 

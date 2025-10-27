@@ -1214,9 +1214,7 @@ class LBFGSsolver(pySolver.Solver):
                 self.step_vectors.append(self.restart.retrieve_vector(f"step_vectors{istep}"))
 
     def perform_iteration(self, problem, verbose):
-        self.last_obj_value = problem.get_obj(self.inv_model)
-        prblm_res = problem.get_res(self.inv_model)
-        prblm_grad = problem.get_grad(self.inv_model)
+        self.last_obj_value, prblm_grad = problem.get_obj_grad(self.inv_model)
 
         self.log_iteration_info(problem, verbose)
         success = self.check_values(self.last_obj_value, prblm_grad, verbose)

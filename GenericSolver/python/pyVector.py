@@ -403,13 +403,13 @@ class superVector(vector):
             if v is None:
                 continue
             elif isinstance(v, vector):
-                self.vecs.append(v)
+                self.vecs.append(v.clone())
             elif isinstance(v, list):
                 for vv in v:
                     if vv is None:
                         continue
                     elif isinstance(vv, vector):
-                        self.vecs.append(vv)
+                        self.vecs.append(vv.clone())
             else:
                 raise TypeError('Argument must be either a vector or a superVector')
 

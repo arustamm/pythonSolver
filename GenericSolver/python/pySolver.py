@@ -63,7 +63,7 @@ class Solver:
         self.stepper.proxOp = proxOp
         self.logger = logger
         self.stopper.logger = self.logger
-        self.iter_msg = "iter = %s, obj = %.5e, gradnorm = %.2e, feval = %d, geval = %d"
+        self.iter_msg = "\niter = %s, obj = %.5e, gradnorm = %.2e, feval = %d, geval = %d"
         return
     
     def log_message(self, msg, verbose=False):
@@ -74,6 +74,7 @@ class Solver:
 
     def initialize_solver(self, problem, verbose=False, restart_path: str=None):
         self.stopper.reset()
+        problem.reset()
         if hasattr(problem, 'objgradf') and self.save_res:
             self.log_message("WARNING: using objgradf. Residuals are not cached! Saving will call a forward operator!", verbose)
         

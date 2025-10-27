@@ -41,6 +41,7 @@ class LCGsolver(pySolver.Solver):
 
         # Resetting stopper before running the inversion
         self.stopper.reset()
+        problem.reset()
         # Check for preconditioning
         precond = True if "prec" in dir(problem) and problem.prec is not None else False
 
@@ -328,6 +329,8 @@ class LCGsolver(pySolver.Solver):
                 self.logger.addToLog(msg)
         # Clear restart object
         self.restart.clear_restart()
+
+        self.inv_model = cg_mdl.clone()
 
         return
 

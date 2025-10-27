@@ -59,15 +59,14 @@ class ProxOperatorExplicit(ProxOperator):
     """
 
     # Default class methods/functions
-    def __init__(self, prox_operator, epsilon=1):
+    def __init__(self, prox_operator):
         self.prox_op = prox_operator
-        self.epsilon = epsilon
 
     def prox(self, input: vector, output:vector, tau):
         arr_in = input.getNdArray()
         arr_out = output.getNdArray()
         # epsilon scaling to make it equivalent to regularized problem formulation
-        res = self.prox_op.prox(arr_in, tau * self.epsilon * self.epsilon / 2)
+        res = self.prox_op.prox(arr_in, tau)
         arr_out[:] = res.reshape(arr_in.shape)[:]
 
 class ProxOperatorImplicit(ProxOperator):
@@ -81,12 +80,11 @@ class ProxOperatorImplicit(ProxOperator):
         b is the data and epsilon is a regularization parameter
     """
 
-    def __init__(self, model, data, op, solver, epsilon=1, warm=True):
-        self.epsilon = epsilon
+    def __init__(self, model, data, op, solver, warm=True):
         if isinstance(op, Op.NonLinearOperator):
-            self.problem = Problem.ProblemL2NonLinearReg(model, data, op, self.epsilon, prior_model=None)
+            self.problem = Problem.ProblemL2NonLinearReg(model, data, op, 1, prior_model=None)
         elif isinstance(op, Op.Operator):
-            self.problem = Problem.ProblemL2LinearReg(model, data, op, self.epsilon, prior_model=None)
+            self.problem = Problem.ProblemL2LinearReg(model, data, op, 1, prior_model=None)
         else:
             raise TypeError("Provided operator should be of Operator class")
         self.solver = solver
@@ -99,7 +97,7 @@ class ProxOperatorImplicit(ProxOperator):
         # scale epsilon by the current step size tau
         if tau < 0:
             raise RuntimeError("Error in the proximal evaluation: step size is negative!")
-        self.problem.epsilon = np.sqrt(1/(tau * self.epsilon))
+        self.problem.epsilon = np.sqrt(1/tau)
         # set the prior in ||x - u||^2 regularization term
         self.problem.prior_model = input.clone()
         self.solver.run(self.problem, verbose=True)
