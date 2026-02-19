@@ -13,85 +13,105 @@ import os
 import dask
 import shutil
 import hashlib
+import uuid
+import atexit
+
+import pysep3d 
+from typing import Dict, Any
 
 # Vector class using Parquet files 
 # Operations are performed out-of-core in a streaming fashion
 class ParquetVector(pyVector.vector):
 
-    def __init__(self, path=None, df=None, data_key="data", filter=None):
-        if df is not None and isinstance(df, dd.DataFrame):
-            self.df = df.copy()
-        elif path is not None:
-            self.df = dd.read_parquet(path, 
-                        dtype_backend="pyarrow",
-                        split_row_groups=True,
-                        ignore_metadata_file=True,
-                        parquet_file_extension=None,
-                        arrow_to_pandas={
-                            "split_blocks" : True,
-                            "self_destruct" : True,
-                            "ignore_metadata" : True,
-                        }
-                    )
-        else:
-            raise RuntimeError("Must provide either path to parquet dataset or DaskDataframe!")
-        self.path = path
-        self.key = data_key
-        self.filter = filter
+    # Track all instances to manage cleanup safely
+    _temp_instances = set()
+
+    def __init__(self, 
+                 vector_reader: pysep3d.PyArrowReader,
+                 data_key: str = 'data',
+                 temp_dir: str = '/tmp',
+                 dtype=np.float32):
+        """
+        Args:
+            vector_reader: An instance of pysep3d.PyArrowReader configured for the source.
+            data_key: Column name for the vector data.
+            temp_dir: Location for temporary clone files.
+        """
+        self.temp_dir = temp_dir
+        os.makedirs(self.temp_dir, exist_ok=True)
         
+        # 1. Read Data using the provided Reader Step
+        # This applies any reader-specific logic (like to_object conversion)
+        self.df = vector_reader.create()
+        self.dtype = dtype
+        if dtype == np.complex64 or dtype == np.complex128:
+            # Convert float columns to complex
+            self.df = pysep3d.FloatToComplex().apply(self.df)
+        self.meta = self.df._meta
+
+        # Track the path for cleanup (if it came from a reader with a path)
+        self.path = vector_reader.path
+        
+        # Default cleanup behavior:
+        # If the reader points to a file in our temp dir, mark for deletion.
+        # Otherwise (e.g., input data), keep it.
+        self.remove_file = False
+        if self.path and os.path.abspath(self.path).startswith(os.path.abspath(self.temp_dir)):
+            self.remove_file = True
+
+        self.key = data_key
+        self.save_cnt = 0 # Counter for mode='a' writes
+
+        sample_trace = self.df.head(1)[self.key].iloc[0]
+        self.n_samples = len(sample_trace)
+            
+        # Register for potential cleanup
+        ParquetVector._temp_instances.add(self)
 
     # def __del__(self):
     #     """Default destructor"""
 
     def hash(self):
-        """
-            Return the combined hash across partitions
-        """        
-        # Compute hashes for each partition
-        hashes = self.df[self.key].map_partitions(
-            lambda p: hashlib.sha1(pd.util.hash_pandas_object(p).values).hexdigest(),
-            meta=pd.Series()
-            ).compute()
+
+        def _compute_partition_hash(df):
+            """Compute hash for a single partition"""
+            series = df[self.key]
+            
+            # Stack all arrays in the partition into one matrix
+            matrix = np.stack(np.asarray(series.values))
+            flat_data = matrix.flatten()
+            # Convert to bytes and hash
+            data_bytes = flat_data.tobytes()
+            hasher = hashlib.sha256(data_bytes)
+            
+            return hasher.hexdigest()
         
-        # Combine hashes of all partitions
-        combined_hash = hashlib.sha256(''.join(hashes).encode()).hexdigest()
+        # Compute hash for each partition
+        partition_hashes = self.df.map_partitions(
+            _compute_partition_hash,
+            meta=pd.Series([], dtype=str)
+        ).compute()
         
-        return combined_hash
+        # Combine all partition hashes into a single hash
+        combined = ''.join(partition_hashes.values)
+        
+        final_hash = hashlib.sha256(combined.encode()).hexdigest()
+        
+        return final_hash
 
     def isDifferent(self, vec2):
-        pass
+        return self.hash() != vec2.hash()
 
     def __add__(self, other):  # self + other
         # self.checkSame(other)
         res = self.clone()
-        def _add(series1, series2):
-            arr1 = series_to_pyarrow(series1)
-            arr2 = series_to_pyarrow(series2)
-            arr3 = pc.add(arr1, arr2)
-            list_arr = to_pyarrow_list(arr3, len(series1))
-            return pd.Series(list_arr, name=series1.name, dtype=pd.ArrowDtype(pa.list_(pa.float32())))
-        
-        res.df[self.key] = self.df[self.key].map_partitions(
-            _add, other.df[self.key],
-            meta=pd.Series([], dtype=pd.ArrowDtype(pa.list_(pa.float32())))
-        )
+        res.scaleAdd(self, sc1=1.0, sc2=1.0)
 
         return res
 
     def __iadd__(self, other):  # self + other
-        # self.checkSame(other)
-        def _add(series1, series2):
-            arr1 = series_to_pyarrow(series1)
-            arr2 = series_to_pyarrow(series2)
-            arr3 = pc.add(arr1, arr2)
-            list_arr = to_pyarrow_list(arr3, len(series1))
-            return pd.Series(list_arr, name=series1.name, dtype=pd.ArrowDtype(pa.list_(pa.float32())))
-        
-        self.df[self.key] = self.df[self.key].map_partitions(
-            _add, other.df[self.key],
-            meta=pd.Series([], dtype=pd.ArrowDtype(pa.list_(pa.float32())))
-        )
-
+        # self.checkSame(other)        
+        self.scaleAdd(other, sc1=1.0, sc2=1.0)
         return self
 
     # def __sub__(self, other):  # self - other
@@ -142,48 +162,32 @@ class ParquetVector(pyVector.vector):
     #     else:
     #         raise TypeError('other has to be either a scalar or a vector')
 
-    # # these were needed for dask
-    # def __getitem__(self, it):
-    #     arr = self.getNdArray()
-    #     return arr[it]
+    def __getitem__(self, it):
+        arr = self.getNdArray()
+        return arr[it]
 
-    # def __setitem__(self, it, val):
-    #     arr = self.getNdArray()
-    #     arr[it] = val
+    def __setitem__(self, it, val):
+        raise NotImplementedError("Setting individual items is not supported in ParquetVector")
 
     # Class vector operations
     def getNdArray(self):
         """Function to return Ndarray of the vector"""
-        return self.df[self.key]
+        return self.df[self.key].compute().to_numpy()
 
     @property
     def shape(self):
         """Property to get the vector shape (number of samples for each axis)"""
-        shape = (self.df.shape[0].compute(), )
+        shape = (self.df.shape[0].compute(), self.n_samples)
         return shape
     
     @property
     def size(self):
         """Property to compute the vector size (number of samples)"""
-        return self.df.shape[0].compute()
+        return self.shape[0] * self.shape[1]
     
     @property
     def ndim(self):
         return 2
-
-    def norm(self, N=2):
-        """Function to compute vector N-norm"""
-        def _norm(series, N):
-            arr = series_to_pyarrow(series)
-            val = pc.sum(pc.power(arr, N))
-            return pd.Series(val, dtype=pd.ArrowDtype(pa.float64()))
-        
-        partial_sums = self.df[self.key].map_partitions(
-            _norm, N, 
-            meta=pd.Series([], dtype=pd.ArrowDtype(pa.float64()))
-        ).compute()
-        return np.power(np.sum(partial_sums), 1./N)
-
 
     def zero(self):
         """Function to zero out a vector"""
@@ -192,131 +196,148 @@ class ParquetVector(pyVector.vector):
 
     def max(self):
         """Function to obtain maximum value within a vector"""
-        def _max(series):
-            arr = series_to_pyarrow(series)
-            val = pc.max(arr)
-            return pd.Series(val, dtype=pd.ArrowDtype(pa.float32()))
-        
-        partial_maxs = self.df[self.key].map_partitions(
-            _max, 
-            meta=pd.Series([], dtype=pd.ArrowDtype(pa.float32()))
-        ).compute()
-        return np.amax(partial_maxs)
+        return self.df[self.key].max().compute()
 
     def min(self):
         """Function to obtain minimum value within a vector"""
-        def _min(series):
-            arr = series_to_pyarrow(series)
-            val = pc.min(arr)
-            return pd.Series(val, dtype=pd.ArrowDtype(pa.float32()))
+        return self.df[self.key].min().compute()
+
+    def rand(self):
+        def _rand(df, ns):
+            n_traces = len(df)
+            # Generate one big block of random numbers
+            matrix = np.random.rand(n_traces, ns).astype(self.dtype)
+            df[self.key] = list(matrix)
+            return df
         
-        partial_mins = self.df[self.key].map_partitions(
-            _min, 
-            meta=pd.Series([], dtype=pd.ArrowDtype(pa.float32()))
-        ).compute()
-        return np.amin(partial_mins)
+        self.df = self.df.map_partitions(
+            _rand, self.n_samples,
+            meta=self.meta
+        )
+        return self
 
     def set(self, val):
-        """Function to set all values in the vector"""
-        def _set(series, val):
-            arr = series_to_pyarrow(series)
-            arr = pa.array(val * np.ones(len(arr), dtype=np.float32()))
-            list_array = to_pyarrow_list(arr, len(series))
-            return pd.Series(list_array, name=series.name, dtype=pd.ArrowDtype(pa.list_(pa.float32())))
-        
-        self.df[self.key] = self.df[self.key].map_partitions(
-            _set, val,
-            meta=pd.Series([], dtype=pd.ArrowDtype(pa.list_(pa.float32())))
-        )
+        def _set(df, ns):
+            n_traces = len(df)
+            matrix = np.full((n_traces, ns), val, dtype=self.dtype)
+            df[self.key] = list(matrix)
+            return df
 
+        self.df = self.df.map_partitions(
+            _set, self.n_samples,
+            meta=self.meta
+        )
         return self
 
     def scale(self, sc):
-        """Function to scale a vector"""
-        def _scale(series):
-            arr = series_to_pyarrow(series)
-            arr = pc.multiply(arr, np.float32(sc))
-            list_array = to_pyarrow_list(arr, len(series))
-            return pd.Series(list_array, name=series.name, dtype=pd.ArrowDtype(pa.list_(pa.float32())))
-        
-        self.df[self.key] = self.df[self.key].map_partitions(
-            _scale,
-            meta=pd.Series([], dtype=pd.ArrowDtype(pa.list_(pa.float32())))
-        )
+        """Scale using matrix multiplication"""
+        def _scale(df):
+            matrix = np.stack(np.asarray(df[self.key].values))
+            matrix *= sc
+            df[self.key] = list(matrix)
+            return df
 
+        self.df = self.df.map_partitions(
+            _scale,
+            meta=self.meta
+        )
+        return self
+
+    def scaleAdd(self, vec2, sc1=1.0, sc2=1.0):
+        """Vectorized ScaleAdd"""
+        def _scale_add(df1, df2):
+            m1 = np.stack(np.asarray(df1[self.key].values))
+            m2 = np.stack(np.asarray(df2[self.key].values))
+            res = m1 * sc1 + m2 * sc2
+            df1[self.key] = list(res)
+            return df1
+        
+        self.df = self.df.map_partitions(
+            _scale_add, 
+            vec2.df,
+            meta=self.meta,
+        )
         return self
 
     def addbias(self, bias):
-        """Function to add bias to a vector"""
-        def _addbias(series, bias):
-            arr = series_to_pyarrow(series)
-            arr = pc.add(arr, bias)
-            list_array = to_pyarrow_list(arr, len(series))
-            return pd.Series(list_array, name=series.name, dtype=pd.ArrowDtype(pa.list_(pa.float32())))
-        
-        self.df[self.key] = self.df[self.key].map_partitions(
-            _addbias, bias,
-            meta=pd.Series([], dtype=pd.ArrowDtype(pa.list_(pa.float32())))
+        def _bias(df):
+            matrix = np.stack(np.asarray(df[self.key].values))
+            matrix += bias
+            df[self.key] = list(matrix)
+            return df
+
+        self.df = self.df.map_partitions(
+            _bias,
+            meta=self.meta
         )
-
         return self
-
-    def rand(self):
-        """Function to randomize a vector"""
-        def _rand(series):
-            arr = series_to_pyarrow(series)
-            arr = pa.array(np.random.rand(len(arr)), type=pa.float32())
-            list_array = to_pyarrow_list(arr, len(series))
-            return pd.Series(list_array, name=series.name, dtype=pd.ArrowDtype(pa.list_(pa.float32())))
-        
-        self.df[self.key] = self.df[self.key].map_partitions(
-            _rand,
-            meta=pd.Series([], dtype=pd.ArrowDtype(pa.list_(pa.float32())))
-        )
-
-        return self
-
-    # def clone(self):
-    #     """Function to clone (deep copy) a vector from a vector or a Space"""
-    #     random_word = ''.join(random.choices(string.ascii_letters, k=5))
-    #     path = self.clone_path + "/" + random_word
-
-    #     if os.path.exists(path):
-    #         raise FileExistsError(f"The destination path '{path}' already exists.")
-    #     else:
-    #         os.makedirs(path, exist_ok=False) 
-
-    #         # Create a bag of file paths
-    #     file_paths = db.from_sequence(os.listdir(self.path))
-    #     # Apply the copy function to each file
-    #     file_paths.map(lambda file: shutil.copy2(os.path.join(self.path, file), path)).compute()
-
-    #     return ParquetVector(path, self.clone_path, data_key=self.key, filter=None)
 
     def clone(self):
-        """Function to clone a vector from a vector or a Space"""
-        return ParquetVector(df=self.df, data_key=self.key, filter=self.filter)
+        """
+        Creates a physical copy (checkpoint) using the library's Writer/Reader.
+        """
+        # 1. Generate Temp Path
+        unique_id = str(uuid.uuid4())
+        new_path = os.path.join(self.temp_dir, f"vec_{unique_id}.parquet")
+        
+        # 2. Write to disk (Checkpointing)
+        # We use pysep3d.PyArrowWriter to ensure the temp file is valid Parquet
+        writer = pysep3d.PyArrowWriter(path=new_path)
+        if self.dtype == np.complex64 or self.dtype == np.complex128:
+            # Convert complex columns to float for storage
+            self.df = pysep3d.ComplexToFloat().apply(self.df)
+        writer.write(self.df)
+        
+        # 3. Create a new Reader for the new file
+        # This breaks the Dask graph lineage
+        new_reader = pysep3d.PyArrowReader(path=new_path)
+        
+        # 4. Return new Vector
+        new_vec = ParquetVector(
+            vector_reader=new_reader,
+            data_key=self.key,
+            temp_dir=self.temp_dir
+        )
+        
+        # Explicitly mark as temporary so it gets deleted on exit
+        new_vec.remove_file = True
+        return new_vec
         
 
     # def cloneSpace(self):
     #     """Function to clone vector space"""
     #     raise NotImplementedError("cloneSpace must be overwritten")
 
-    # def checkSame(vec):
-    #     """Function to check to make sure the vectors exist in the same space"""
-    #     num_cols = vec.num_cols
-    #     num_rows = vec.num_rows
+    def checkSame(self, vec):
+        """Function to check to make sure the vectors exist in the same space"""
+        return isinstance(vec, ParquetVector) and self.shape == vec.shape
 
-    def window(self):
+    def window(self, params: Dict[str, Any]):
         """ A function to create a chunk of a Vector
             This is needed for creating DaskVector from existing Vector
         """
-        raise NotImplementedError("Need to overwrite windowing function!")
+        df = pysep3d.Window(params).apply(self.df)
+        self.df = df.copy()
+        return self
 
-    def writeVec(self, path, mode='w'):
-        """Function to write vector to file"""
-        raise NotImplementedError("writeVec must be overwritten")
+    def writeVec(self, filename, mode='w'):
+        """
+        Writes the vector to disk using pysep3d.PyArrowWriter.
+        """
+        out_path = filename
 
+        if mode == 'a':
+            os.makedirs(filename, exist_ok=True)
+            sub_name = f"iter_{str(self.save_cnt).zfill(5)}.parquet"
+            out_path = os.path.join(filename, sub_name)
+            self.save_cnt += 1
+        
+        # This ensures schema consistency and handles the 'object' -> 'list' conversion
+        writer = pysep3d.PyArrowWriter(path=out_path)
+        if self.dtype == np.complex64 or self.dtype == np.complex128:
+            # Convert complex columns to float for storage
+            self.df = pysep3d.ComplexToFloat().apply(self.df)
+        writer.write(self.df)
 
     # # TODO implement on seplib
     # def abs(self):
@@ -361,40 +382,35 @@ class ParquetVector(pyVector.vector):
     # # Combination of different vectors
 
     def copy(self, vec2):
-        """Function to copy vector"""
-        self = vec2.clone()
+        """Function to copy the content of a vector"""
+        self.df = vec2.df.copy()
         return self
 
-    def scaleAdd(self, vec2, sc1=1.0, sc2=1.0):
-        """Function to scale two vectors and add them to the first one"""
-        def _scale_add(series1, series2, sc1, sc2):
-            arr1 = series_to_pyarrow(series1)
-            arr2 = series_to_pyarrow(series2)
-            arr1 = pc.multiply_checked(arr1.values, np.float32(sc1))
-            arr2 = pc.multiply_checked(arr2.values, np.float32(sc2))
-            arr3 = pc.add(arr1, arr2)
-            list_array = to_pyarrow_list(arr3, len(series1))
-            return pd.Series(list_array, name=series1.name, dtype=pd.ArrowDtype(pa.list_(pa.float32())))
-        
-        self.df[self.key] = self.df[self.key].map_partitions(
-            _scale_add, vec2.df[self.key], sc1=sc1, sc2=sc2,
-            meta=pd.Series([], dtype=pd.ArrowDtype(pa.list_(pa.float32())))
-        )
-        
-
     def dot(self, vec2):
-        """Function to compute dot product between two vectors"""
-        def _dot(series1, series2):
-            arr1 = series_to_pyarrow(series1)
-            arr2 = series_to_pyarrow(series2)
-            val = pc.sum(pc.multiply(arr1.values, arr2.values))
-            return pd.Series(val, dtype=pd.ArrowDtype(pa.float64()))
-        
-        partial_dots = self.df[self.key].map_partitions(
-            _dot, vec2.df[self.key], 
-            meta=pd.Series([], dtype=pd.ArrowDtype(pa.float64()))
+        def _dot(df1, df2):
+            m1 = np.stack(np.asarray(df1[self.key].values)).flatten()
+            m2 = np.stack(np.asarray(df2[self.key].values)).flatten()
+            return np.vdot(m1, m2).astype(np.float64)
+
+        partial_dots = self.df.map_partitions(
+            _dot, 
+            vec2.df, 
+            meta=pd.Series([], dtype=np.float64)
         ).compute()
+        
         return np.sum(partial_dots)
+
+    def norm(self, N=2):
+        def _norm(df):
+            matrix = np.stack(np.asarray(df[self.key].values)).flatten()
+            return np.sum(np.power(np.abs(matrix), N)).astype(np.float64)
+
+        partial_sums = self.df.map_partitions(
+            _norm,
+            meta=pd.Series([], dtype=np.float64)
+        ).compute()
+        
+        return np.power(np.sum(partial_sums), 1.0/N)
 
     # def multiply(self, vec2):
     #     """Function to multiply element-wise two vectors"""
@@ -411,6 +427,18 @@ class ParquetVector(pyVector.vector):
     #     """
     #     raise NotImplementedError("clipVector must be overwritten")
 
+    @classmethod
+    def cleanup(cls):
+        for instance in list(cls._temp_instances):
+            if getattr(instance, 'remove_file', False) and instance.path:
+                if os.path.exists(instance.path):
+                    try:
+                        shutil.rmtree(instance.path)
+                    except OSError:
+                        pass
+        cls._temp_instances.clear()
+
+atexit.register(ParquetVector.cleanup)
 
 # Helper functions for pyarrow conversion
 def series_to_pyarrow(series):

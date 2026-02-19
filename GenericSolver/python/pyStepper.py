@@ -21,29 +21,21 @@ class Stepper:
         raise NotImplementedError("Implement run stepper in the derived class.")
 
     def estimate_initial_guess(self, problem, modl, dmodl, logger):
-        """Function to estimate initial step length value"""
         try:
-            # Projecting search direction in the data space
-            dres = problem.get_dres(modl, dmodl)
+            dres_res, dres_dres = problem.get_dres_res(modl, dmodl)
+            if dres_dres == 0.:
+                # ... (rest of the original logic)
+                alpha_guess = 1.0 / dmodl.norm()
+            else:
+                alpha_guess = np.real(-dres_res / dres_dres)
+                
         except NotImplementedError:
             if logger:
                 logger.addToLog(
-                    "\t!!!dresf not implemented; stepper will use inverse of search direction norm as initial step length value!!!")
+                    "\t!!!dresf/resf not implemented; stepper will use inverse of search direction norm as initial step length value!!!")
             # Initial step length value of 1.0 / |dm|_2
             alpha_guess = 1.0 / dmodl.norm()
-            return alpha_guess
-        res = problem.get_res(modl)
-        dres_res = np.real(res.dot(dres))
-        dres_dres = dres.dot(dres)
-        if dres_dres == 0.:
-            if logger:
-                logger.addToLog(
-                    "\t!!!Gradient in the null space of linear forward operator; using inverse of search direction norm as step length value!!!")
-            # Initial step length value of 1.0 / |dm|_2
-            alpha_guess = 1.0 / dmodl.norm()
-        else:
-            # alpha = -phi'(0)/phi''(0)
-            alpha_guess = np.real(-dres_res / dres_dres)
+
         return alpha_guess
     
     def apply_step(self, model, dmodl, step):
@@ -351,9 +343,7 @@ class CvSrchStep(Stepper):
                             self.xtol, self.ftol, self.gtol, self.alpha_min, self.alpha_max, self.maxfev, self.xtrapf))
         success = False
         # Obtain objective function for provided model
-        phi_init = problem.get_obj(modl)
-        # Getting pointer to problem's gradient vector
-        prblm_grad = problem.get_grad(modl)
+        phi_init, prblm_grad = problem.get_obj_grad(modl)
         dphi_init = np.real(prblm_grad.dot(dmodl))
         if dphi_init > 0.0:
             if logger:
@@ -427,7 +417,7 @@ class CvSrchStep(Stepper):
                 # Model hit bounds
                 if logger:
                     logger.addToLog("\tModel hit provided bounds. Projecting it onto them.")
-            phi_alpha = problem.get_obj(model_step)
+            phi_alpha, prblm_grad = problem.get_obj_grad(model_step)
             fev += 1
             # Checking if a NaN is encountered
             if isnan(phi_alpha):
@@ -437,7 +427,7 @@ class CvSrchStep(Stepper):
                 break
             if logger:
                 logger.addToLog("\tObjective function value of %.5e (feval = %d)" % (phi_alpha, problem.get_fevals()))
-            prblm_grad = problem.get_grad(model_step)
+
             dphi_alpha = np.real(prblm_grad.dot(dmodl))
             phi_test1 = phi_init + alpha * dphi_test
 
@@ -531,281 +521,209 @@ class CvSrchStep(Stepper):
 class ParabolicStep(Stepper):
     """Parabolic Stepper class with three-point interpolation"""
 
-    def __init__(self, c1=1.0, c2=2.0, ntry=10, alpha=0., alpha_scale_min=1.0e-10, alpha_scale_max=2000.00, shrink=0.25,
+    def __init__(self, c1=1.0, c2=0.5, ntry=10, alpha=0., alpha_scale_min=1.0e-5, alpha_scale_max=10.0, shrink=0.5,
                  eval_parab=True, proxOp=None):
         """
-           Constructor for parabolic stepper with three-point interpolation:
-           c1  		   	   = [1.0] - float; Scaling factor of first search point (i.e., m1 = c1*alpha*dm + m_current)
-           c2  		   	   = [2.0] - float; Scaling factor of first search point (i.e., m2 = c2*alpha*dm + m_current)
-           ntry  	   	   = [10] - integer; Number of trials for finding the step length
-           alpha 		   = [0.] - float; Initial step-length guess
-           alpha_scale_min = [1.0e-10] - float; Minimum scaling factor (c_optimal) for step-length allowed
-           alpha_scale_max = [1000.00] - float; Maximum scaling factor (c_optimal) for step-length allowed
-           shrink 		   = [0.25] - float; Shrinking factor if step length is not found at a given trial
-           eval_parab 	   = [True] - boolean; Force parabola minimum to be computed. If False, the best point will be chosen from c1 or c2 and the parabola minimum is computed if necessary
+           Updated Defaults for FWI Stability:
+           c2              = [0.5] - Check a smaller step by default (safer for rough gradients)
+           alpha_scale_min = [1e-5] - Allow smaller steps
+           alpha_scale_max = [10.0] - Prevent wild extrapolation
+           shrink          = [0.5] - Cut step in half on failure
         """
         super().__init__(proxOp)
-        self.c1 = c1  # Scaling for first tested point
-        self.c2 = c2  # Scaling for second tested point
-        self.ntry = ntry  # Number of total trials before re-estimating initial alpha value
-        self.alpha = alpha  # Initial step length guess
-        self.alpha_scale_min = alpha_scale_min  # Maximum scaling value for the step length
-        self.alpha_scale_max = alpha_scale_max  # Minimum scaling value for the step length
-        self.shrink = shrink  # Shrinking scaling factor if trial is unsuccessful
+        self.c1 = c1  
+        self.c2 = c2  
+        self.ntry = ntry  
+        self.alpha = alpha  
+        self.alpha_scale_min = alpha_scale_min  
+        self.alpha_scale_max = alpha_scale_max  
+        self.shrink = shrink  
         self.zero = 10 ** (np.floor(
-            np.log10(np.abs(float(np.finfo(np.float64).tiny)))) + 2)  # Check for avoid Overflow or Underflow
+            np.log10(np.abs(float(np.finfo(np.float64).tiny)))) + 2) 
         self.eval_parab = eval_parab
         return
 
     def run(self, problem, modl, dmodl, logger=None):
         """Method to apply parabolic stepper"""
-        # Writing to log file if any
-        global obj1
+        
+
+        obj0, prblm_grad = problem.get_obj_grad(modl)
+        dphi = np.real(prblm_grad.dot(dmodl))
+
         if logger:
             logger.addToLog("PARABOLIC STEPPER USING THREE-POINT INTERPOLATION")
-            logger.addToLog("c1=%.2e c2=%.2e ntry=%d steplength-scaling-min=%.2e steplength-scaling-max=%.2e shrinking-factor=%.2e"
-                            % (self.c1, self.c2, self.ntry, self.alpha_scale_min, self.alpha_scale_max, self.shrink))
+            logger.addToLog("c1=%.2e c2=%.2e ntry=%d shrink=%.2e"
+                            % (self.c1, self.c2, self.ntry, self.shrink))
+
         success = False
-        # Obtain objective function for provided model
-        obj0 = problem.get_obj(modl)
-        # Model temporary vector
-        model_step = modl.clone()
-        # Getting pointer to problem's model vector
-        prblm_mdl = problem.get_model()
-        # Initial step length value
-        alpha = deepcopy(self.alpha)
-        # Checking if current search direction is a descending one
-        prblm_grad = problem.get_grad(prblm_mdl)
-        dphi = np.real(prblm_grad.dot(dmodl))
+        
+        # Verify descent direction
         if dphi > 0.0:
             if logger:
                 logger.addToLog("\tWarning! Current search direction is not a descent one!")
-            return alpha, success
+            return self.alpha, success
+
+        # Model temporary vector
+        model_step = modl.clone()
+        
+        # Initial step length value
+        alpha = deepcopy(self.alpha)
+        
         itry = 1
         total_trials = deepcopy(self.ntry)
         if alpha != 0.:
-            # If initial step length is different than zero, we test twice in case we need to re-estimate initial alpha
             total_trials *= 2
+            
         while itry <= total_trials:
-            # Writing info to log file
             if logger:
                 logger.addToLog("\ttrial number: %d" % itry)
-                logger.addToLog("\tinitial-steplength=%.2e" % alpha)
-            # Find the first guess as if the problem was linear (Tangent method)
+
             if (itry == self.ntry) or (alpha < self.zero):
                 alpha = self.estimate_initial_guess(problem, modl, dmodl, logger)
                 if logger:
                     logger.addToLog("\tGuessing step length of: %.2e" % alpha)
-            # Test values of objective function for two scaled versions of the step length
-            # Testing c1 scale
+
             if logger:
                 logger.addToLog("\tTesting point (c1=%.2e): m_current+c1*alpha*dm" % self.c1)
+            
             model_step.copy(modl)
-            # model_step.scaleAdd(dmodl, sc2=self.c1 * alpha)
             self.apply_step(model_step, dmodl, self.c1 * alpha)
-            # Checking if model parameters hit the bounds
-            problem.set_model(model_step)
-            # Projecting model onto the bounds (if any)
+            
+            # Handle Bounds
             if "bounds" in dir(problem):
                 problem.bounds.apply(model_step)
-            if prblm_mdl.isDifferent(model_step):
-                # Model hit bounds
-                msg = "\tModel hit provided bounds. Projecting it onto them."
-                if logger:
-                    logger.addToLog(msg)
+
+            if problem.get_model().isDifferent(model_step):
+                 if logger: logger.addToLog("\tModel hit provided bounds.")
+
             obj1 = problem.get_obj(model_step)
-            # Copying residuals for point c1
-            res_prblm = problem.get_res(model_step)
-            res1 = res_prblm.clone()
+            
             if logger:
                 logger.addToLog("\tObjective function value of %.5e" % obj1)
-            # Checking if a NaN is encountered in any of the two tested points
+
+            # Handle NaN
             if isnan(obj1):
-                if logger:
-                    logger.addToLog("\t!!!Problem with step length and objective function!!!")
+                if logger: logger.addToLog("\t!!!NaN encountered at c1!!!")
                 if itry >= self.ntry:
-                    if logger:
-                        logger.addToLog("\t!!!Check problem definition or change solver!!!")
-                    # Setting model to current one and resetting initial step length value
                     alpha = 0.0
                     self.alpha = 0.0
                     problem.set_model(modl)
                     break
                 else:
-                    if logger:
-                        logger.addToLog("\t!!!Guessing linear step length to try to solve problem!!!")
-                    itry = self.ntry  # To not repeat computation of linear guess
+                    itry = self.ntry 
                     continue
-            # Testing c2 scale
-            msg = "\tTesting point (c2=%.2e): m_current+c2*alpha*dm" % self.c2
+
             if logger:
-                logger.addToLog(msg)
+                logger.addToLog("\tTesting point (c2=%.2e): m_current+c2*alpha*dm" % self.c2)
+            
             model_step.copy(modl)
-            # model_step.scaleAdd(dmodl, sc2=self.c2 * alpha)
             self.apply_step(model_step, dmodl, self.c2 * alpha)
-            # Checking if model parameters hit the bounds
-            problem.set_model(model_step)
-            # Projecting model onto the bounds (if any)
+            
             if "bounds" in dir(problem):
                 problem.bounds.apply(model_step)
-            if prblm_mdl.isDifferent(model_step):
-                # Model hit bounds
-                msg = "\tModel hit provided bounds. Projecting it onto them."
-                if logger:
-                    logger.addToLog(msg)
+
+            # Evaluate Objective ONLY
             obj2 = problem.get_obj(model_step)
-            # Copying residuals for point c1
-            res_prblm = problem.get_res(model_step)
-            res2 = res_prblm.clone()
+
             if logger:
                 logger.addToLog("\tObjective function value of %.5e" % obj2)
-            # Checking for NaN
+
             if isnan(obj2):
-                if logger:
-                    logger.addToLog("\t!!!Problem with step length and objective function!!!")
+                if logger: logger.addToLog("\t!!!NaN encountered at c2!!!")
                 if itry >= self.ntry:
-                    if logger:
-                        logger.addToLog("\t!!!Check problem definition or change solver!!!")
-                    # Setting model to current one and resetting initial step length value
                     alpha = 0.0
                     self.alpha = 0.0
                     problem.set_model(modl)
                     break
                 else:
-                    if logger:
-                        logger.addToLog("\t!!!Guessing linear step length to try to solve problem!!!")
-                    itry = self.ntry  # To not repeat computation of linear guess
+                    itry = self.ntry 
                     continue
-            # Checking if parabolic point is necessary or not
+            
+            # Check for fast exit (if one point is good enough and we don't demand parabola)
             if not self.eval_parab:
-                # Setting third point to infinity
                 obj3 = np.inf
-                # Check which one is the best step length
-                msg = "\n\tAs requested, parabola minimum was not evaluated! Unless necessary!"
-                if obj1 < obj0 and obj1 < obj2 and obj1 < obj3:
+                msg = "\n\tParabola evaluation skipped."
+                if obj1 < obj0 and obj1 < obj2:
                     success = True
                     alpha *= self.c1
-                    if logger:
-                        logger.addToLog("\tc1 best step-length value of: %.2e (feval = %d)" % (alpha, problem.get_fevals() - 1) + msg)
+                    if logger: logger.addToLog("\tc1 picked (feval = %d)" % (problem.get_fevals() - 1) + msg)
                     break
-                elif obj2 < obj0 and obj2 < obj1 and obj2 < obj3:
+                elif obj2 < obj0 and obj2 < obj1:
                     success = True
                     alpha *= self.c2
-                    if logger:
-                        logger.addToLog("\tc2 best step-length value of: %.2e (feval = %d)" % (alpha, problem.get_fevals()) + msg)
+                    if logger: logger.addToLog("\tc2 picked (feval = %d)" % (problem.get_fevals()) + msg)
                     break
-            # If points lay on a horizontal line pick minimum alpha set by user
-            if obj0 == obj1 == obj2 or (self.c2 * (obj1 - obj0) + self.c1 * (obj0 - obj2)) == 0.:
-                step_scale = self.alpha_scale_min
-                if logger:
-                    logger.addToLog("\tTwo testing points on a line: cannot fit a parabola, using minimum step-length of %.2e"
-                                    % (step_scale * alpha))
-            else:
-                # Otherwise, find the optimal parabolic step length
-                step_scale = 0.5 * (self.c2 * self.c2 * (obj1 - obj0) + self.c1 * self.c1 * (obj0 - obj2)) / (
-                        self.c2 * (obj1 - obj0) + self.c1 * (obj0 - obj2))
-                if logger:
-                    logger.addToLog("\tTesting point (c_opt=%.2e): m_current+c_opt*alpha*dm (parabola minimum)" % step_scale)
-            # If step length negative, re-evaluate points
-            if step_scale < 0.:
-                if logger:
-                    logger.addToLog("\tEncountered a negative step-length value: %.2e; Setting parabola-minimum objective function to infinity."
-                                    % (step_scale * alpha))
-                # Skipping parabola minimum and setting obj3 to infinity
-                obj3 = np.inf
-            else:
-                # Clipping the step-length scale
-                if step_scale < self.alpha_scale_min:
-                    if logger:
-                        logger.addToLog("\t!!! step-length scale of %.2e smaller than provided lower bound."
-                                        "Clipping its value to bound value of %.2e !!!" % (step_scale, self.alpha_scale_min))
-                    step_scale = self.alpha_scale_min
-                elif step_scale > self.alpha_scale_max:
-                    if logger:
-                        logger.addToLog("\t!!! step-length scale of %.2e greater than provided upper bound."
-                                        "Clipping its value to bound value of %.2e !!!" % (step_scale, self.alpha_scale_max))
-                    step_scale = self.alpha_scale_max
 
-                # Testing parabolic scale
-                # Compute new objective function at the minimum of the parabolic approximation
+            # Fit Parabola to (0, obj0), (c1, obj1), (c2, obj2)
+            # Denominator check
+            denom = (self.c2 * (obj1 - obj0) + self.c1 * (obj0 - obj2))
+            
+            if obj0 == obj1 == obj2 or denom == 0.:
+                step_scale = self.alpha_scale_min
+                if logger: logger.addToLog("\tPoints collinear, using min step.")
+            else:
+                # Optimal scale factor
+                step_scale = 0.5 * (self.c2 * self.c2 * (obj1 - obj0) + self.c1 * self.c1 * (obj0 - obj2)) / denom
+                if logger: logger.addToLog("\tParabola Minimum estimated at scale: %.2e" % step_scale)
+
+            # Sanity check parabolic result
+            if step_scale < 0.:
+                if logger: logger.addToLog("\tNegative parabolic step. Rejecting.")
+                obj3 = np.inf # Reject negative steps
+            else:
+                # Clip scaling
+                step_scale = max(min(step_scale, self.alpha_scale_max), self.alpha_scale_min)
+
                 model_step.copy(modl)
                 self.apply_step(model_step, dmodl, step_scale * alpha)
-                # Checking if model parameters hit the bounds
-                problem.set_model(model_step)
-                # Projecting model onto the bounds (if any)
+                
                 if "bounds" in dir(problem):
                     problem.bounds.apply(model_step)
-                if prblm_mdl.isDifferent(model_step):
-                    # Model hit bounds
-                    msg = "\tModel hit provided bounds. Projecting it onto them."
-                    if logger:
-                        logger.addToLog(msg)
-                obj3 = problem.get_obj(model_step)
-                if logger:
-                    logger.addToLog("\tObjective function value of %.5e" % obj3)
 
-            # Writing info to log file
-            if logger:
-                logger.addToLog("\tInitial objective function value: %.5e,"
-                                "Objective function at c1*alpha*dm: %.5e,"
-                                "Objective function at c2*alpha*dm: %.5e,"
-                                "Objective function at parabola minimum: %.5e"
-                                % (obj0, obj1, obj2, obj3))
+                obj3 = problem.get_obj(model_step)
+                if logger: logger.addToLog("\tObjective function at parabola min: %.5e" % obj3)
+
             itry += 1
 
-            # Check which one is the best step length
-            if obj1 < obj0 and obj1 < obj2 and obj1 < obj3:
+            # We accept ANY point that is lower than obj0 (start)
+            # We prefer the lowest of the three.
+            
+            if obj1 < obj0 and obj1 <= obj2 and obj1 <= obj3:
                 success = True
                 alpha *= self.c1
-                if logger:
-                    logger.addToLog("\tc1 best step-length value of: %.2e (feval = %d)" % (alpha, problem.get_fevals() - 2))
+                if logger: logger.addToLog("\tc1 best step-length: %.2e" % alpha)
                 break
-            elif obj2 < obj0 and obj2 < obj1 and obj2 < obj3:
+            elif obj2 < obj0 and obj2 <= obj1 and obj2 <= obj3:
                 success = True
                 alpha *= self.c2
-                if logger:
-                    logger.addToLog("\tc2 best step-length value of: %.2e (feval = %d)" % (alpha, problem.get_fevals() - 1))
+                if logger: logger.addToLog("\tc2 best step-length: %.2e" % alpha)
                 break
             elif obj3 < obj0 and obj3 <= obj1 and obj3 <= obj2:
                 success = True
                 alpha *= step_scale
-                if logger:
-                    logger.addToLog("\tparabola minimum best step-length value of: %.2e (feval = %d)" % (alpha, problem.get_fevals()))
+                if logger: logger.addToLog("\tParabola min best step-length: %.2e" % alpha)
                 break
             else:
-                # Shrink line search
+                # No descent found? Shrink and try again
                 alpha *= self.shrink
-                if logger:
-                    logger.addToLog("\tShrinking search direction")
+                if logger: logger.addToLog("\tNo descent found. Shrinking search direction.")
 
         if success:
-            # Line search has finished, update model
             self.alpha = deepcopy(alpha)
-            model_step.copy(modl)  # model_step = m_current
-            # model_step.scaleAdd(dmodl, sc2=self.alpha)
+            # Update model to the winner
+            model_step.copy(modl)
             self.apply_step(model_step, dmodl, self.alpha)
-            # Checking if model parameters hit the bounds
-            modl.copy(model_step)
-            # Projecting model onto the bounds (if any)
+            
+            # Final Bound Check
             if "bounds" in dir(problem):
                 problem.bounds.apply(model_step)
-            if modl.isDifferent(model_step):
-                # Computing true scaled search direction dm = m_new_clipped - m_current
-                dmodl.copy(model_step)
-                dmodl.scaleAdd(modl, 1.0, -1.0)
-                # Scaled by the inverse of the step length
-                dmodl.scale(1.0 / self.alpha)
-            # Setting model and residual vectors to c1 or c2 point if parabola minimum is not picked
-            problem.set_model(model_step)
-            if obj1 < obj0 and obj1 < obj2 and obj1 < obj3:
-                problem.set_residual(res1)
-            elif obj2 < obj0 and obj2 < obj1 and obj2 < obj3:
-                problem.set_residual(res2)
+            
+            # Copy back to modl
             modl.copy(model_step)
-        # Delete temporary vectors
-        del model_step, res1, res2
-        return alpha, success
+            problem.set_model(modl)
 
+        del model_step
+        return alpha, success
 
 class ParabolicStepConst(Stepper):
     """Parabolic Stepper class assuming constant local curvature"""

@@ -1,467 +1,453 @@
-import numpy as np
-import dask.array as da
-import dask.dataframe as dd
-import zarr
-from pathlib import Path
-from typing import Optional, Union
-import hashlib
 import pyVector
-import pyarrow as pa
-import pyarrow.parquet as pq
+import numpy as np
+import zarr
+import dask.array as da
+import os
+import shutil
+import uuid
+import weakref
+import atexit
+from typing import Tuple, List, Union
+import hashlib
 
 class ZarrVector(pyVector.vector):
-    """
-    Vector class that separates headers (Dask DataFrame) and data (Dask Array).
-    
-    This avoids PyArrow list type issues and uses appropriate data structures:
-    - Headers: Dask DataFrame (tabular metadata)
-    - Data: Dask Array (numerical traces)
-    
-    Attributes:
-        headers: Dask DataFrame with metadata (trace_id, sx, sy, etc.)
-        data: Dask Array with trace amplitudes (n_traces, n_samples)
-    """
-    
+    _temp_instances = weakref.WeakSet()
+
     def __init__(self, 
-                 headers_path: Optional[Union[str, Path]] = None,
-                 traces_path: Optional[Union[str, Path]] = None,
-                 headers: Optional[dd.DataFrame] = None,
-                 data: Optional[da.Array] = None):
-        """
-        Initialize from either paths or existing Dask objects.
+                 path: str = None, 
+                 ns_list: List[int] = None,
+                 ds_list: List[float] = None,
+                 os_list: List[float] = None, 
+                 shape: Tuple[int] = None, 
+                 chunks: Tuple[int] = None,
+                 shards: Tuple[int] = None, 
+                 dtype: np.dtype = np.float32, 
+                 existing_zarr_array = None,
+                 temp_dir: str = '/tmp/',
+                 overwrite: bool = False,
+                 remove_file: bool = False):
         
-        Args:
-            headers_path: Path to Parquet file with headers
-            traces_path: Path to Zarr array with traces
-            headers: Existing Dask DataFrame
-            data: Existing Dask Array
-        """
-        if headers is not None and data is not None:
-            # Initialize from existing Dask objects
-            self.headers = headers
-            self.data = data
-        elif headers_path is not None and traces_path is not None:
-            # Load from disk
-            self.headers = dd.read_parquet(headers_path, 
-                        dtype_backend="pyarrow",
-                        split_row_groups=True,
-                        ignore_metadata_file=True,
-                        parquet_file_extension=None,
-                        arrow_to_pandas={
-                            "split_blocks" : True,
-                            "self_destruct" : True,
-                            "ignore_metadata" : True,
-                        },
-                    )
-            self.data = da.from_zarr(traces_path)
-        else:
-            raise ValueError("Must provide either (headers_path, traces_path) or (headers, data)")
+        self.remove_file = remove_file
+        self._temp_dir = temp_dir
+        if not os.path.exists(self._temp_dir):
+            os.makedirs(self._temp_dir, exist_ok=True)
+
+        # 1. Determine Shape
+        if existing_zarr_array is None and shape is None and ns_list is not None:
+            shape = tuple(reversed(ns_list))
         
-        # Validate shapes match
-        if self.headers.shape[0].compute() != self.data.shape[0]:
-            raise ValueError(
-                f"Shape mismatch: headers has {self.headers.shape[0].compute()} rows "
-                f"but data has {self.data.shape[0]} rows"
-            )
-    
-    # ============================================
-    # Properties
-    # ============================================
-    
-    @property
-    def shape(self):
-        """Shape of the data array (n_traces, n_samples)"""
-        return self.data.shape
-    
-    @property
-    def size(self):
-        """Total number of elements in data"""
-        return self.data.size
-    
-    @property
-    def ndim(self):
-        """Number of dimensions in data"""
-        return self.data.ndim
-    
-    @property
-    def n_traces(self):
-        """Number of traces"""
-        return self.data.shape[0]
-    
-    @property
-    def n_samples(self):
-        """Number of samples per trace"""
-        return self.data.shape[1]
-    
-    # ============================================
-    # Array Operations (delegated to Dask Array)
-    # ============================================
-    
-    def __add__(self, other):
-        """self + other"""
-        if isinstance(other, ZarrVector):
-            return ZarrVector(
-                headers=self.headers.copy(),
-                data=self.data + other.data
-            )
-        else:
-            # Scalar addition
-            return ZarrVector(
-                headers=self.headers.copy(),
-                data=self.data + other
-            )
-    
-    def __iadd__(self, other):
-        """self += other"""
-        if isinstance(other, ZarrVector):
-            self.data = self.data + other.data
-        else:
-            self.data = self.data + other
-        return self
-    
-    def __sub__(self, other):
-        """self - other"""
-        if isinstance(other, ZarrVector):
-            return ZarrVector(
-                headers=self.headers.copy(),
-                data=self.data - other.data
-            )
-        else:
-            return ZarrVector(
-                headers=self.headers.copy(),
-                data=self.data - other
-            )
-    
-    def __mul__(self, other):
-        """self * other"""
-        if isinstance(other, ZarrVector):
-            return ZarrVector(
-                headers=self.headers.copy(),
-                data=self.data * other.data
-            )
-        else:
-            return ZarrVector(
-                headers=self.headers.copy(),
-                data=self.data * other
-            )
-    
-    def __truediv__(self, other):
-        """self / other"""
-        if isinstance(other, ZarrVector):
-            return ZarrVector(
-                headers=self.headers.copy(),
-                data=self.data / other.data
-            )
-        else:
-            return ZarrVector(
-                headers=self.headers.copy(),
-                data=self.data / other
-            )
-    
-    def __neg__(self):
-        """- self"""
-        return ZarrVector(
-            headers=self.headers.copy(),
-            data=-self.data
-        )
-    
-    def __getitem__(self, key):
-        """Support indexing"""
-        # This is complex - need to slice both headers and data consistently
-        if isinstance(key, (int, slice)):
-            return ZarrVector(
-                headers=self.headers.iloc[key],
-                data=self.data[key]
-            )
-        else:
-            raise NotImplementedError("Advanced indexing not yet supported")
-    
-    # ============================================
-    # Vector Operations
-    # ============================================
-    
-    def norm(self, ord=2):
-        """Compute vector norm"""
-        return da.linalg.norm(self.data.flatten(), ord=ord).compute()
-    
-    def dot(self, other):
-        """Dot product with another vector"""
-        if not isinstance(other, ZarrVector):
-            raise TypeError("Can only dot with another ZarrVector")
-        
-        # Flatten and compute dot product
-        return da.dot(self.data.flatten(), other.data.flatten()).compute()
-    
-    def max(self):
-        """Maximum value in data"""
-        return self.data.max().compute()
-    
-    def min(self):
-        """Minimum value in data"""
-        return self.data.min().compute()
-    
-    def mean(self):
-        """Mean value in data"""
-        return self.data.mean().compute()
-    
-    def std(self):
-        """Standard deviation of data"""
-        return self.data.std().compute()
-    
-    # ============================================
-    # In-place Modifications
-    # ============================================
-    
-    def zero(self):
-        """Zero out the data"""
-        self.data = da.zeros_like(self.data)
-        return self
-    
-    def set(self, value):
-        """Set all values to a constant"""
-        self.data = da.full_like(self.data, value, dtype=self.data.dtype)
-        return self
-    
-    def scale(self, factor):
-        """Scale data by a factor"""
-        self.data = self.data * factor
-        return self
-    
-    def rand(self, seed=None):
-        """Fill with random values"""
-        if seed is not None:
-            da.random.seed(seed)
-        self.data = da.random.random(self.data.shape, chunks=self.data.chunks)
-        return self
-    
-    def abs(self):
-        """Absolute value"""
-        self.data = da.abs(self.data)
-        return self
-    
-    def clip(self, min_val, max_val):
-        """Clip values to range [min_val, max_val]"""
-        self.data = da.clip(self.data, min_val, max_val)
-        return self
-    
-    # ============================================
-    # Advanced Operations
-    # ============================================
-    
-    def scaleAdd(self, other, sc1=1.0, sc2=1.0):
-        """self = sc1 * self + sc2 * other"""
-        if not isinstance(other, ZarrVector):
-            raise TypeError("other must be ZarrVector")
-        
-        self.data = sc1 * self.data + sc2 * other.data
-        return self
-    
-    def multiply(self, other):
-        """Element-wise multiplication"""
-        if isinstance(other, ZarrVector):
-            self.data = self.data * other.data
-        else:
-            self.data = self.data * other
-        return self
-    
-    # ============================================
-    # Cloning and Copying
-    # ============================================
-    
-    def clone(self):
-        """Create a deep copy"""
-        return ZarrVector(
-            headers=self.headers.copy(),
-            data=self.data.copy()
-        )
-    
-    def copy(self, other):
-        """Copy data from another vector"""
-        if not isinstance(other, ZarrVector):
-            raise TypeError("Can only copy from another ZarrVector")
-        
-        self.headers = other.headers.copy()
-        self.data = other.data.copy()
-        return self
-    
-    # ============================================
-    # I/O Operations
-    # ============================================
-    
-    def writeVec(self, output_path: Union[str, Path], overwrite: bool = True):
-        """
-        Write ZarrVector to disk using efficient partition-by-partition writing.
-        
-        Args:
-            output_path: Base directory path
-            overwrite: Whether to overwrite existing data
-        """
-        import shutil
-        import gc
-        
-        output_path = Path(output_path)
-        
-        # Handle existing data
-        if output_path.exists():
-            if overwrite:
-                print(f"Removing existing output: {output_path}")
-                shutil.rmtree(output_path)
+        # 2. Setup Zarr Storage
+        if existing_zarr_array is not None:
+            self.za = existing_zarr_array
+            if path is not None:
+                self.path = path
             else:
-                raise FileExistsError(f"Output path {output_path} exists. Set overwrite=True to replace.")
-        
-        output_path.mkdir(parents=True, exist_ok=True)
-        
-        # ============================================
-        # Write Headers Partition-by-Partition
-        # ============================================
-        headers_path = output_path / 'headers.parquet'
-        headers_path.mkdir(parents=True, exist_ok=True)
-        
-        # Prepare metadata for first partition
-        metadata = {
-            b'traces_path': str((output_path / 'data.zarr').absolute()).encode('utf-8'),
-            b'n_samples': str(self.n_samples).encode('utf-8'),
-            b'n_traces': str(self.n_traces).encode('utf-8'),
-        }
-        
-        def write_header_partition(partition_df, partition_info=None):
-            """Write a single header partition to parquet file."""
-            partition_idx = partition_info['number'] if partition_info else 0
-            filename = headers_path / f"part-{partition_idx:05d}.parquet"
+                self.path = getattr(self.za.store, 'path', None)
+        else:
+            if path is None:
+                # FIX: Respect the remove_file flag if passed
+                temp_id = str(uuid.uuid4())
+                path = os.path.join(self._temp_dir, f"vector_{temp_id}.zarr")
+                if not self.remove_file: self.remove_file = True
             
-            try:
-                # Convert to PyArrow table
-                table = pa.Table.from_pandas(partition_df, preserve_index=False)
-                
-                # Add metadata to first partition only
-                if partition_idx == 0:
-                    schema = table.schema.with_metadata(metadata)
-                    table = pa.Table.from_pandas(partition_df, schema=schema, preserve_index=False)
-                
-                # Write to parquet file
-                pq.write_table(table, filename, compression='snappy')
-                
-                if (partition_idx + 1) % 10 == 0 or partition_idx == 0:
-                    print(f"  ✓ Wrote partition {partition_idx + 1}: {len(partition_df)} rows")
-                
-            except Exception as e:
-                print(f"  ✗ Error writing partition {partition_idx}: {e}")
-                raise
+            self.path = path
+            needs_new = not os.path.exists(self.path) or overwrite
+            mode = 'w' if needs_new else 'r+'
+            # Create/Open Zarr Array
+            self.za = zarr.open_array(
+                store=path,
+                shape=shape if needs_new else None,
+                chunks=chunks if needs_new else None,
+                dtype=dtype,
+                mode=mode,
+            )
             
-            # Return partition unchanged (required by map_partitions)
-            return partition_df
+            if needs_new and ns_list is not None:
+                self.za.attrs['ns'] = ns_list
+                self.za.attrs['ds'] = ds_list if ds_list else [1.0] * len(ns_list)
+                self.za.attrs['os'] = os_list if os_list else [0.0] * len(ns_list)
+
+        self.shape = self.za.shape
+        self.dtype = self.za.dtype
+        self.size = self.za.size
+        self.ndim = len(self.shape)
+        self.chunks = self.za.chunks
+        self.shards = getattr(self.za, 'shards', None)
         
-        # Write all header partitions
-        self.headers.map_partitions(
-            write_header_partition,
-            meta=self.headers._meta
-        ).compute()
+        # Cleanup Registration
+        self._register_finalizer()
+
+    def _register_finalizer(self):
+        if self.path and not hasattr(self, '_finalizer'):
+            self._finalizer = weakref.finalize(self, self._cleanup_path, self.path)
+            if self.remove_file:
+                ZarrVector._temp_instances.add(self)
+            else:
+                self._finalizer.detach()
+
+    # --- HELPER: Dask Interface ---
+
+    def _as_dask(self):
+        """Returns a lazy dask array representation of this vector."""
+        # We explicitly pass chunks to ensure Dask tasks align with Zarr chunks
+        return da.from_zarr(self.za, chunks=self.chunks)
+
+    def _write_dask(self, dask_arr):
+        meta = dict(self.za.attrs)
+        temp_store = self.path + "_write_temp"
+        if os.path.exists(temp_store):
+            shutil.rmtree(temp_store)
+        dask_arr.to_zarr(temp_store, overwrite=True, compute=True)
+        shutil.rmtree(self.path)
+        shutil.move(temp_store, self.path)
+        self.za = zarr.open_array(self.path, mode='r+')
+        self.za.attrs.update(meta)
+
+    # --- Math Operations (Parallelized) ---
+
+    def zero(self):
+        # Create a dask array of zeros with correct chunking
+        zeros = da.zeros(self.shape, chunks=self.chunks, dtype=self.dtype)
+        self._write_dask(zeros)
+        return self
+
+    def set(self, val):
+        # Broadcast value to full array
+        d = self._as_dask()
+        d[:] = val
+        self._write_dask(d)
+        return self
+
+    def scale(self, sc):
+        d = self._as_dask()
+        res = d * sc
+        self._write_dask(res)
+        return self
+
+    def scaleAdd(self, vec2, sc1=1.0, sc2=1.0):
+        self.checkSame(vec2)
         
-        print(f"✓ Headers written: {self.headers.npartitions} files in {headers_path}")
+        d1 = self._as_dask()
+        d2 = vec2._as_dask()
         
-        # Clean up
-        gc.collect()
+        # This builds a graph to read d1, read d2, multiply, add
+        res = d1 * sc1 + d2 * sc2
         
-        # ============================================
-        # Write Data to Zarr
-        # ============================================
-        data_path = output_path / 'data.zarr'
+        # Triggers the computation and parallel write
+        self._write_dask(res)
+        return self
+
+    def addbias(self, bias):
+        d = self._as_dask()
+        res = d + bias
+        self._write_dask(res)
+        return self
+    
+    def multiply(self, vec2):
+        self.checkSame(vec2)
+        d1 = self._as_dask()
+        d2 = vec2._as_dask()
+        res = d1 * d2
+        self._write_dask(res)
+        return self
+
+    def rand(self):
+        # Dask has its own parallel random generator
+        rng = da.random.default_rng()
         
-        # Write using Dask's to_zarr (efficient chunked writing)
-        self.data.to_zarr(
-            str(data_path),
-            component='data',  # Creates data.zarr/data structure
-            overwrite=overwrite
+        if np.iscomplexobj(self.dtype):
+            r = rng.random(self.shape, chunks=self.chunks).astype(self.dtype.real.dtype)
+            i = rng.random(self.shape, chunks=self.chunks).astype(self.dtype.real.dtype)
+            data = r + 1j*i
+        else:
+            data = rng.random(self.shape, chunks=self.chunks).astype(self.dtype)
+            
+        self._write_dask(data)
+        return self
+
+    # --- Reductions (Parallelized) ---
+
+    def dot(self, vec2):
+        self.checkSame(vec2)
+        d1 = self._as_dask().flatten()
+        d2 = vec2._as_dask().flatten()
+        
+        # vdot handles complex conjugation: sum(x * conj(y))
+        # Dask handles the reduction tree (summing chunks -> summing sums)
+        return da.vdot(d1, d2).compute()
+
+    def norm(self, N=2):
+        d = self._as_dask()
+        # linalg.norm is generally optimized in Dask
+        return float(da.linalg.norm(d.flatten(), ord=N).compute())
+
+    def min(self):
+        return float(self._as_dask().min().compute())
+
+    def max(self):
+        return float(self._as_dask().max().compute())
+
+    # --- IO & Accessors ---
+
+    def __getitem__(self, key):
+        return self.za[key]
+    
+    def __setitem__(self, key, value):
+        self.za[key] = value
+
+    def copy(self, vec2):
+        self.checkSame(vec2)
+        # Directly pipe one dask array into the other's storage
+        self._write_dask(vec2._as_dask())
+        return self
+
+    def clone(self):
+        new_vec = self.cloneSpace()
+        new_vec.copy(self)
+        return new_vec
+
+    def cloneSpace(self):
+        unique_id = str(uuid.uuid4())
+        new_path = os.path.join(self._temp_dir, f"clone_{unique_id}.zarr")
+        
+        # Just create empty array structure
+        new_za = zarr.open_array(
+            store=new_path, shape=self.shape, 
+            chunks=self.chunks, dtype=self.dtype, mode='w'
         )
         
-        print(f"✓ Data written to {data_path}")
+        # Clone metadata
+        self._copy_metadata_to(new_za)
         
-        # Clean up
-        gc.collect()
-        
-        print(f"✅ ZarrVector successfully written to {output_path}")
-        print(f"   Total: {self.n_traces:,} traces × {self.n_samples} samples")
-    
-    @classmethod
-    def read(cls, path: Union[str, Path]):
-        """
-        Read from disk.
-        
-        Args:
-            path: Base directory path
+        return ZarrVector(existing_zarr_array=new_za, 
+                          path=new_path,
+                          temp_dir=self._temp_dir, 
+                          overwrite=False, # Already created above
+                          remove_file=True)
+
+    def writeVec(self, filename, mode='w'):
+        if mode == 'a':
+            if not os.path.exists(filename): os.makedirs(filename)
+            idx = len([n for n in os.listdir(filename) if "iter" in n])
+            out_path = os.path.join(filename, f"iter_{idx:05d}.zarr")
+        else:
+            out_path = filename
             
-        Returns:
-            ZarrVector instance
-        """
-        path = Path(path)
-        return cls(
-            headers_path=path / 'headers.parquet',
-            traces_path=path / 'data.zarr' / 'data'
-        )
+        # Dask's to_zarr is extremely efficient for this
+        d = self._as_dask()
+        
+        # to_zarr creates the file and writes data in parallel
+        # We pass arguments to ensure it matches our specs
+        d.to_zarr(out_path, 
+                  overwrite=True, 
+                  compute=True,
+                  storage_options={'chunks': self.chunks}) 
+        
+        # Re-open to write SEP metadata which Dask ignores
+        # (Alternatively, Dask creates .zattrs, we just update it)
+        target_za = zarr.open_array(out_path, mode='r+')
+        self._copy_metadata_to(target_za)
+
+    def window(self, slices):
+        temp_id = str(uuid.uuid4())
+        path = os.path.join(self._temp_dir, f"win_{temp_id}.zarr")
+        
+        # Use Dask slicing (lazy)
+        d_window = self._as_dask()[slices]
+        
+        # Write window to new Zarr
+        d_window.to_zarr(path, overwrite=True, compute=True)
+        
+        new_za = zarr.open_array(path, mode='r+')
+
+        if self.ns and self.os and self.ds:
+            # Metadata update logic (Keep your existing logic, it's fine)
+            new_ns = list(self.ns)
+            new_ds = list(self.ds) 
+            new_os = list(self.os) 
+            
+            ndim = len(self.shape)
+            for i, sl in enumerate(slices):
+                start = sl.start if isinstance(sl, slice) else sl
+                if start is None: start = 0
+                sep_idx = ndim - 1 - i
+                new_os[sep_idx] = self.os[sep_idx] + start * self.ds[sep_idx]
+
+            new_za.attrs['ns'] = new_ns
+            new_za.attrs['ds'] = new_ds
+            new_za.attrs['os'] = new_os
+        
+        return ZarrVector(existing_zarr_array=new_za, 
+                          path=path,
+                          temp_dir=self._temp_dir, 
+                          overwrite=True,
+                          remove_file=True)
     
-    # ============================================
-    # Utility Methods
-    # ============================================
+    def to_numpy(self, slices=None):
+        """
+        Reads a slice directly into memory without creating a temp Zarr file.
+        Returns: Tuple (numpy_data, ns, os, ds)
+        """
+        if slices is None:
+            return self.za[:], self.ns, self.os, self.ds
+        # 1. Read directly from Global Zarr to RAM
+        data = self.za[slices] 
+        
+        # 2. Calculate Metadata (same logic as your window function)
+        new_ns = list(reversed(data.shape))
+        new_ds = list(self.ds)
+        new_os = list(self.os)
+        
+        ndim = len(self.shape)
+        for i, sl in enumerate(slices):
+            start = sl.start if isinstance(sl, slice) else sl
+            if start is None: start = 0
+            sep_idx = ndim - 1 - i
+            new_os[sep_idx] = self.os[sep_idx] + start * self.ds[sep_idx]
+            
+        return data, new_ns, new_os, new_ds
+
+    # --- Utils ---
+
+    def _copy_metadata_to(self, target_zarr):
+        target_zarr.attrs.update(self.za.attrs)
+
+    def checkSame(self, other):
+        if self.shape != other.shape:
+            return False
+        if self.za.chunks != other.za.chunks:
+            return False
+        return True
     
     def hash(self):
-        """Compute hash of the data (for verification)"""
-        # Hash the data array
-        data_hash = hashlib.sha256(
-            self.data.compute().tobytes()
-        ).hexdigest()
-        
-        return data_hash
-    
-    def compute(self):
         """
-        Trigger computation and return in-memory version.
-        
-        Returns:
-            Tuple of (pandas DataFrame, numpy array)
+        Computes SHA1 hash of the array content.
         """
-        return self.headers.compute(), self.data.compute()
-    
-    def filter_headers(self, query: str):
-        """
-        Filter based on header values.
-        
-        Args:
-            query: Pandas query string (e.g., "sx > 1000 and sy < 2000")
+        d = self._as_dask()
+        # Define function to run on each chunk
+        def compute_chunk_hash(chunk):
+            sha = hashlib.sha1()
             
-        Returns:
-            New ZarrVector with filtered data
-        """
-        # Filter headers
-        filtered_headers = self.headers.query(query)
+            # Ensure consistent byte order and contiguous memory
+            # (Important for accurate hashing)
+            if hasattr(chunk, 'astype'):
+                data = np.ascontiguousarray(chunk)
+                sha.update(data.tobytes())
+            
+            hash_str = sha.hexdigest()
+            
+            # --- THE FIX ---
+            # Create a 1D array containing the hash
+            res = np.array([hash_str], dtype=object)
+            
+            # Reshape it to match the input chunk's dimensionality.
+            # If chunk is 3D, this makes res shape (1, 1, 1)
+            # If chunk is 2D, this makes res shape (1, 1)
+            return res.reshape((1,) * chunk.ndim)
+
+        # We promise Dask that every input chunk results in a 1x1x... output chunk
+        output_chunks = tuple([(1,)*len(c) for c in d.chunks])
         
-        # Get trace indices
-        if 'trace_id' not in filtered_headers.columns:
-            raise ValueError("Headers must have 'trace_id' column for filtering")
-        
-        trace_indices = filtered_headers['trace_id'].values
-        
-        # Filter data
-        filtered_data = self.data[trace_indices, :]
-        
-        return ZarrVector(
-            headers=filtered_headers.reset_index(drop=True),
-            data=filtered_data
+        lazy_hashes = d.map_blocks(
+            compute_chunk_hash,
+            dtype=object,
+            chunks=output_chunks
         )
+        
+        # Trigger Compute: Reads all data and returns flat array of hashes
+        chunk_hashes = lazy_hashes.compute().flatten()
+        
+        # Combine all chunk hashes into one final hash
+        final_sha = hashlib.sha1()
+        
+        # Sort to ensure deterministic order (Dask might return chunks out of order)
+        chunk_hashes.sort() 
+        
+        for h in chunk_hashes: 
+            final_sha.update(h.encode('utf-8'))
+            
+        return final_sha.hexdigest()
     
-    def persist(self):
-        """
-        Persist data in memory (useful for iterative algorithms).
-        """
-        self.headers = self.headers.persist()
-        self.data = self.data.persist()
-        return self
+    def isDifferent(self, other):
+        return self.hash() != other.hash()
+
+    @property
+    def ns(self):
+        return self.za.attrs.get('ns')
+
+    @property
+    def ds(self):
+        return self.za.attrs.get('ds')
+
+    @property
+    def os(self):
+        return self.za.attrs.get('os')
+
+    @staticmethod
+    def _cleanup_path(path):
+        if os.path.exists(path):
+            try:
+                shutil.rmtree(path)
+            except OSError:
+                pass
+
+    @classmethod
+    def cleanup(cls):
+        for instance in list(cls._temp_instances):
+            if getattr(instance, 'remove_file', False) and instance.path:
+                ZarrVector._cleanup_path(instance.path)
+        cls._temp_instances.clear()
+
+    # Pickling
+    def __getstate__(self):
+        state = self.__dict__.copy()
+        self._register_finalizer()
+        return state
     
-    def __repr__(self):
-        return (
-            f"ZarrVector(\n"
-            f"  n_traces={self.n_traces},\n"
-            f"  n_samples={self.n_samples},\n"
-            f"  headers={list(self.headers.columns)},\n"
-            f"  dtype={self.data.dtype}\n"
-            f")"
-        )
+    def __setstate__(self, state):
+        self.__dict__.update(state)
+        self._register_finalizer()
+        
+    @staticmethod
+    def sum(vectors: List['ZarrVector']) -> 'ZarrVector':
+        """
+        Optimized Parallel Reduction using Dask.
+        1. Converts all input vectors to lazy Dask arrays.
+        2. Sums them symbolically (in memory).
+        3. Writes the result to disk in parallel (one pass).
+        """
+        if not vectors:
+            return None
+        
+        # 1. Use the first vector as a template for shape/chunks/path generation
+        template = vectors[0]
+        
+        # 2. Create the Result Vector container
+        # cloneSpace creates a new unique path and registers cleanup handles
+        result = template.cloneSpace()
+        
+        # 3. Build the Dask Graph
+        # We convert all ZarrVectors to lazy dask arrays
+        dask_vecs = [v._as_dask() for v in vectors]
+        
+        # This creates a summation graph: sum(chunk_i_vec1, chunk_i_vec2, ...)
+        # It does NOT compute yet.
+        total_lazy = sum(dask_vecs)
+        
+        # 4. Compute and Write
+        # to_zarr(overwrite=True) ensures we replace the empty array created by cloneSpace
+        # compute=True triggers the actual parallel execution
+        total_lazy.to_zarr(result.path, overwrite=True, compute=True)
+        
+        # 5. Restore Metadata
+        # Since overwrite=True wipes the directory (including attributes),
+        # we must re-open the array and re-apply the SEP metadata.
+        result.za = zarr.open_array(result.path, mode='r+')
+        
+        if template.ns: result.za.attrs['ns'] = template.ns
+        if template.ds: result.za.attrs['ds'] = template.ds
+        if template.os: result.za.attrs['os'] = template.os
+            
+        return result
+
+atexit.register(ZarrVector.cleanup)

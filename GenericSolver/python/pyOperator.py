@@ -40,6 +40,11 @@ class Operator:
 
     def __mul__(self, other):  # self * other
         return self.dot(other)
+    
+    @property
+    def jac(self):
+        """Alias for linear operator in NonLinearOperator class"""
+        return self
 
     __rmul__ = __mul__  # other * self
 
@@ -103,11 +108,11 @@ class Operator:
     
     def setDomain(self, domain):
         """Function to set operator domain"""
-        self.domain = domain.clone()
+        self.domain = domain
 
     def setRange(self, range):
         """Function to set operator range"""
-        self.range = range.clone()
+        self.range = range
 
     def setDomainRange(self, domain, range):
         """Function to set (cloning space) domain and range of the operator"""
@@ -602,6 +607,21 @@ class Dstack(Operator):
 
     def __str__(self):
         return " DStack "
+    
+    def set_background(self, model):
+        """
+        Propagates the background model to child operators.
+        Splits the input SuperVector so each child gets its corresponding component.
+        """
+        # 1. Verify input is a SuperVector matching our stack size
+        if hasattr(model, "vecs") and len(model.vecs) == self.n:
+            # 2. Iterate and propagate
+            for idx in range(self.n):
+                # Only call set_background if the child operator supports it
+                if hasattr(self.ops[idx], "set_background"):
+                    self.ops[idx].set_background(model.vecs[idx])
+        else:
+            raise ValueError("Input model must be a SuperVector with %d components." % self.n)
 
     def forward(self, add, model, data):
         """Forward operator"""
@@ -840,6 +860,14 @@ class NonLinearOperator(Operator):
             return _sumNlOperator(self, other)
         else:
             raise TypeError('Argument must be an Operator')
+        
+    def forward(self, add, model, data):
+        return self.nl_op.forward(add, model, data)
+    
+    @property
+    def jac(self):
+        """Alias for linear operator in NonLinearOperator class"""
+        return self.lin_op
 
 
 class _combNonLinearOperator(NonLinearOperator):

@@ -109,3 +109,57 @@ def RunShellCmd(cmd, print_cmd=False, print_output=False, synch=True, check_code
         raise SystemError("ERROR! Command failed: %s; Error code: %s; Output: %s" % (cmd, err_code, stdout))
     # Returning
     return return_var
+
+import os
+import numpy as np
+
+# --- Optimized IO for SuperVectors ---
+
+def save_numpy(vec, filepath):
+    """
+    Saves a Vector or SuperVector to disk using fast raw binary (NumPy).
+    Avoids OOM by saving components individually.
+    """
+    # Check if it is a SuperVector (has a 'vecs' list)
+    if hasattr(vec, 'vecs') and len(vec.vecs) > 0:
+        # Collect arrays from components WITHOUT concatenating them
+        arrays = {}
+        for i, sub_vec in enumerate(vec.vecs):
+            # Extract raw array (view, not copy)
+            arr = sub_vec.getNdArray()
+            arrays[f'arr_{i}'] = arr
+        
+        # Save as uncompressed .npz (fastest composite format)
+        np.savez(filepath, **arrays)
+        
+    else:
+        # It's a single vector
+        arr = vec.getNdArray()
+        np.save(filepath, arr)
+
+def load_numpy(filepath, template_vec):
+    """
+    Loads raw binary data back into a vector container.
+    Requires 'template_vec' to define the structure (geometry).
+    """
+    # Ensure extension exists for np.load
+    if not filepath.endswith(".npz") and not filepath.endswith(".npy"):
+        filepath += ".npz"  # Default assumption if missing
+
+    if hasattr(template_vec, 'vecs') and len(template_vec.vecs) > 0:
+        # Load SuperVector components
+        with np.load(filepath) as data:
+            new_vec = template_vec.clone()
+            # Fill components
+            for i, sub_vec in enumerate(new_vec.vecs):
+                sub_vec.getNdArray()[:] = data[f'arr_{i}']
+            return new_vec
+            
+    else:
+        if not filepath.endswith(".npy"): 
+            filepath = filepath.replace(".npz", ".npy")
+            
+        arr = np.load(filepath)
+        new_vec = template_vec.clone()
+        new_vec.getNdArray()[:] = arr
+        return new_vec

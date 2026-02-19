@@ -2,7 +2,7 @@
 import pyVector as pyVec
 import pyOperator as pyOp
 from math import isnan
-
+import numpy as np
 
 class Bounds:
     """Class used to enforce boundary constraints during the inversion"""
@@ -160,9 +160,9 @@ class Problem:
     def get_obj_grad(self, model):
         """Accessor for objective function and gradient vector"""
         self.set_model(model)
-        if not self.obj_updated:
+        if not self.obj_updated or not self.grad_updated:
             if hasattr(self, 'objgradf'):
-                self.obj, self.grad = self.objgradf(model, self.data)
+                self.obj, self.grad = self.objgradf(model)
                 self.fevals += 1
                 self.gevals += 1
                 self.obj_updated = True
@@ -171,6 +171,16 @@ class Problem:
                 self.obj = self.get_obj(model)
                 self.grad = self.get_grad(model)
         return self.obj, self.grad
+    
+    def get_dres_res(self, model, dmodel):
+        if hasattr(self, 'dresresf'):
+            return self.dresresf(model, dmodel)
+        else:
+            dres = self.get_dres(model, dmodel)
+            res = self.get_res(model) 
+            dres_res = np.real(res.dot(dres))
+            dres_dres = dres.dot(dres)
+            return dres_res, dres_dres
 
     def get_dres(self, model, dmodel):
         """Accessor for dresidual vector (i.e., application of the Jacobian to Dmodel vector)"""

@@ -389,12 +389,17 @@ class vectorSet:
         self.vecSet = []  # List of vectors of the set
 
 
+import os
+import numpy as np
+from concurrent.futures import ThreadPoolExecutor
+
 class superVector(vector):
 
-    def __init__(self, *args):
+    def __init__(self, *args, max_workers=None):
         """
         superVector constructor
         :param args: vectors or superVectors or vectors list objects
+        :param max_workers: Int, limit number of threads. Defaults to len(self.vecs).
         """
         super(superVector, self).__init__()
 
@@ -403,36 +408,66 @@ class superVector(vector):
             if v is None:
                 continue
             elif isinstance(v, vector):
-                self.vecs.append(v.clone())
+                self.vecs.append(v)
             elif isinstance(v, list):
                 for vv in v:
                     if vv is None:
                         continue
                     elif isinstance(vv, vector):
-                        self.vecs.append(vv.clone())
+                        self.vecs.append(vv)
             else:
                 raise TypeError('Argument must be either a vector or a superVector')
 
         self.n = len(self.vecs)
+        # Cap workers to cpu_count to prevent over-subscription overhead
+        # unless explicit higher count is beneficial for I/O
+        import multiprocessing
+        default_max = min(self.n, multiprocessing.cpu_count())
+        self.max_workers = max_workers if max_workers else default_max
 
-    def window(self, kwargs: list):
-        nv = []
-        if len(kwargs) != len(self.vecs):
-            raise ValueError("Window parameters need to be provided as a list for each sub-vector!")
-        for v, kw in zip(self.vecs, kwargs):
-            nv.append(v.window(**kw))
-        return superVector(nv)
+    def _exec_parallel(self, func, args_list=None):
+        """
+        Private helper to execute a function on all vectors in parallel.
+        :param func: Function that takes (index, vector_component, args_for_component)
+        :param args_list: List of arguments to pass to each component. 
+                          If None, passes nothing extra.
+        """
+        if args_list is None:
+            args_list = [() for _ in range(self.n)]
+        
+        results = [None] * self.n
+        
+        with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
+            # We map indices to futures to maintain order
+            futures = {
+                executor.submit(func, i, self.vecs[i], args_list[i]): i 
+                for i in range(self.n)
+            }
+            
+            for f in futures:
+                idx = futures[f]
+                results[idx] = f.result()
+                
+        return results
 
     def __del__(self):
         """superVector destructor"""
-        del self.vecs, self.n
+        # Python handles GC automatically, usually strict del is not needed 
+        # unless breaking circular refs, but keeping per your original.
+        if hasattr(self, 'vecs'):
+            del self.vecs
+        if hasattr(self, 'n'):
+            del self.n
     
     def __getitem__(self, it):
         return self.vecs[it]
 
+    # --- Properties (Fast enough to keep serial usually, but getNdArray might be large) ---
+
     def getNdArray(self):
         """Function to return Ndarray of the vector"""
-        return [self.vecs[idx].getNdArray() for idx in range(self.n)]
+        # Parallelizing this is useful if memory copy is slow
+        return self._exec_parallel(lambda i, v, _: v.getNdArray())
 
     @property
     def shape(self):
@@ -442,188 +477,225 @@ class superVector(vector):
     def size(self):
         return sum([self.vecs[idx].size for idx in range(self.n)])
 
+    # --- Reduction Operations ---
+
     def norm(self, N=2):
         """Function to compute vector N-norm"""
-        norm = np.power([self.vecs[idx].norm(N) for idx in range(self.n)], N)
-        return np.power(sum(norm), 1. / N)
-
-    def set(self, val):
-        """Function to set all values in the vector"""
-        for idx in range(self.n):
-            self.vecs[idx].set(val)
-        return self
-
-    def zero(self):
-        """Function to zero out a vector"""
-        for idx in range(self.n):
-            self.vecs[idx].zero()
-        return self
-
-    def max(self):
-        """Function to obtain maximum value within a vector"""
-        return np.max([self.vecs[idx].max() for idx in range(self.n)])
-
-    def min(self):
-        """Function to obtain minimum value within a vector"""
-        return np.min([self.vecs[idx].min() for idx in range(self.n)])
-
-    def scale(self, sc):
-        """Function to scale a vector"""
-        if not isinstance(sc, list):
-            sc = [sc] * self.n
-        for idx in range(self.n):
-            self.vecs[idx].scale(sc[idx])
-        return self
-
-    def addbias(self, bias):
-        """Add a constant to the vector"""
-        if not isinstance(bias, list):
-            bias = [bias] * self.n
-        for idx in range(self.n):
-            self.vecs[idx].addbias(bias[idx])
-        return self
-
-    def rand(self, snr=1.0):
-        """Function to randomize a vector"""
-        for idx in range(self.n):
-            self.vecs[idx].rand()
-        return self
-
-    def clone(self):
-        """Function to clone (deep copy) a vector from a vector or a Space"""
-        vecs = [self.vecs[idx].clone() for idx in range(self.n)]
-        return superVector(vecs)
-
-    def cloneSpace(self):
-        """Function to clone vector space"""
-        return superVector([self.vecs[idx].cloneSpace() for idx in range(self.n)])
-
-    def checkSame(self, other):
-        """Function to check to make sure the vectors exist in the same space"""
-        # Checking type
-        if not isinstance(other, superVector):
-            raise TypeError('Input variable is not a superVector')
-        checkspace = np.asarray([self.vecs[idx].checkSame(other.vecs[idx]) for idx in range(self.n)])
-        notsame = np.where(checkspace is False)[0]
-        for v in notsame:
-            raise Warning('Component %d not in the same space!' % v)
-        return np.all(checkspace == True)
-
-    # Combination of different vectors
-    def copy(self, vecs_in):
-        """Function to copy vector from input vector"""
-        # Checking type
-        if not isinstance(vecs_in,superVector):
-            raise TypeError("Input variable is not a superVector")
-        # Checking dimensionality
-        if not self.checkSame(vecs_in):
-            raise ValueError("ERROR! Dimensionality mismatching between given superVectors")
-        for idx in range(self.n):
-            self.vecs[idx].copy(vecs_in.vecs[idx])
-        return self
-
-    def scaleAdd(self, vecs_in, sc1=1.0, sc2=1.0):
-        """Function to scale input vectors and add them to the original ones"""
-        # Checking type
-        if not isinstance(vecs_in, superVector):
-            raise TypeError("Input variable is not a superVector")
-        # Checking dimensionality
-        if not self.checkSame(vecs_in):
-            raise ValueError("ERROR! Dimensionality mismatching between given superVectors")
-        for idx in range(self.n):
-            self.vecs[idx].scaleAdd(vecs_in.vecs[idx], sc1, sc2)
-        return self
+        # 1. Parallel Map: Compute norm of each component
+        sub_norms = self._exec_parallel(lambda i, v, _: v.norm(N))
+        
+        # 2. Reduce: Combine results
+        # norm = (sum(|v_i|^N))^(1/N)
+        norm_pow = np.power(sub_norms, N)
+        return np.power(np.sum(norm_pow), 1. / N)
 
     def dot(self, vecs_in):
         """Function to compute dot product between two vectors"""
-        # Checking type
         if not isinstance(vecs_in, superVector):
             raise TypeError("Input variable is not a superVector")
-        # Checking dimensionality
         if not self.checkSame(vecs_in):
-            raise ValueError("ERROR! Dimensionality mismatching between given superVectors")
-        return np.sum([self.vecs[idx].dot(vecs_in.vecs[idx]) for idx in range(self.n)])
+            raise ValueError("Dimensionality mismatch")
+            
+        # Parallel Dot of sub-components
+        sub_dots = self._exec_parallel(
+            lambda i, v, other_v: v.dot(other_v), 
+            args_list=vecs_in.vecs # Pass the other vector's components as args
+        )
+        return np.sum(sub_dots)
+
+    def max(self):
+        """Function to obtain maximum value within a vector"""
+        sub_maxs = self._exec_parallel(lambda i, v, _: v.max())
+        return np.max(sub_maxs)
+
+    def min(self):
+        """Function to obtain minimum value within a vector"""
+        sub_mins = self._exec_parallel(lambda i, v, _: v.min())
+        return np.min(sub_mins)
+    
+    def isDifferent(self, vecs_in):
+        if not isinstance(vecs_in, superVector):
+            raise TypeError("Input variable is not a superVector")
+            
+        diffs = self._exec_parallel(
+            lambda i, v, other_v: v.isDifferent(other_v),
+            args_list=vecs_in.vecs
+        )
+        return any(diffs)
+
+    # --- In-Place Modifiers (Return Self) ---
+
+    def set(self, val):
+        self._exec_parallel(lambda i, v, _: v.set(val))
+        return self
+
+    def zero(self):
+        self._exec_parallel(lambda i, v, _: v.zero())
+        return self
+
+    def scale(self, sc):
+        if not isinstance(sc, list):
+            sc = [sc] * self.n
+        # Pass the specific scale factor for each component
+        self._exec_parallel(lambda i, v, s: v.scale(s), args_list=sc)
+        return self
+
+    def addbias(self, bias):
+        if not isinstance(bias, list):
+            bias = [bias] * self.n
+        self._exec_parallel(lambda i, v, b: v.addbias(b), args_list=bias)
+        return self
+
+    def rand(self, snr=1.0):
+        # Assuming snr is global, otherwise spread it like scale()
+        self._exec_parallel(lambda i, v, _: v.rand())
+        return self
+    
+    def clipVector(self, lows, highs):
+        # We need to zip lows and highs into a single arg list of tuples
+        args = list(zip(lows, highs))
+        self._exec_parallel(lambda i, v, arg: v.clipVector(arg[0], arg[1]), args_list=args)
+        return self
+
+    def copy(self, vecs_in):
+        if not isinstance(vecs_in, superVector):
+            raise TypeError("Input variable is not a superVector")
+        if not self.checkSame(vecs_in):
+            raise ValueError("Dimensionality mismatch")
+            
+        self._exec_parallel(
+            lambda i, v, other_v: v.copy(other_v),
+            args_list=vecs_in.vecs
+        )
+        return self
+
+    def scaleAdd(self, vecs_in, sc1=1.0, sc2=1.0):
+        if not isinstance(vecs_in, superVector):
+            raise TypeError("Input variable is not a superVector")
+        if not self.checkSame(vecs_in):
+            raise ValueError("Dimensionality mismatch")
+            
+        # Passing tuple (other_vec, sc1, sc2)
+        args = [(vecs_in.vecs[i], sc1, sc2) for i in range(self.n)]
+        self._exec_parallel(
+            lambda i, v, arg: v.scaleAdd(arg[0], arg[1], arg[2]),
+            args_list=args
+        )
+        return self
 
     def multiply(self, vecs_in):
-        """Function to multiply element-wise two vectors"""
-        # Checking type
         if not isinstance(vecs_in, superVector):
             raise TypeError("Input variable is not a superVector")
-        # Checking dimensionality
         if not self.checkSame(vecs_in):
-            raise ValueError("ERROR! Dimensionality mismatching between given superVectors")
-        for idx in range(self.n):
-            self.vecs[idx].multiply(vecs_in.vecs[idx])
+            raise ValueError("Dimensionality mismatch")
+            
+        self._exec_parallel(
+            lambda i, v, other_v: v.multiply(other_v),
+            args_list=vecs_in.vecs
+        )
         return self
 
-    def isDifferent(self, vecs_in):
-        """Function to check if two vectors are identical"""
-        # Checking type
-        if not isinstance(vecs_in, superVector):
-            raise TypeError("Input variable is not a superVector")
-        return any([self.vecs[idx].isDifferent(vecs_in.vecs[idx]) for idx in range(self.n)])
-
-    def clipVector(self, lows, highs):
-        for idx in range(self.n):
-            self.vecs[idx].clipVector(lows[idx], highs[idx])
-        return self
-
+    # --- Unary Operations ---
+    
     def abs(self):
-        for idx in range(self.n):
-            self.vecs[idx].abs()
+        self._exec_parallel(lambda i, v, _: v.abs())
         return self
 
     def sign(self):
-        for idx in range(self.n):
-            self.vecs[idx].sign()
+        self._exec_parallel(lambda i, v, _: v.sign())
         return self
 
     def reciprocal(self):
-        for idx in range(self.n):
-            self.vecs[idx].reciprocal()
-        return self
-
-    def maximum(self, other):
-        if np.isscalar(other):
-            for idx in range(self.n):
-                self.vecs[idx].maximum(other)
-            return self
-        elif not isinstance(other, superVector):
-            raise TypeError("Input variable is not a superVector")
-        if other.n != self.n:
-            raise ValueError('Input must have the same length of self')
-        for idx in range(self.n):
-            self.vecs[idx].maximum(other.vecs[idx])
+        self._exec_parallel(lambda i, v, _: v.reciprocal())
         return self
 
     def conj(self):
-        for idx in range(self.n):
-            self.vecs[idx].conj()
+        self._exec_parallel(lambda i, v, _: v.conj())
         return self
 
     def real(self):
-        for idx in range(self.n):
-            self.vecs[idx].real()
+        self._exec_parallel(lambda i, v, _: v.real())
         return self
 
-    def imag(self,):
-        for idx in range(self.n):
-            self.vecs[idx].imag()
+    def imag(self):
+        self._exec_parallel(lambda i, v, _: v.imag())
         return self
 
     def pow(self, power):
-        for idx in range(self.n):
-            self.vecs[idx].pow(power)
+        self._exec_parallel(lambda i, v, _: v.pow(power))
         return self
+
+    # --- Misc / Complex Logic ---
+
+    def maximum(self, other):
+        if np.isscalar(other):
+            self._exec_parallel(lambda i, v, _: v.maximum(other))
+        elif isinstance(other, superVector):
+            if other.n != self.n:
+                raise ValueError('Input must have the same length of self')
+            self._exec_parallel(
+                lambda i, v, other_v: v.maximum(other_v),
+                args_list=other.vecs
+            )
+        else:
+            raise TypeError("Input variable is not a superVector or scalar")
+        return self
+
+    def clone(self):
+        """Function to clone (deep copy) a vector"""
+        # Parallel clone of components
+        new_vecs = self._exec_parallel(lambda i, v, _: v.clone())
+        return superVector(new_vecs)
+
+    def cloneSpace(self):
+        """Function to clone vector space"""
+        new_vecs = self._exec_parallel(lambda i, v, _: v.cloneSpace())
+        return superVector(new_vecs)
+    
+    def window(self, kwargs: list):
+        if len(kwargs) != len(self.vecs):
+            raise ValueError("Window parameters need to be provided as a list for each sub-vector!")
+        
+        # kwargs is already a list, perfect for args_list
+        nv = self._exec_parallel(lambda i, v, kw: v.window(**kw), args_list=kwargs)
+        return superVector(nv)
+
+    def checkSame(self, other):
+        """Function to check to make sure the vectors exist in the same space"""
+        if not isinstance(other, superVector):
+            raise TypeError('Input variable is not a superVector')
+            
+        # Parallel check
+        results = self._exec_parallel(
+            lambda i, v, other_v: v.checkSame(other_v),
+            args_list=other.vecs
+        )
+        
+        # Handle logic after gathering results
+        checkspace = np.asarray(results)
+        notsame = np.where(~checkspace)[0]
+        for v in notsame:
+            # We raise the warning here on the main thread
+            raise Warning('Component %d not in the same space!' % v)
+        return np.all(checkspace == True)
 
     def writeVec(self, filename, mode="w"):
         """Method to write to vector to file within a Vector set"""
         _, ext = os.path.splitext(filename)
-        for ii, vec_cmp in enumerate(self.vecs):
-            # Writing components to different files
-            filename_cmp = ".".join(filename.split('.')[:-1]) + "_comp%s" % (ii + 1)
-            # Writing files (recursively)
-            vec_cmp.writeVec(filename_cmp+ext, mode)
+        
+        # Pre-calculate filenames
+        args = []
+        for ii in range(self.n):
+            fname_cmp = ".".join(filename.split('.')[:-1]) + "_comp%s" % (ii + 1) + ext
+            args.append(fname_cmp)
+            
+        # Parallel Write
+        # NOTE: Parallel writing to the same HDD can slow things down due to seek time.
+        # But for SSDs or separate files on parallel FS, this is fine.
+        self._exec_parallel(
+            lambda i, v, fname: v.writeVec(fname, mode), 
+            args_list=args
+        )
         return
 
 

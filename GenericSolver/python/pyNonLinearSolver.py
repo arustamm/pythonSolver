@@ -8,6 +8,7 @@ from pyStopper import BasicStopper
 from pyProblem import ProblemLinearSymmetric
 from pyLinearSolver import SymLCGsolver
 from copy import deepcopy
+from sys_util import save_numpy, load_numpy
 
 # Check for avoid Overflow or Underflow
 zero = 10 ** (np.floor(np.log10(np.abs(float(np.finfo(np.float64).tiny)))) + 2)
@@ -1033,11 +1034,11 @@ class TNewtonsolver(pySolver.Solver):
         """Running Truncated Newton solver"""
         return
 
-
+import os
 class LBFGSsolver(pySolver.Solver):
     """L-BFGS (Limited-memory Broyden-Fletcher-Goldfarb-Shanno) Solver object"""
 
-    def __init__(self, stopper, stepper=None, proxOp=None, save_alpha=False, m_steps=None, H0=None, logger=None, save_est=False):
+    def __init__(self, stopper, stepper=None, proxOp=None, save_alpha=False, m_steps=None, H0=None, logger=None, save_est=False, scratch_dir=None):
         """
 		Constructor for LBFGS Solver:
 		:param stopper    : Stopper, object to terminate the solver
@@ -1048,17 +1049,24 @@ class LBFGSsolver(pySolver.Solver):
 		:param logger 	  : Logger, object to save inversion information at runtime
 		:param save_est   : bool, save inverse Hessian estimate vectors (self.prefix must not be None) [False]
 		"""
-        # Calling parent construction
-        # Defining stepper object
         self.stepper = stepper if stepper is not None else CvSrchStep()
         super().__init__(stopper, self.stepper, proxOp=proxOp, logger=logger)
-        # LBFGS-specific parameters
+        
         self.save_alpha = save_alpha
         self.H0 = H0
         self.m_steps = m_steps
         self.save_est = save_est
-        self.tmp_vector = None  # A copy of the model vector will be create when the function run is invoked
-        self.iistep = 0 # necessary to re-used the estimated hessian inverse from previous runs
+        self.tmp_vector = None
+        self.iistep = 0
+        
+        # Disk Storage Setup
+        self.scratch_dir = scratch_dir
+        self.disk_storage = False
+        if self.scratch_dir is not None:
+            self.disk_storage = True
+            if not os.path.exists(self.scratch_dir):
+                os.makedirs(self.scratch_dir)
+            print(f"LBFGS: Using Disk Storage for history vectors at {self.scratch_dir}")
 
     def get_initial_message(self):
         msg = f"{90*'#'}\n"
@@ -1129,54 +1137,111 @@ class LBFGSsolver(pySolver.Solver):
         return
 
     # BFGSMultiply function
+    def _load_vec(self, vec_entry):
+        """Helper to load vector from RAM or Disk"""
+        if self.disk_storage:
+            # vec_entry is a filename string
+            return load_numpy(vec_entry, template_vec=self.dmodl)
+        else:
+            # vec_entry is the vector object itself
+            return vec_entry
+
     def BFGSMultiply(self, dmodl, grad, iiter):
         """Function to apply approximated inverse Hessian"""
         # Array containing dot-products
         if self.m_steps is not None:
             alpha = [0.0] * self.m_steps
-            # Handling of limited memory
             if iiter <= self.m_steps:
                 initial_point = 0
             else:
                 initial_point = iiter % self.m_steps
-            # Right step list
             rloop = deque(range(0, min(iiter, self.m_steps)))
             rloop.reverse()
-            # Rotate the list
             rloop.rotate(initial_point)
-            # Left step list
             lloop = deque(range(0, min(iiter, self.m_steps)))
-            # Rotate the list
             lloop.rotate(-initial_point)
         else:
             alpha = [0.0] * iiter
             rloop = deque(range(0, iiter))
             rloop.reverse()
             lloop = deque(range(0, iiter))
+
         # r = -grad
         dmodl.copy(grad)
         dmodl.scale(-1.0)
-        # Apply right-hand series of operators
+
+        # --- LOOP 1: Right-hand series (Backwards) ---
         for ii in rloop:
-            # Check positivity, if not true skip the update
             if self.rho[ii] > 0.0:
-                # alpha_i=rho_i*s_i'r
-                alpha[ii] = self.rho[ii] * np.real(self.step_vectors[ii].dot(dmodl))
-                # r=r-alpha_i*y_i
-                dmodl.scaleAdd(self.grad_diff_vectors[ii], 1.0, -alpha[ii])
-        # Comput center (If not provide Identity matrix is assumed)
-        # r=H0r
+                # Load vectors on demand
+                s_vec = self._load_vec(self.step_vectors[ii])
+                y_vec = self._load_vec(self.grad_diff_vectors[ii])
+
+                # alpha_i = rho_i * s_i' r
+                # Real part only for complex vectors
+                alpha[ii] = self.rho[ii] * np.real(s_vec.dot(dmodl))
+                
+                # r = r - alpha_i * y_i
+                dmodl.scaleAdd(y_vec, 1.0, -alpha[ii])
+                
+                # Free memory immediately if using disk
+                if self.disk_storage:
+                    del s_vec, y_vec
+
+        # =================================================================
+        #   CENTER: Hessian Scaling (gamma * I) or Preconditioner (H0)
+        # =================================================================
+        
+        # Case A: User provided a custom Preconditioner/Hessian
         if self.H0 is not None:
-            # Apply a forward of the initial Hessian estimate
             self.H0.forward(False, dmodl, self.tmp_vector)
             dmodl.copy(self.tmp_vector)
-        # Apply left-hand series of operators
+
+        # Case B: Standard L-BFGS Dynamic Scaling (Oren-Spedicato)
+        # We assume H0 = gamma * Identity
+        elif iiter > 0:
+            # 1. Identify the index of the MOST RECENTLY completed step
+            if self.m_steps is not None:
+                # Circular buffer index for the previous step
+                last_idx = (iiter - 1) % self.m_steps
+            else:
+                last_idx = iiter - 1
+            
+            # 2. Load the vectors (s_k-1, y_k-1)
+            # These contain the curvature info of the step we just finished
+            s_last = self._load_vec(self.step_vectors[last_idx])
+            y_last = self._load_vec(self.grad_diff_vectors[last_idx])
+            
+            # 3. Calculate Scaling Factor gamma = (y . s) / (y . y)
+            y_dot_y = np.real(y_last.dot(y_last))
+            y_dot_s = np.real(y_last.dot(s_last))
+            
+            # 4. Apply Scaling to the vector
+            # This scales the "Identity Matrix" in the center of the recursion
+            if y_dot_y > 1e-20:
+                gamma = y_dot_s / y_dot_y
+                dmodl.scale(gamma)
+            
+            # Cleanup for disk mode
+            if self.disk_storage:
+                del s_last, y_last
+
+        # --- LOOP 2: Left-hand series (Forwards) ---
         for ii in lloop:
-            # Check positivity, if not true skip the update
             if self.rho[ii] > 0.0:
-                # beta=rhoiyi'r
-                beta = self.rho[ii] * np.real(self.grad_diff_vectors[ii].dot(dmodl))
-                dmodl.scaleAdd(self.step_vectors[ii], 1.0, alpha[ii] - beta)
+                # Load vectors on demand
+                s_vec = self._load_vec(self.step_vectors[ii])
+                y_vec = self._load_vec(self.grad_diff_vectors[ii])
+
+                # beta = rho_i * y_i' r
+                beta = self.rho[ii] * np.real(y_vec.dot(dmodl))
+                
+                # r = r + s_i * (alpha - beta)
+                dmodl.scaleAdd(s_vec, 1.0, alpha[ii] - beta)
+
+                # Free memory immediately
+                if self.disk_storage:
+                    del s_vec, y_vec
         return
     
     def initialize_solver(self, problem, verbose=False, restart_path=None, keep_hessian=False):
@@ -1242,7 +1307,6 @@ class LBFGSsolver(pySolver.Solver):
             problem.set_model(self.prev_model)
             return False
         
-        # TODO can we avoid recomputing gradient?
         prblm_grad = problem.get_grad(self.inv_model)
         self.update_hessian_estimate(prblm_grad, alpha)
         
@@ -1268,28 +1332,46 @@ class LBFGSsolver(pySolver.Solver):
         return True
 
     def update_hessian_estimate(self, grad, alpha):
-        # Compute updates for estimated Hessian inverse
+        # 1. Determine Index
         if self.m_steps is not None:
-            # LBFGS
-            step_index = self.iistep % self.m_steps  # Modulo to handle limited memory
-            # yn+1=gn+1-gn
-            self.grad_diff_vectors[step_index] = self.grad0.clone()
-            self.grad_diff_vectors[step_index].scaleAdd(grad, -1.0, 1.0)
-            # sn+1=xn+1-xn = alpha * dmodl
-            self.step_vectors[step_index] = self.dmodl.clone()
-            self.step_vectors[step_index].scale(alpha)
+            step_index = self.iistep % self.m_steps
         else:
-            # BFGS
-            step_index = self.iistep
-            # yn+1=gn+1-gn
-            self.grad_diff_vectors.append(self.grad0.clone())
-            self.grad_diff_vectors[step_index].scaleAdd(grad, -1.0, 1.0)
-            # sn+1=xn+1-xn = alpha * dmodl
-            self.step_vectors.append(self.dmodl.clone())
-            self.step_vectors[step_index].scale(alpha)
-        # rhon+1=1/yn+1'sn+1
-        denom_dot = self.grad_diff_vectors[step_index].dot(self.step_vectors[step_index])
-        # Checking rho
+            step_index = self.iistep 
+            self.grad_diff_vectors.append(None)
+            self.step_vectors.append(None)
+            self.rho.append(0.0)
+
+        # 2. Compute Vectors (Temporarily in RAM)
+        # y = g_new - g_old
+        y_vec = self.grad0.clone()
+        y_vec.scaleAdd(grad, -1.0, 1.0)
+        
+        # s = alpha * dmodl
+        s_vec = self.dmodl.clone()
+        s_vec.scale(alpha)
+
+        # 3. Compute Rho
+        denom_dot = y_vec.dot(s_vec)
+
+        # 4. Storage Logic (Write & Drop)
+        if self.disk_storage:
+            s_name = os.path.join(self.scratch_dir, f"s_vec_{step_index}.npz")
+            y_name = os.path.join(self.scratch_dir, f"y_vec_{step_index}.npz")
+            
+            # Simple Write
+            save_numpy(s_vec, s_name)
+            save_numpy(y_vec, y_name)
+            
+            # Save Paths, Drop Objects
+            self.step_vectors[step_index] = s_name
+            self.grad_diff_vectors[step_index] = y_name
+            
+            del s_vec, y_vec
+        else:
+            self.step_vectors[step_index] = s_vec
+            self.grad_diff_vectors[step_index] = y_vec
+
+        # 5. Check and Save Rho
         self.check_rho(denom_dot, step_index, self.iistep)
 
     def run(self, problem, verbose=False, keep_hessian=False, restart_path=None):
